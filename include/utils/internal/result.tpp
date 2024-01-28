@@ -3,12 +3,15 @@
 #define UTILS_RESULT_TPP
 
 #include <stdexcept> // std::runtime_error
+#include <utility> // std::move
 
 namespace utils {
 
     template <typename T>
     template <typename ...Ts>
-    Result<T>::Result(Ts&& ...args) : m_result(std::move(args)...) {
+    Result<T>::Result(Ts&& ...args) : Response(),
+                                      m_result(std::move(args)...)
+                                      {
     }
     
     template <typename T>
