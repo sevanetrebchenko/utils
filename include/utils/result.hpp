@@ -5,24 +5,22 @@
 #include <string> // std::string
 #include <optional> // std::optional
 
-namespace utility {
+namespace utils {
     
     template <typename T>
     class Result {
         public:
             template <typename ...Ts>
             static Result<T> OK(Ts&&... args);
-            static Result<T> NOT_OK(std::string error);
+            static Result<T> NOT_OK(const std::string& error);
             ~Result();
             
             [[nodiscard]] bool ok() const;
-            [[nodiscard]] const std::string& error() const;
+            [[nodiscard]] const std::string& what() const;
             
             [[nodiscard]] T& operator->() const;
             
         private:
-            Result();
-            
             template <typename ...Ts>
             explicit Result(Ts&&... args);
             
