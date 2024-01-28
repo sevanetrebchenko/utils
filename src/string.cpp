@@ -19,23 +19,10 @@ namespace utils {
         return std::move(components);
     }
     
-    [[nodiscard]] std::string join(const std::vector<std::string>& components, const std::string& glue) {
-        if (components.empty()) {
-            return "";
-        }
-    
-        if (components.size() == 1) {
-            return components[0];
-        }
-    
-        std::string result;
-        for (std::size_t i = 0u; i < components.size() - 1; ++i) {
-            result += components[i] + glue;
-        }
-        result += components[components.size() - 1];
-        
-        return result;
+    [[nodiscard]] std::string join(const std::initializer_list<std::string>& components, const std::string& glue) {
+        return join<std::initializer_list<std::string>>(components, glue);
     }
+    
     
     [[nodiscard]] std::string trim(const std::string& in) {
         static const char* ws = " \t\n\r";
