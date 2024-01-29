@@ -22,6 +22,24 @@ namespace utils {
     // Trim off all whitespace characters on either side of 'in'.
     [[nodiscard]] std::string trim(const std::string& in);
     
+    
+    // For formatting named format specifiers.
+    // Note: custom types must define a std::string conversion operator.
+    struct arg {
+        template <typename T>
+        arg(std::string name, const T& value);
+        ~arg();
+        
+        operator std::string() const;
+        
+        std::string name;
+        std::string value;
+    };
+    
+    // Supports Python f-strings and printf-style format specifiers.
+    template <typename ...Ts>
+    [[nodiscard]] std::string format(const std::string& format, const Ts&... args);
+
 }
 
 // Template definitions.

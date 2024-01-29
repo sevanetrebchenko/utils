@@ -23,10 +23,14 @@ namespace utils {
         return join<std::initializer_list<std::string>>(components, glue);
     }
     
-    
     [[nodiscard]] std::string trim(const std::string& in) {
         static const char* ws = " \t\n\r";
         return in.substr(in.find_first_not_of(ws), in.length() - (in.find_last_not_of(ws) + 1));
     }
 
+    arg::~arg() = default;
+    
+    arg::operator std::string() const {
+        return value;
+    }
 }
