@@ -2,6 +2,8 @@
 #ifndef UTILS_STRING_HPP
 #define UTILS_STRING_HPP
 
+#pragma once
+
 #include <vector> // std::vector
 #include <string> // std::string
 
@@ -30,16 +32,22 @@ namespace utils {
         arg(std::string name, const T& value);
         ~arg();
         
-        operator std::string() const;
+        explicit operator std::string() const {
+            return value;
+        }
         
         std::string name;
         std::string value;
     };
     
+//    inline std::string to_string(const arg& arg) {
+//        return arg.value;
+//    }
+    
     // Supports Python f-strings and printf-style format specifiers.
     template <typename ...Ts>
     [[nodiscard]] std::string format(const std::string& format, const Ts&... args);
-
+    
 }
 
 // Template definitions.

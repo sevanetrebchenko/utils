@@ -20,7 +20,7 @@ namespace utils {
     }
     
     [[nodiscard]] std::string join(const std::initializer_list<std::string>& components, const std::string& glue) {
-        return join<std::initializer_list<std::string>>(components, glue);
+         return join<std::initializer_list<std::string>>(components, glue);
     }
     
     [[nodiscard]] std::string trim(const std::string& in) {
@@ -29,8 +29,5 @@ namespace utils {
     }
 
     arg::~arg() = default;
-    
-    arg::operator std::string() const {
-        return value;
-    }
+
 }

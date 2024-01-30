@@ -3,9 +3,10 @@
 #define UTILS_STRING_TPP
 
 #include "utils/constexpr.hpp"
+#include "utils/concepts.hpp"
+#include "utils/result.hpp"
 #include <functional>
 #include <cstdio> // std::snprintf
-#include <charconv> // std::to_chars
 #include <memory> // std::unique_ptr
 #include <stdexcept> // std::runtime_error
 #include <tuple> // std::tuple_cat, std::make_tuple
@@ -19,44 +20,38 @@ namespace utils {
             using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
             static_assert(std::is_pointer<Type>::value || std::is_null_pointer<Type>::value, "non-pointer type provided to pointer_to_string");
             
-            static std::unique_ptr<char[]> buffer = nullptr;
-            static std::size_t buffer_size = 0u;
-            if (buffer_size == 0u) {
-                int num_characters = std::snprintf(nullptr, 0u, "0x%p", static_cast<void*>(pointer)); // Guaranteed to be the same during program execution.
-                if (num_characters < 0) {
-                    throw std::runtime_error("encoding error (initial allocation) pointer_to_string");
-                }
-                
-                buffer_size = static_cast<std::size_t>(num_characters) + 1u; // Account for null terminator.
-                buffer = std::unique_ptr<char[]>(new char[buffer_size]);
-            }
+            static char buffer[2u * sizeof(void*) + 3u] { '\0' }; // Enough space to store a pointer address + an optional '0x' prefix (2 bytes) + null terminator (1 byte).
+            static std::size_t buffer_size = sizeof(buffer) / sizeof(buffer[0]);
             
-            int num_characters = std::snprintf(buffer.get(), buffer_size, "0x%p", static_cast<void*>(pointer));
+            int num_characters = std::snprintf(buffer, buffer_size, "%p", static_cast<void*>(pointer));
             if (num_characters < 0) {
                 throw std::runtime_error("encoding error in pointer_to_string");
             }
             
-            return { buffer.get(), static_cast<std::size_t>(num_characters) };
+            // The inclusion of the '0x' prefix is implementation dependent, and not all compilers may include it.
+            if (buffer[0] == '0' && buffer[1] == 'x') {
+                return { buffer, static_cast<std::size_t>(num_characters) };
+            }
+            else {
+                return "0x" + std::string(buffer, static_cast<std::size_t>(num_characters));
+            }
         }
         
         template <typename T>
-        [[nodiscard]] std::string to_string(const T& value) {
+        [[nodiscard]] std::string stringify(const T& value) {
             using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
             
             if constexpr (std::is_fundamental<Type>::value) {
                 if constexpr (std::is_null_pointer<Type>::value) {
                     // std::nullptr_t (nullptr)
-                    // Note: passing as void* instead of std::nullptr_t
-                    return pointer_to_string(nullptr);
+                    return pointer_to_string(value);
+                }
+                else if constexpr (std::is_same<Type, bool>::value) {
+                    return value ? "true" : "false";
                 }
                 else {
-                    // fundamental types (boolean, character, integer, floating point)
-                    
-                    // TODO: doesn't work for boolean types.
-                    
-                    char buffer[32] = { '\0' };
-                    auto [p, error_code] = std::to_chars(buffer, buffer + sizeof(buffer) / sizeof(buffer[0]), value);
-                    return std::string(buffer, p);
+                    // TODO: other fundamental types.
+                    return "";
                 }
             }
             else if constexpr (is_standard_container<Type>::value) {
@@ -70,9 +65,9 @@ namespace utils {
                 }
                 
                 std::string result = "[ ";
-                result.append(to_string(*iter));
+                result.append(stringify(*iter));
                 for (++iter; iter != end; ++iter) {
-                    result.append(", " + to_string(*iter));
+                    result.append(", " + stringify(*iter));
                 }
                 result.append(" ]");
 
@@ -81,9 +76,9 @@ namespace utils {
             else if constexpr (is_pair<Type>::value) {
                 // std::pair
                 std::string result = "{ ";
-                result.append(to_string(value.first));
+                result.append(stringify(value.first));
                 result.append(", ");
-                result.append(to_string(value.second));
+                result.append(stringify(value.second));
                 result.append(" }");
                 return std::move(result);
             }
@@ -93,7 +88,7 @@ namespace utils {
                 
                 // Use std::apply + fold expression to iterate over and format the elements of the tuple.
                 std::apply([&result](auto&&... args) {
-                    ((result.append(to_string(args) + ", ")), ...);
+                    ((result.append(stringify(args) + ", ")), ...);
                 }, value);
                 
                 // Overwrite the trailing ", " with " }".
@@ -111,31 +106,65 @@ namespace utils {
                 // pointer types
                 return pointer_to_string(value);
             }
-            else {
-                // Utilize T::operator std::string() for all other custom types.
+            // Utilize user-defined std::string conversion operators for all other custom types.
+            // This implementation allows for both a std::string conversion class operator (T::operator std::string() const) and a standalone to_string(const T&) function.
+            else if constexpr (convertible_to_string<Type>) {
+                // Note: can also use std::is_convertible<Type, std::string>::value if the conversion operator is not marked explicit.
                 return std::string(value);
+            }
+            else {
+                return to_string(value);
             }
         }
         
         template <typename T, typename ...Rest>
         auto to_string_tuple(const T& value, const Rest&... rest) {
-            return std::tuple_cat(std::make_tuple(to_string(value)), internal::to_string_tuple<Rest>(rest)...);
+            return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
         }
+        
+//        struct FormatString {
+//            enum Type {
+//                Python,
+//                Printf
+//            };
+//
+//            struct Placeholder {
+//                enum Type {
+//                    Auto,
+//                    Positional,
+//                    Named
+//                };
+//
+//                std::uint32_t offset;
+//                std::string name;
+//            };
+//
+//            FormatString() {};
+//
+//            Type type;
+//            std::vector<Placeholder> placeholders;
+//            std::string result;
+//        };
+//
+//        Result<FormatString> parse_format_string(const std::string& fmt) {
+//            for (std::size_t i = 0u; i < fmt.length(); ++i) {
+//
+//            }
+//        }
         
     }
     
-    template <typename Container>
-    [[nodiscard]] std::string join(const Container& components, const std::string& glue) {
-        static_assert(std::is_same<typename std::decay<decltype(*std::begin(std::declval<Container>()))>::type, std::string>::value, "container must be of string type");
-        if (empty(components)) {
-            return "";
-        }
     
-        auto iter = components.begin();
+    template <typename Container>
+    [[nodiscard]] std::string join(const Container& container, const std::string& glue) {
+        // TODO: support custom containers with iterators
+        static_assert(is_standard_container<Container>::value || is_initializer_list<Container>::value, "container type must be a standard c++ container");
         
+        auto iter = std::cbegin(container);
         std::string result;
+        
         result.append(*iter);
-        for (++iter; iter != components.end(); ++iter) {
+        for (++iter; iter != std::cend(container); ++iter) {
             result.append(glue);
             result.append(*iter);
         }
@@ -145,11 +174,18 @@ namespace utils {
 
     template <typename T>
     arg::arg(std::string name, const T& value) : name(std::move(name)),
-                                                 value(internal::to_string(value)) {
+                                                 value(internal::stringify(value)) {
     }
     
     template <typename ...Ts>
-    std::string format(const std::string& format, const Ts&... ts) {
+    std::string format(const std::string& fmt, const Ts&... ts) {
+        using namespace internal;
+        
+//        Result<FormatString> format_string = parse_format_string(fmt);
+//        if (!format_string.ok()) {
+//            throw std::runtime_error(format_string.what());
+//        }
+        
         auto formatted = internal::to_string_tuple<Ts...>(ts...);
         return "";
     }

@@ -50,5 +50,4 @@ namespace utils {
 
 }
 
-
 #endif // UTILS_RESULT_TPP
