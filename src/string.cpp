@@ -30,4 +30,8 @@ namespace utils {
 
     arg::~arg() = default;
 
+    arg::operator std::string() const {
+        return value;
+    }
+    
 }

@@ -5,6 +5,13 @@
 #include <iostream>
 #include <vector>
 
+struct MyContainer {
+    std::vector<int> raw;
+
+    std::vector<int>::const_iterator begin() const;
+    std::vector<int>::const_iterator end() const;
+};
+
 int main() {
     using namespace utils;
     
@@ -16,6 +23,14 @@ int main() {
     
 //    std::string a = format("test", arg("test", true));
     std::string a = format("test", arg("test", 2), b, pair, nullptr, c, tup);
+    
+    std::vector<std::string> cont {
+        "test",
+        "main"
+    };
+    
+    MyContainer test_cont { };
+    std::string tt = join(test_cont, " ");
     
     arg t = arg("name", 6);
     std::string s = std::string(t);

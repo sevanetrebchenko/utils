@@ -26,15 +26,13 @@ namespace utils {
     
     
     // For formatting named format specifiers.
-    // Note: custom types must define a std::string conversion operator.
+    // Note: custom types must define either a std::string conversion operator (T::operator std::string()) or a standalone to_string(const T&) function.
     struct arg {
         template <typename T>
         arg(std::string name, const T& value);
         ~arg();
         
-        explicit operator std::string() const {
-            return value;
-        }
+        explicit operator std::string() const;
         
         std::string name;
         std::string value;

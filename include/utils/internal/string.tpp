@@ -108,7 +108,7 @@ namespace utils {
             }
             // Utilize user-defined std::string conversion operators for all other custom types.
             // This implementation allows for both a std::string conversion class operator (T::operator std::string() const) and a standalone to_string(const T&) function.
-            else if constexpr (convertible_to_string<Type>) {
+            else if constexpr (is_convertible_to_string<Type>) {
                 // Note: can also use std::is_convertible<Type, std::string>::value if the conversion operator is not marked explicit.
                 return std::string(value);
             }
@@ -158,17 +158,17 @@ namespace utils {
     template <typename Container>
     [[nodiscard]] std::string join(const Container& container, const std::string& glue) {
         // TODO: support custom containers with iterators
-        static_assert(is_standard_container<Container>::value || is_initializer_list<Container>::value, "container type must be a standard c++ container");
+        static_assert(is_const_iterable<Container>, "container must support std::begin/std::end");
         
-        auto iter = std::cbegin(container);
+        auto iter = std::begin(container);
         std::string result;
-        
-        result.append(*iter);
-        for (++iter; iter != std::cend(container); ++iter) {
+
+        result.append(internal::stringify(*iter));
+        for (++iter; iter != std::end(container); ++iter) {
             result.append(glue);
-            result.append(*iter);
+            result.append(internal::stringify(*iter));
         }
-        
+
         return std::move(result);
     }
 
