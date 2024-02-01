@@ -22,15 +22,12 @@ int main() {
     std::tuple<std::string, int, float> tup = std::make_tuple("test string", 56, 9.8f);
     
 //    std::string a = format("test", arg("test", true));
-    std::string a = format("test", arg("test", 2), b, pair, nullptr, c, tup);
+    std::string a = format("test {format specifier:}", arg("test", 2), b, pair, nullptr, c, tup);
     
     std::vector<std::string> cont {
         "test",
         "main"
     };
-    
-    MyContainer test_cont { };
-    std::string tt = join(test_cont, " ");
     
     arg t = arg("name", 6);
     std::string s = std::string(t);

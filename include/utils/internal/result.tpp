@@ -2,6 +2,7 @@
 #ifndef UTILS_RESULT_TPP
 #define UTILS_RESULT_TPP
 
+#include "utils/string.hpp"
 #include <stdexcept> // std::runtime_error
 #include <utility> // std::move
 
@@ -18,34 +19,26 @@ namespace utils {
     Result<T>::~Result() = default;
     
     template <typename T>
-    template <typename ...Ts>
-    Result<T> Result<T>::OK(Ts&& ...args) {
-        return Result<T>(std::move(args)...);
+    template <typename ...Args>
+    Result<T> Result<T>::NOT_OK(const std::string& format_string, const Args&... args) {
+        Result<T> result { };
+        
+        if constexpr (sizeof...(Args) > 0u) {
+            result.m_error = format(format_string, args...);
+        }
+        else {
+            result.m_error = format_string;
+        }
+
+        return result;
     }
     
     template <typename T>
-    Result<T> Result<T>::NOT_OK(const std::string& error) {
-        Result<T> Result { };
-        Result.m_error = error;
-        return Result;
-    }
-    
-    template <typename T>
-    bool Result<T>::ok() const {
-        return m_result.has_value();
-    }
-    
-    template <typename T>
-    const std::string& Result<T>::what() const {
-        return m_error;
-    }
-    
-    template <typename T>
-    T& Result<T>::operator->() const {
-        if (!m_result.has_value()) {
+    T* Result<T>::operator->() {
+        if (!ok()) {
             throw std::runtime_error("Result<T>::operator->() invoked on Result<T> instance that is not ok!");
         }
-        return m_result;
+        return &m_result.value();
     }
 
 }

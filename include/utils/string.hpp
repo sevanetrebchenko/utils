@@ -26,7 +26,7 @@ namespace utils {
     
     
     // For formatting named format specifiers.
-    // Note: custom types must define either a std::string conversion operator (T::operator std::string()) or a standalone to_string(const T&) function.
+    // Note: custom types must define either a std::string conversion operator (T::operator std::string(), preferred) or a standalone to_string(const T&) function.
     struct arg {
         template <typename T>
         arg(std::string name, const T& value);
@@ -38,11 +38,7 @@ namespace utils {
         std::string value;
     };
     
-//    inline std::string to_string(const arg& arg) {
-//        return arg.value;
-//    }
-    
-    // Supports Python f-strings and printf-style format specifiers.
+    // Python f-string format
     template <typename ...Ts>
     [[nodiscard]] std::string format(const std::string& format, const Ts&... args);
     

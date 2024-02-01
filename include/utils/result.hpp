@@ -29,22 +29,18 @@ namespace utils {
     };
     
     template <typename T>
-    class Result final : private Response {
+    class Result final : public Response {
         public:
-            template <typename ...Ts>
-            static Result<T> OK(Ts&&... args);
-            static Result<T> NOT_OK(const std::string& error);
-            ~Result();
+            template <typename ...Args>
+            static Result<T> NOT_OK(const std::string& format_string, const Args&... args);
             
-            [[nodiscard]] bool ok() const;
-            [[nodiscard]] const std::string& what() const;
-            
-            [[nodiscard]] T& operator->() const;
-            
-        private:
             template <typename ...Ts>
             explicit Result(Ts&&... args);
+            ~Result();
             
+            [[nodiscard]] T* operator->();
+            
+        private:
             std::optional<T> m_result;
     };
     
