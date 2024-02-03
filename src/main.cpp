@@ -29,6 +29,8 @@ int main() {
         "main"
     };
     
+    std::vector<std::string> comps = split(":adf", ":");
+    
     arg t = arg("name", 6);
     std::string s = std::string(t);
     std::cout << std::is_convertible<decltype(t), std::string>::value << std::endl;

@@ -124,92 +124,69 @@ namespace utils {
         }
         
         struct FormatString {
-            FormatString() {}
-            std::string str;
+            FormatString(const std::string& format_string);
         };
 
-        struct TypeFormatArgs {
-            // Justification
-            bool justify_left;
-            bool justify_right;
-            bool justify_center;
+        struct Placeholder {
+            struct Identifier {
+                enum Type {
+                    None = 0,
+                    Position,
+                    Name
+                };
+                
+                Identifier();
+                explicit Identifier(int position);
+                explicit Identifier(std::string name);
+    
+                Type type;
+                int position;
+                std::string name;
+            };
             
+            struct Formatting {
+                enum Justification {
+                    Right = 0,
+                    Left,
+                    Center
+                };
+                
+                enum Representation {
+                    Decimal = 0,
+                    Binary,
+                    Unicode,
+                    Octal,
+                    Hexadecimal
+                };
+                
+                enum Sign {
+                    NegativeOnly = 0,
+                    Aligned,
+                    Both
+                };
+                
+                Formatting();
+                ~Formatting();
+                
+                Justification justification;
+                Representation representation;
+                Sign sign;
+                char fill;
+                char separator;
+                unsigned width;
+                unsigned precision;
+            };
+            
+            Placeholder(const std::string& placeholder);
+            ~Placeholder();
+            
+            Identifier identifier;
+            Formatting formatting;
         };
         
-        inline Result<TypeFormatArgs> parse_placeholder_format_specifiers(const std::string& specifiers) {
-            return Result<TypeFormatArgs> { };
-        }
-        
-        
-        inline Result<FormatString> parse_format_string(const std::string& format_string) {
-            Result<FormatString> result { };
-            
-            // To save on processing power, resulting string is only updated when a placeholder is encountered.
-            
-            bool processing_placeholder = false;
-            std::size_t placeholder_start;
-            processing_placeholder = false;
-            
-            std::size_t position = 0u;
-            
-            for (std::size_t i = 0u; i < format_string.length(); ++i) {
-                if (processing_placeholder) {
-                    if (format_string[i] == '}') {
-                        // Parse the placeholder without the starting or ending braces.
-                        std::string placeholder = format_string.substr(placeholder_start + 1u, i - placeholder_start - 1u);
-                        
-                        if (placeholder.empty() || placeholder[0] == ':') {
-                            // Detected auto-numbered placeholder - {}.
-                            // Note: auto-numbered placeholders may still contain format specifiers for type formatting.
-                            
-                        }
-                        else {
-                            // A placeholder should not have any whitespace characters.
-                            for (std::size_t j = 0u; j < placeholder.length(); ++j) {
-                                if (std::isspace(placeholder[j])) {
-                                    return Result<FormatString>::NOT_OK("error while processing placeholder '{{{}}}' (whitespace character at position {})", placeholder, j);
-                                }
-                            }
-                            
-                            // Determine if placeholder is positional or named.
-                            std::vector<std::string> components = split(placeholder, ":");
-                            if (std::regex_match(components[0], std::regex("^[0-9]+$"))) {
-                                // Positional placeholders can only be positive integers.
-                            }
-                            else if (std::regex_match(components[0], std::regex("^[a-zA-Z_]\\w*$"))) {
-                                // Named placeholders follow the same naming convention as C++ identifiers:
-                                //  - start with a letter or underscore
-                                //  - followed by any combination of letters, digits, or underscores (\w)
-                            }
-                            else {
-                                return Result<FormatString>::NOT_OK("error while processing placeholder '{{{}}}' (placeholder name '{}' is not valid)", placeholder, components[0]);
-                            }
-                        }
-                    }
-                }
-                else {
-                    if (format_string[i] == '{') {
-                        if (i != format_string.length() - 1u && format_string[i + 1u] == '{') {
-                            // Escaped '{' character.
-                        }
-                        else {
-                            processing_placeholder = true;
-                            placeholder_start = i;
-                        }
-                    }
-                    else if (format_string[i] == '}') {
-                        if (i == 0u) {
-                            return Result<FormatString>::NOT_OK("");
-                        }
-                        else if (format_string[i - 1u] == '}') {
-                            // Escaped '}' character.
-                        }
-                    }
-                }
-            }
-            
-            return Result<FormatString> { };
-        }
+        [[nodiscard]] Result<FormatString> parse_format_string(const std::string& format_string);
+        [[nodiscard]] Result<Placeholder::Identifier> parse_placeholder_identifier(const std::string& identifier);
+        [[nodiscard]] Result<Placeholder::Formatting> parse_placeholder_format_specifiers(const std::string& format_specifiers);
         
     }
     
