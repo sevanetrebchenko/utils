@@ -19,9 +19,11 @@ int main() {
     int* c = nullptr;
     
     std::pair<bool, char> pair = std::make_pair(true, 'a');
-    std::tuple<std::string, int, float> tup = std::make_tuple("test string", 56, 9.8f);
+    std::tuple<std::string, int, float, int> tup = std::make_tuple("test string", 56, 9.8f, 1);
     
-    std::string a = format("test {0}", arg("test", true));
+    auto ocur = count_occurrences<std::string>(tup);
+    
+    std::string a = format("test {} {0}", arg("test", true));
 //    std::string a = format("test {0}", arg("test", 2), b, pair, nullptr, c, tup);
     
     return 0;

@@ -21,7 +21,7 @@ namespace utils {
         struct Placeholder {
             class Identifier {
                 public:
-                    enum Type {
+                    enum class Type {
                         None = 0,
                         Position,
                         Name
@@ -32,6 +32,8 @@ namespace utils {
                     
                     Identifier();
                     ~Identifier();
+                    
+                    [[nodiscard]] bool operator==(const Identifier& other) const;
     
                     Type type;
                     int position; // Allows for ~2 billion unique positions in a single format string.
@@ -68,6 +70,8 @@ namespace utils {
                 
                 Formatting();
                 ~Formatting();
+                
+                [[nodiscard]] bool operator==(const Formatting& other) const;
             
                 Justification justification;
                 Representation representation;
@@ -83,6 +87,8 @@ namespace utils {
             
             Placeholder();
             ~Placeholder();
+            
+            [[nodiscard]] bool operator==(const Placeholder& other) const;
             
             Identifier identifier;
             Formatting formatting;
@@ -101,14 +107,23 @@ namespace utils {
                 
             private:
                 struct InsertionPoint {
+                    InsertionPoint(std::size_t placeholder_index, std::size_t insert_position);
+                    ~InsertionPoint();
+                    
                     std::size_t placeholder_index;
                     std::size_t insert_position;
                 };
+
+                void register_placeholder(const Placeholder& placeholder, std::size_t position);
                 
+                // Verifies that placeholders are of the same type.
+                // A format string can either contain all auto-numbered placeholders or a mix of positional and named placeholders.
+                // Auto-numbered placeholders cannot be mixed in with placeholders of the other two types.
+                [[nodiscard]] bool verify_placeholder_homogeneity() const;
                 
                 std::string m_format;
                 std::vector<Placeholder> m_placeholders;
-                std::vector<std::size_t> m_insert_positions;
+                std::vector<InsertionPoint> m_insertion_points;
         };
         
         
@@ -224,6 +239,17 @@ namespace utils {
         std::string FormatString::format(const Ts& ...args) const {
             std::string result = m_format;
             auto tuple = std::make_tuple(args...);
+            
+            std::size_t arg_count = sizeof...(args);
+            std::size_t keyword_arg_count = count_occurrences<arg>(tuple);
+            
+            std::vector<std::string> formatted_args;
+            formatted_args.reserve(m_placeholders.size());
+
+            for (const Placeholder& placeholder : m_placeholders) {
+            
+            }
+            
             
             get_type<arg>(tuple, [](const arg& value) {
                 std::cout << value.value << std::endl;

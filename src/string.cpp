@@ -9,6 +9,7 @@
 namespace utils {
     namespace internal {
         
+        // Identifier implementation.
         Result<Placeholder::Identifier> Placeholder::Identifier::parse(std::string_view identifier) noexcept {
             if (identifier.empty()) {
                 // Detected auto-numbered placeholder - {}.
@@ -82,6 +83,12 @@ namespace utils {
         
         Placeholder::Identifier::~Identifier()= default;
         
+        bool Placeholder::Identifier::operator==(const Placeholder::Identifier& other) const {
+            return type == other.type && position == other.position && name == other.name;
+        }
+        
+        
+        // Formatting implementation.
         Placeholder::Formatting::Formatting() : justification(Right),
                                                 representation(Decimal),
                                                 sign(NegativeOnly),
@@ -106,6 +113,18 @@ namespace utils {
             return Result<Formatting> { };
         }
         
+        bool Placeholder::Formatting::operator==(const Placeholder::Formatting& other) const {
+            return justification == other.justification &&
+                   representation == other.representation &&
+                   sign == other.sign &&
+                   fill == other.fill &&
+                   separator == other.separator &&
+                   width == other.width &&
+                   precision == other.precision;
+        }
+        
+        
+        // Placeholder implementation
         Placeholder::Placeholder(std::string_view in) : identifier(),
                                                         formatting()
                                                         {
@@ -154,6 +173,10 @@ namespace utils {
         
         Placeholder::~Placeholder() = default;
         
+        bool Placeholder::operator==(const Placeholder& other) const {
+            return identifier == other.identifier && formatting == other.formatting;
+        }
+        
         
         // FormatString implementation
         FormatString::FormatString(std::string_view in) {
@@ -185,8 +208,8 @@ namespace utils {
                             return Result<FormatString>::NOT_OK("error parsing format string - {}", placeholder.what());
                         }
                         
-                        format_string->m_placeholders.emplace_back(*placeholder);
-                        format_string->m_insert_positions.emplace_back(i);
+                        format_string->register_placeholder(*placeholder, i);
+                        processing_placeholder = false;
                     }
                 }
                 else {
@@ -203,7 +226,8 @@ namespace utils {
                     }
                     else if (in[i] == '}') {
                         if (i == 0u) {
-                            // return Result<FormatString>::NOT_OK("");
+                            // TODO
+                            return Result<FormatString>::NOT_OK("");
                         }
                         else if (in[i - 1u] == '}') {
                             // Escaped '}' character.
@@ -215,6 +239,12 @@ namespace utils {
             }
             
             if (processing_placeholder) {
+                // TODO:
+                return Result<FormatString>::NOT_OK("");
+            }
+            
+            if (!format_string->verify_placeholder_homogeneity()) {
+                return Result<FormatString>::NOT_OK("format string placeholders must be homogeneous - auto-numbered placeholders cannot be mixed in with positional/named ones");
             }
             
             return format_string;
@@ -223,6 +253,48 @@ namespace utils {
         FormatString::FormatString() = default;
         
         FormatString::~FormatString() = default;
+        
+        void FormatString::register_placeholder(const Placeholder& placeholder, std::size_t position) {
+            // Determine if this placeholder already exists
+            std::size_t placeholder_index = m_placeholders.size();
+            
+            for (std::size_t i = 0u; i < m_placeholders.size(); ++i) {
+                if (placeholder == m_placeholders[i]) {
+                    placeholder_index = i;
+                    break;
+                }
+            }
+            
+            if (placeholder_index == m_placeholders.size()) {
+                m_placeholders.emplace_back(placeholder);
+            }
+            
+            // Register insertion point.
+            m_insertion_points.emplace_back(placeholder_index, position);
+        }
+        
+        bool FormatString::verify_placeholder_homogeneity() const {
+            if (m_placeholders.empty()) {
+                return true;
+            }
+            
+            bool auto_numbered = m_placeholders[0].identifier.type == Placeholder::Identifier::Type::None;
+            for (std::size_t i = 1u; i < m_placeholders.size(); ++i) {
+                if (m_placeholders[i].identifier.type != Placeholder::Identifier::Type::None) {
+                    // Detected placeholder of a different type.
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        FormatString::InsertionPoint::InsertionPoint(std::size_t placeholder_index, std::size_t insert_position) : placeholder_index(placeholder_index),
+                                                                                                                   insert_position(insert_position)
+                                                                                                                   {
+        }
+        
+        FormatString::InsertionPoint::~InsertionPoint() = default;
         
     }
     
