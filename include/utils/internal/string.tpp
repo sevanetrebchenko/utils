@@ -123,75 +123,78 @@ namespace utils {
             return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
         }
         
-        struct Placeholder {
-            class Identifier {
-                public:
-                    enum Type {
-                        None = 0,
-                        Position,
-                        Name
+        class Placeholder {
+            public:
+                class Identifier {
+                    public:
+                        enum Type {
+                            None = 0,
+                            Position,
+                            Name
+                        };
+        
+                        Identifier();
+                        explicit Identifier(std::string_view identifier);
+                        static Result<Identifier> parse(std::string_view identifier) noexcept;
+                        ~Identifier();
+        
+                        Type type;
+                        int position; // Allows for ~2 billion unique positions in a single format string.
+                        std::string name;
+                        
+                    private:
+                        explicit Identifier(int position);
+                        explicit Identifier(std::string name);
+                };
+                
+                struct Formatting {
+                    enum Justification {
+                        Right = 0,
+                        Left,
+                        Center
                     };
-    
-                    explicit Identifier(std::string_view identifier);
-                    static Result<Identifier> parse(std::string_view identifier) noexcept;
-                    ~Identifier();
-    
-                    Type type;
-                    int position; // Allows for ~2 billion unique positions in a single format string.
-                    std::string name;
                     
-                private:
-                    Identifier();
-                    explicit Identifier(int position);
-                    explicit Identifier(std::string name);
-            };
-            
-            struct Formatting {
-                enum Justification {
-                    Right = 0,
-                    Left,
-                    Center
+                    enum Representation {
+                        Decimal = 0,
+                        Binary,
+                        Unicode,
+                        Octal,
+                        Hexadecimal
+                    };
+                    
+                    enum Sign {
+                        NegativeOnly = 0,
+                        Aligned,
+                        Both
+                    };
+                    
+                    explicit Formatting(std::string_view specifiers);
+                    static Result<Formatting> parse(std::string_view specifiers) noexcept;
+                    
+                    Formatting();
+                    ~Formatting();
+                
+                    Justification justification;
+                    Representation representation;
+                    Sign sign;
+                    char fill;
+                    char separator;
+                    unsigned width;
+                    unsigned precision;
                 };
                 
-                enum Representation {
-                    Decimal = 0,
-                    Binary,
-                    Unicode,
-                    Octal,
-                    Hexadecimal
-                };
+                Placeholder(std::string_view placeholder);
+                static Result<Placeholder> parse(std::string_view placeholder) noexcept;
                 
-                enum Sign {
-                    NegativeOnly = 0,
-                    Aligned,
-                    Both
-                };
+                Placeholder();
+                ~Placeholder();
                 
-                explicit Formatting(const std::string& specifiers);
-                static Result<Formatting> parse(const std::string& specifiers) noexcept;
-                
-                Formatting();
-                ~Formatting();
-            
-                Justification justification;
-                Representation representation;
-                Sign sign;
-                char fill;
-                char separator;
-                unsigned width;
-                unsigned precision;
-            };
-            
-            Placeholder(const std::string& placeholder);
-            static Result<Placeholder> parse(const std::string& placeholder) noexcept;
-            ~Placeholder();
-            
-            Identifier identifier;
-            Formatting formatting;
+                Identifier identifier;
+                Formatting formatting;
         };
         
         struct FormatString {
-            FormatString(const std::string& format_string);
+            FormatString() {}
             
             std::vector<Placeholder> placeholders;
         };

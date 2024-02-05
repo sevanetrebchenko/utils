@@ -141,9 +141,9 @@ namespace utils {
         Placeholder::Identifier::Identifier(std::string_view in) {
             Result<Identifier> result = parse(in);
             if (!result.ok()) {
-                throw std::runtime_error(format("error on parsing identifier - {}", result.what()));
+                throw std::invalid_argument(format("error parsing identifier '{}' - {}", in, result.what()));
             }
-            *this = result.get();
+            *this = *result;
         }
         
         Placeholder::Identifier::Identifier() : type(Type::None),
@@ -178,44 +178,58 @@ namespace utils {
         
         Placeholder::Formatting::~Formatting() = default;
         
-        Result<Placeholder::Formatting> Placeholder::Formatting::parse(const std::string& specifiers) noexcept {
+        Placeholder::Formatting::Formatting(std::string_view in) {
+            Result<Formatting> result = parse(in);
+            if (!result.ok()) {
+                throw std::invalid_argument(format("error parsing placeholder format specifiers '{}' - {}", in, result.what()));
+            }
+            *this = *result;
         }
         
-        Result<Placeholder> Placeholder::parse(const std::string& in) noexcept {
-            std::vector<std::string> components { };
+        Result<Placeholder::Formatting> Placeholder::Formatting::parse(std::string_view specifiers) noexcept {
+            return Result<Formatting>::NOT_OK(" ");
+        }
+        
+        Placeholder::Placeholder(std::string_view in) : identifier(),
+                                                        formatting()
+                                                        {
+            Result<Placeholder> result = parse(in);
+            if (!result.ok()) {
+                throw std::invalid_argument(format("error parsing placeholder '{}' - {}", in, result.what()));
+            }
+            *this = *result;
+        }
+        
+        Result<Placeholder> Placeholder::parse(std::string_view in) noexcept {
+            Result<Placeholder> placeholder { };
             
             // Split by the first ':' character, if present.
             // This approach has the added benefit of catching any extra ':' characters in the placeholder during parsing.
             std::size_t split_position = in.find(':');
-            components.emplace_back(in.substr(0, split_position));
-            if (split_position != std::string::npos) {
-                components.emplace_back(in.substr(split_position + 1));
-            }
-
-            Result<Placeholder> placeholder { };
             
             {
-                Result<Placeholder::Identifier> result = Placeholder::Identifier::parse(components[0]);
+                Result<Placeholder::Identifier> result = Placeholder::Identifier::parse(in.substr(0, split_position));
                 if (!result.ok()) {
                     return Result<Placeholder>::NOT_OK("error parsing format string - {}", result.what());
                 }
-                placeholder->identifier = result.get();
+                placeholder->identifier = *result;
             }
 
-            
             // Formatting specifiers are optional.
             {
-                if (components.size() > 1) {
-                    Result<Placeholder::Formatting> result = Placeholder::Formatting::parse(components[1]);
+                if (split_position != std::string::npos) {
+                    Result<Placeholder::Formatting> result = Placeholder::Formatting::parse(in.substr(split_position + 1));
                     if (!result.ok()) {
                         return Result<Placeholder>::NOT_OK("error parsing format string - {}", result.what());
                     }
-                    placeholder->formatting = result.get();
+                    placeholder->formatting = *result;
                 }
             }
             
             return placeholder;
         }
+        
+        Placeholder::Placeholder() = default;
         
         Placeholder::~Placeholder() = default;
 

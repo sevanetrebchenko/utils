@@ -16,6 +16,12 @@ namespace utils {
     }
     
     template <typename T>
+    Result<T>::Result() : Response(),
+                          m_result(T { })
+                          {
+    }
+    
+    template <typename T>
     Result<T>::~Result() = default;
     
     template <typename T>
@@ -34,10 +40,17 @@ namespace utils {
     }
     
     template <typename T>
+    [[nodiscard]] T& Result<T>::operator*() {
+        return m_result.value();
+    }
+    
+    template <typename T>
+    [[nodiscard]] T& Result<T>::get() {
+        return m_result.value();
+    }
+    
+    template <typename T>
     T* Result<T>::operator->() {
-        if (!ok()) {
-            throw std::runtime_error("Result<T>::operator->() invoked on Result<T> instance that is not ok!");
-        }
         return &m_result.value();
     }
 

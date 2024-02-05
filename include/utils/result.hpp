@@ -36,9 +36,11 @@ namespace utils {
             
             template <typename ...Ts>
             explicit Result(Ts&&... args);
+            Result();
             ~Result();
             
-            [[nodiscard]] T& get() const;
+            [[nodiscard]] T& operator*();
+            [[nodiscard]] T& get();
             [[nodiscard]] T* operator->();
             
         private:
