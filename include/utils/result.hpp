@@ -38,6 +38,7 @@ namespace utils {
             explicit Result(Ts&&... args);
             ~Result();
             
+            [[nodiscard]] T& get() const;
             [[nodiscard]] T* operator->();
             
         private:

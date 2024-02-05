@@ -123,25 +123,27 @@ namespace utils {
             return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
         }
         
-        struct FormatString {
-            FormatString(const std::string& format_string);
-        };
-
         struct Placeholder {
-            struct Identifier {
-                enum Type {
-                    None = 0,
-                    Position,
-                    Name
-                };
-                
-                Identifier();
-                explicit Identifier(int position);
-                explicit Identifier(std::string name);
+            class Identifier {
+                public:
+                    enum Type {
+                        None = 0,
+                        Position,
+                        Name
+                    };
     
-                Type type;
-                int position;
-                std::string name;
+                    explicit Identifier(std::string_view identifier);
+                    static Result<Identifier> parse(std::string_view identifier) noexcept;
+                    ~Identifier();
+    
+                    Type type;
+                    int position; // Allows for ~2 billion unique positions in a single format string.
+                    std::string name;
+                    
+                private:
+                    Identifier();
+                    explicit Identifier(int position);
+                    explicit Identifier(std::string name);
             };
             
             struct Formatting {
@@ -165,9 +167,12 @@ namespace utils {
                     Both
                 };
                 
+                explicit Formatting(const std::string& specifiers);
+                static Result<Formatting> parse(const std::string& specifiers) noexcept;
+                
                 Formatting();
                 ~Formatting();
-                
+            
                 Justification justification;
                 Representation representation;
                 Sign sign;
@@ -178,15 +183,20 @@ namespace utils {
             };
             
             Placeholder(const std::string& placeholder);
+            static Result<Placeholder> parse(const std::string& placeholder) noexcept;
             ~Placeholder();
             
             Identifier identifier;
             Formatting formatting;
         };
         
+        struct FormatString {
+            FormatString(const std::string& format_string);
+            
+            std::vector<Placeholder> placeholders;
+        };
+        
         [[nodiscard]] Result<FormatString> parse_format_string(const std::string& format_string);
-        [[nodiscard]] Result<Placeholder::Identifier> parse_placeholder_identifier(const std::string& identifier);
-        [[nodiscard]] Result<Placeholder::Formatting> parse_placeholder_format_specifiers(const std::string& format_specifiers);
         
     }
     

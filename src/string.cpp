@@ -4,6 +4,7 @@
 #include "utils/internal/string.tpp"
 
 #include <limits>
+#include <charconv>
 
 namespace utils {
 
@@ -41,6 +42,8 @@ namespace utils {
     namespace internal {
         
         Result<FormatString> parse_format_string(const std::string& format_string) {
+            std::vector<Placeholder> placeholders;
+            
             // To save on processing power, resulting string is only updated when a placeholder is encountered.
             std::string string;
             
@@ -54,25 +57,12 @@ namespace utils {
                 if (processing_placeholder) {
                     if (format_string[i] == '}') {
                         // Parse the placeholder without the starting or ending braces.
-                        std::string placeholder = format_string.substr(placeholder_start + 1u, i - placeholder_start - 1u);
-                        
-                        std::vector<std::string> components { };
-                        
-                        // Split by the first ':' character, if present.
-                        std::size_t split_position = placeholder.find(':');
-                        components.emplace_back(placeholder.substr(0, split_position));
-                        if (split_position != std::string::npos) {
-                            components.emplace_back(placeholder.substr(split_position + 1));
+                        Result<Placeholder> placeholder = Placeholder::parse(format_string.substr(placeholder_start + 1u, i - placeholder_start - 1u));
+                        if (!placeholder.ok()) {
+                            return Result<FormatString>::NOT_OK("error parsing format string - {}", placeholder.what());
                         }
                         
-                        Result<Placeholder::Identifier> identifier = parse_placeholder_identifier(components[0]);
-                        if (!identifier.ok()) {
-                            return Result<FormatString>::NOT_OK("error parsing format string - {}", identifier.what());
-                        }
-                        
-                        if (components.size() > 1) {
-                            parse_placeholder_format_specifiers(components[1]);
-                        }
+                        placeholders.emplace_back(placeholder.get());
                     }
                 }
                 else {
@@ -103,21 +93,78 @@ namespace utils {
             return Result<FormatString> { };
         }
         
-        Placeholder::Identifier::Identifier() : type(None),
-                                                position(-1)
+        Result<Placeholder::Identifier> Placeholder::Identifier::parse(std::string_view identifier) noexcept {
+            if (identifier.empty()) {
+                // Detected auto-numbered placeholder - {}.
+                return Result<Identifier> { };
+            }
+            else {
+                // A placeholder identifier should not have any whitespace characters.
+                for (unsigned i = 0u; i < identifier.length(); ++i) {
+                    if (std::isspace(identifier[i])) {
+                        return Result<Identifier>::NOT_OK("whitespace character at index {}", i);
+                    }
+                }
+                
+                // Note: regex_match checks the entire input string. This behaviour can be simulated by using
+                // regex search and anchoring the input string by using '^' (start) and '$' (end), but has been
+                // omitted for simplicity.
+                
+                // Determine if placeholder is positional or named.
+                if (std::regex_match(identifier.begin(), identifier.end(), std::regex("[0-9]+"))) {
+                    // Positional placeholders can only be positive integers.
+                    int position;
+                    
+                    const char* start = identifier.data();
+                    const char* end = start + identifier.length();
+                    std::from_chars_result conversion_result = std::from_chars(start, end, position, 10);
+                    
+                    // Regex check asserts that std::from_chars(...) will only return std::errc::out_of_range if the position value exceeds that of an integer.
+                    // Note that this value is ~2.14 billion and should be considered a hard limit on the number of positional arguments for a single format string.
+                    if (conversion_result.ec == std::errc::result_out_of_range) {
+                        return Result<Identifier>::NOT_OK("positional placeholder value '{}' is out of range", identifier);
+                    }
+                    return Result<Identifier>(Identifier(position));
+                }
+                else if (std::regex_match(identifier.begin(), identifier.end(), std::regex("[a-zA-Z_]\\w*"))) {
+                    // Named placeholders follow the same naming convention as C++ identifiers:
+                    //  - start with a letter or underscore
+                    //  - followed by any combination of letters, digits, or underscores (\w)
+                    return Result<Identifier>(Identifier(std::string(identifier)));
+                }
+                else {
+                    return Result<Identifier>::NOT_OK("named placeholder identifier '{}' is not valid", identifier);
+                }
+            }
+        }
+        
+        Placeholder::Identifier::Identifier(std::string_view in) {
+            Result<Identifier> result = parse(in);
+            if (!result.ok()) {
+                throw std::runtime_error(format("error on parsing identifier - {}", result.what()));
+            }
+            *this = result.get();
+        }
+        
+        Placeholder::Identifier::Identifier() : type(Type::None),
+                                                position(-1),
+                                                name()
                                                 {
         }
         
-        Placeholder::Identifier::Identifier(int position) : type(Position),
-                                                            position(position)
+        Placeholder::Identifier::Identifier(int position) : type(Type::Position),
+                                                            position(position),
+                                                            name()
                                                             {
         }
         
-        Placeholder::Identifier::Identifier(std::string name) : type(Name),
+        Placeholder::Identifier::Identifier(std::string name) : type(Type::Name),
                                                                 position(-1),
                                                                 name(std::move(name))
                                                                 {
         }
+        
+        Placeholder::Identifier::~Identifier()= default;
         
         Placeholder::Formatting::Formatting() : justification(Right),
                                                 representation(Decimal),
@@ -129,53 +176,48 @@ namespace utils {
                                                 {
         }
         
-        Placeholder::Formatting::~Formatting() {
+        Placeholder::Formatting::~Formatting() = default;
+        
+        Result<Placeholder::Formatting> Placeholder::Formatting::parse(const std::string& specifiers) noexcept {
         }
         
-        Result<Placeholder::Identifier> parse_placeholder_identifier(const std::string& identifier) {
-            if (identifier.empty()) {
-                // Detected auto-numbered placeholder - {}.
-                return Result<Placeholder::Identifier>();
+        Result<Placeholder> Placeholder::parse(const std::string& in) noexcept {
+            std::vector<std::string> components { };
+            
+            // Split by the first ':' character, if present.
+            // This approach has the added benefit of catching any extra ':' characters in the placeholder during parsing.
+            std::size_t split_position = in.find(':');
+            components.emplace_back(in.substr(0, split_position));
+            if (split_position != std::string::npos) {
+                components.emplace_back(in.substr(split_position + 1));
             }
-            else {
-                // A placeholder identifier should not have any whitespace characters.
-                for (unsigned i = 0u; i < identifier.length(); ++i) {
-                    if (std::isspace(identifier[i])) {
-                        return Result<Placeholder::Identifier>::NOT_OK("whitespace character at position {}", i);
+
+            Result<Placeholder> placeholder { };
+            
+            {
+                Result<Placeholder::Identifier> result = Placeholder::Identifier::parse(components[0]);
+                if (!result.ok()) {
+                    return Result<Placeholder>::NOT_OK("error parsing format string - {}", result.what());
+                }
+                placeholder->identifier = result.get();
+            }
+
+            
+            // Formatting specifiers are optional.
+            {
+                if (components.size() > 1) {
+                    Result<Placeholder::Formatting> result = Placeholder::Formatting::parse(components[1]);
+                    if (!result.ok()) {
+                        return Result<Placeholder>::NOT_OK("error parsing format string - {}", result.what());
                     }
-                }
-                
-                // Determine if placeholder is positional or named.
-                if (std::regex_match(identifier, std::regex("^[0-9]+$"))) {
-                    // Positional placeholders can only be positive integers.
-                    char* end;
-                    unsigned position = std::strtoul(identifier.c_str(), &end, 10);
-                    return Result<Placeholder::Identifier>(position);
-                }
-                else if (std::regex_match(identifier, std::regex("^[a-zA-Z_]\\w*$"))) {
-                    // Named placeholders follow the same naming convention as C++ identifiers:
-                    //  - start with a letter or underscore
-                    //  - followed by any combination of letters, digits, or underscores (\w)
-                    return Result<Placeholder::Identifier>(identifier);
-                }
-                else {
-                    return Result<Placeholder::Identifier>::NOT_OK("placeholder identifier '{}' is not valid", identifier);
+                    placeholder->formatting = result.get();
                 }
             }
+            
+            return placeholder;
         }
         
-        Result<Placeholder::Formatting> parse_placeholder_format_specifiers(const std::string& format_specifiers) {
-        
-        }
-        
+        Placeholder::~Placeholder() = default;
 
-        
     }
-    
-    
-    
-
-
-
-    
 }
