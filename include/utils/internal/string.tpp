@@ -5,17 +5,113 @@
 #include "utils/constexpr.hpp"
 #include "utils/concepts.hpp"
 #include "utils/result.hpp"
+#include "utils/tuple.hpp"
+
 #include <functional>
 #include <cstdio> // std::snprintf
 #include <memory> // std::unique_ptr
 #include <stdexcept> // std::runtime_error
 #include <tuple> // std::tuple_cat, std::make_tuple
 #include <regex> // std::regex_match
+#include <iostream>
 
 namespace utils {
-
     namespace internal {
+        
+        struct Placeholder {
+            class Identifier {
+                public:
+                    enum Type {
+                        None = 0,
+                        Position,
+                        Name
+                    };
     
+                    explicit Identifier(std::string_view identifier);
+                    static Result<Identifier> parse(std::string_view identifier) noexcept;
+                    
+                    Identifier();
+                    ~Identifier();
+    
+                    Type type;
+                    int position; // Allows for ~2 billion unique positions in a single format string.
+                    std::string name;
+                    
+                private:
+                    explicit Identifier(int position);
+                    explicit Identifier(std::string name);
+            };
+            
+            struct Formatting {
+                enum Justification {
+                    Right = 0,
+                    Left,
+                    Center
+                };
+                
+                enum Representation {
+                    Decimal = 0,
+                    Binary,
+                    Unicode,
+                    Octal,
+                    Hexadecimal
+                };
+                
+                enum Sign {
+                    NegativeOnly = 0,
+                    Aligned,
+                    Both
+                };
+                
+                explicit Formatting(std::string_view specifiers);
+                static Result<Formatting> parse(std::string_view specifiers) noexcept;
+                
+                Formatting();
+                ~Formatting();
+            
+                Justification justification;
+                Representation representation;
+                Sign sign;
+                char fill;
+                char separator;
+                unsigned width;
+                unsigned precision;
+            };
+            
+            explicit Placeholder(std::string_view placeholder);
+            static Result<Placeholder> parse(std::string_view placeholder) noexcept;
+            
+            Placeholder();
+            ~Placeholder();
+            
+            Identifier identifier;
+            Formatting formatting;
+        };
+        
+        class FormatString {
+            public:
+                explicit FormatString(std::string_view format_string);
+                static Result<FormatString> parse(std::string_view format_string);
+            
+                FormatString();
+                ~FormatString();
+
+                template <typename ...Ts>
+                [[nodiscard]] std::string format(const Ts&... args) const;
+                
+            private:
+                struct InsertionPoint {
+                    std::size_t placeholder_index;
+                    std::size_t insert_position;
+                };
+                
+                
+                std::string m_format;
+                std::vector<Placeholder> m_placeholders;
+                std::vector<std::size_t> m_insert_positions;
+        };
+        
+        
         template <typename T>
         [[nodiscard]] std::string pointer_to_string(T pointer) {
             using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
@@ -24,7 +120,7 @@ namespace utils {
             static char buffer[2u * sizeof(void*) + 3u] { '\0' }; // Enough space to store a pointer address + an optional '0x' prefix (2 bytes) + null terminator (1 byte).
             static std::size_t buffer_size = sizeof(buffer) / sizeof(buffer[0]);
             
-            int num_characters = std::snprintf(buffer, buffer_size, "%p", static_cast<void*>(pointer));
+            int num_characters = std::snprintf(buffer, buffer_size, "%p", (void*)(pointer));
             if (num_characters < 0) {
                 throw std::runtime_error("encoding error in pointer_to_string");
             }
@@ -122,84 +218,28 @@ namespace utils {
         auto to_string_tuple(const T& value, const Rest&... rest) {
             return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
         }
+
         
-        class Placeholder {
-            public:
-                class Identifier {
-                    public:
-                        enum Type {
-                            None = 0,
-                            Position,
-                            Name
-                        };
-        
-                        Identifier();
-                        explicit Identifier(std::string_view identifier);
-                        static Result<Identifier> parse(std::string_view identifier) noexcept;
-                        ~Identifier();
-        
-                        Type type;
-                        int position; // Allows for ~2 billion unique positions in a single format string.
-                        std::string name;
-                        
-                    private:
-                        explicit Identifier(int position);
-                        explicit Identifier(std::string name);
-                };
-                
-                struct Formatting {
-                    enum Justification {
-                        Right = 0,
-                        Left,
-                        Center
-                    };
-                    
-                    enum Representation {
-                        Decimal = 0,
-                        Binary,
-                        Unicode,
-                        Octal,
-                        Hexadecimal
-                    };
-                    
-                    enum Sign {
-                        NegativeOnly = 0,
-                        Aligned,
-                        Both
-                    };
-                    
-                    explicit Formatting(std::string_view specifiers);
-                    static Result<Formatting> parse(std::string_view specifiers) noexcept;
-                    
-                    Formatting();
-                    ~Formatting();
-                
-                    Justification justification;
-                    Representation representation;
-                    Sign sign;
-                    char fill;
-                    char separator;
-                    unsigned width;
-                    unsigned precision;
-                };
-                
-                Placeholder(std::string_view placeholder);
-                static Result<Placeholder> parse(std::string_view placeholder) noexcept;
-                
-                Placeholder();
-                ~Placeholder();
-                
-                Identifier identifier;
-                Formatting formatting;
-        };
-        
-        struct FormatString {
-            FormatString() {}
+        template <typename ...Ts>
+        std::string FormatString::format(const Ts& ...args) const {
+            std::string result = m_format;
+            auto tuple = std::make_tuple(args...);
             
-            std::vector<Placeholder> placeholders;
-        };
-        
-        [[nodiscard]] Result<FormatString> parse_format_string(const std::string& format_string);
+            get_type<arg>(tuple, [](const arg& value) {
+                std::cout << value.value << std::endl;
+            });
+            
+            for (const Placeholder& placeholder : m_placeholders) {
+                // Wrap the stringify function in a lambda since taking the address of a template function is illegal in c++.
+                std::string res = get(tuple, placeholder.identifier.position, []<typename T> (const T& v) -> std::string {
+                    return stringify(v);
+                });
+                std::cout << res << std::endl;
+                break;
+            }
+            
+            return result;
+        }
         
     }
     
@@ -227,16 +267,15 @@ namespace utils {
     }
     
     template <typename ...Ts>
-    std::string format(const std::string& fmt, const Ts&... ts) {
+    std::string format(const std::string& format_string, const Ts&... ts) {
         using namespace internal;
         
-        Result<FormatString> format_string = parse_format_string(fmt);
-        if (!format_string.ok()) {
-            throw std::runtime_error(format_string.what());
+        Result<FormatString> result = FormatString::parse(format_string);
+        if (!result.ok()) {
+            throw std::runtime_error(result.what());
         }
         
-        auto formatted = internal::to_string_tuple<Ts...>(ts...);
-        return "";
+        return result->format(ts...);
     }
     
 }
