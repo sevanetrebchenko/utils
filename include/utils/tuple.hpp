@@ -23,6 +23,11 @@ namespace utils {
         throw std::out_of_range(format("tuple index {} out of range", index));
     }
     
+    
+    template <typename T, typename F>
+    auto for_each(const T& tuple, const F& fn);
+    
+    
     template <typename T, typename Tuple, typename F, std::size_t N = 0>
     void get_type(const Tuple& tuple, const F& fn) {
         const auto& value = std::get<N>(tuple);

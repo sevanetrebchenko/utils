@@ -188,64 +188,75 @@ namespace utils {
         }
         
         Result<FormatString> FormatString::parse(std::string_view in) {
-            // To save on processing power, resulting string is only updated when a placeholder is encountered.
             Result<FormatString> format_string { };
+            int processed_position = -1;
             
+            // To save on processing power, the resulting string is only updated when a brace character is encountered.
             bool processing_placeholder = false;
-            std::size_t placeholder_start;
-            processing_placeholder = false;
-            
+            std::size_t placeholder_start = in.length();
             std::size_t last_update_position = 0u;
             
-            for (std::size_t i = 0u; i < in.length(); ++i) {
-                bool is_last_character = (i == in.length() - 1u);
-                
+            for (std::size_t i = 0u; i < in.length(); ++i, ++processed_position) {
                 if (processing_placeholder) {
                     if (in[i] == '}') {
-                        // Substring to get only the placeholder (including opening / closing braces).
+                        // Substring to get only the placeholder + opening / closing braces.
                         Result<Placeholder> placeholder = Placeholder::parse(in.substr(placeholder_start, i - placeholder_start + 1u));
                         if (!placeholder.ok()) {
                             return Result<FormatString>::NOT_OK("error parsing format string - {}", placeholder.what());
                         }
                         
-                        format_string->register_placeholder(*placeholder, i);
+                        // Register this placeholder and the position it should be inserted at (accounting for other placeholders / escaped characters).
+                        format_string->register_placeholder(*placeholder, processed_position);
                         processing_placeholder = false;
+                        placeholder_start = in.length(); // invalid index
+                        
+                        // Placeholders are entirely omitted in the resulting string.
+                        last_update_position = i + 1u;
                     }
                 }
                 else {
-                    if (in[i] == '{') {
-                        if (!is_last_character && in[i + 1u] == '{') {
-                            // Escaped '{' character.
-                            format_string->m_format.append(in.substr(last_update_position, i - last_update_position));
-                            last_update_position = i + 1u;
-                        }
-                        else {
-                            processing_placeholder = true;
-                            placeholder_start = i;
-                        }
+                    bool is_last_character = i == (in.length() - 1u);
+                    bool is_escape_sequence = (in[i] == '{' && !is_last_character && in[i + 1u] == '{') ||
+                                              (in[i] == '}' && !is_last_character && in[i + 1u] == '}');
+                    
+                    if (is_escape_sequence) {
+                        // Escaped brace character.
+                        // Resulting string will only have one brace (instead of the two in the format string), which affects the position for inserting processed placeholders.
+                        processed_position -= 1;
+                        
+                        // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (inclusive).
+                        format_string->m_format.append(in.substr(last_update_position, (i + 1u) - last_update_position));
+                        
+                        // Skip over the second brace character.
+                        i += 1u;
+                        last_update_position = i + 1u;
+                    }
+                    else if (in[i] == '{') {
+                        // Start of placeholder.
+                        processing_placeholder = true;
+                        placeholder_start = i;
+                        
+                        // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (exclusive).
+                        format_string->m_format.append(in.substr(last_update_position, i - last_update_position));
                     }
                     else if (in[i] == '}') {
-                        if (i == 0u) {
-                            // TODO
-                            return Result<FormatString>::NOT_OK("");
-                        }
-                        else if (in[i - 1u] == '}') {
-                            // Escaped '}' character.
-                            format_string->m_format.append(in.substr(last_update_position, i - last_update_position));
-                            last_update_position = i + 1u;
-                        }
+                        // This code path would never be hit if the '}' character belonged to a previously-opened placeholder scope, as this path is processed above.
+                        // Therefore, this is an unescaped '}' character that does NOT belong to a scope, which is not a valid format string.
+                        return Result<FormatString>::NOT_OK("");
                     }
                 }
             }
             
             if (processing_placeholder) {
-                // TODO:
                 return Result<FormatString>::NOT_OK("");
             }
             
             if (!format_string->verify_placeholder_homogeneity()) {
                 return Result<FormatString>::NOT_OK("format string placeholders must be homogeneous - auto-numbered placeholders cannot be mixed in with positional/named ones");
             }
+            
+            // Append any remaining characters present between the last brace and the end of the format string.
+            format_string->m_format.append(in.substr(last_update_position));
             
             return format_string;
         }
@@ -278,15 +289,43 @@ namespace utils {
                 return true;
             }
             
-            bool auto_numbered = m_placeholders[0].identifier.type == Placeholder::Identifier::Type::None;
+            bool is_auto_numbered = m_placeholders[0].identifier.type == Placeholder::Identifier::Type::None;
             for (std::size_t i = 1u; i < m_placeholders.size(); ++i) {
-                if (m_placeholders[i].identifier.type != Placeholder::Identifier::Type::None) {
+                if (is_auto_numbered && m_placeholders[i].identifier.type != Placeholder::Identifier::Type::None) {
                     // Detected placeholder of a different type.
                     return false;
                 }
             }
             
             return true;
+        }
+        
+        std::size_t FormatString::get_placeholder_count() const {
+            return m_placeholders.size();
+        }
+        
+        std::size_t FormatString::get_positional_placeholder_count() const {
+            std::size_t count = 0u;
+            
+            for (const Placeholder& placeholder : m_placeholders) {
+                if (placeholder.identifier.type == Placeholder::Identifier::Type::Position) {
+                    ++count;
+                }
+            }
+            
+            return count;
+        }
+        
+        std::size_t FormatString::get_named_placeholder_count() const {
+            std::size_t count = 0u;
+            
+            for (const Placeholder& placeholder : m_placeholders) {
+                if (placeholder.identifier.type == Placeholder::Identifier::Type::Name) {
+                    ++count;
+                }
+            }
+            
+            return count;
         }
         
         FormatString::InsertionPoint::InsertionPoint(std::size_t placeholder_index, std::size_t insert_position) : placeholder_index(placeholder_index),

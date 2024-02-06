@@ -105,6 +105,10 @@ namespace utils {
                 template <typename ...Ts>
                 [[nodiscard]] std::string format(const Ts&... args) const;
                 
+                [[nodiscard]] std::size_t get_placeholder_count() const;
+                [[nodiscard]] std::size_t get_positional_placeholder_count() const;
+                [[nodiscard]] std::size_t get_named_placeholder_count() const;
+                
             private:
                 struct InsertionPoint {
                     InsertionPoint(std::size_t placeholder_index, std::size_t insert_position);
@@ -150,7 +154,7 @@ namespace utils {
         }
         
         template <typename T>
-        [[nodiscard]] std::string stringify(const T& value) {
+        [[nodiscard]] std::string stringify(const T& value, const Placeholder::Formatting& formatting = {}) {
             using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
             
             if constexpr (std::is_fundamental<Type>::value) {
@@ -229,42 +233,71 @@ namespace utils {
             }
         }
         
-        template <typename T, typename ...Rest>
-        auto to_string_tuple(const T& value, const Rest&... rest) {
-            return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
-        }
+//        template <typename T, typename ...Rest>
+//        auto to_string_tuple(const T& value, const Rest&... rest) {
+//            return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
+//        }
 
         
         template <typename ...Ts>
         std::string FormatString::format(const Ts& ...args) const {
             std::string result = m_format;
-            auto tuple = std::make_tuple(args...);
-            
-            std::size_t arg_count = sizeof...(args);
-            std::size_t keyword_arg_count = count_occurrences<arg>(tuple);
-            
-            std::vector<std::string> formatted_args;
-            formatted_args.reserve(m_placeholders.size());
 
-            for (const Placeholder& placeholder : m_placeholders) {
-            
+            if (!m_placeholders.empty()) {
+                auto tuple = std::make_tuple(args...);
+                
+                if (m_placeholders.size() < sizeof...(args)) {
+                }
+                
+                // Values for placeholders are inserted into the resulting string in reverse order of appearance so that
+                // inserting a placeholder value does not offset / affect the insertion positions of any placeholders that come before it.
+                
+                // The total number of placeholders is hard-capped to the maximum number able to be represented by an int.
+                
+                if (m_placeholders[0].identifier.type == Placeholder::Identifier::Type::None) {
+                    // Format string contains only auto-numbered placeholders.
+                    
+                    // Verify argument types.
+                    bool has_named_arguments = for_each(tuple, []<typename T>(const T& value) -> bool {
+                        return std::is_same<typename std::decay<T>::type, arg>::value;
+                    });
+                    
+                    // For auto-numbered placeholders, there is a 1:1 correlation between placeholder and insertion point.
+                    // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
+                    // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored in the resulting string.
+                    
+                    for (int i = static_cast<int>(m_placeholders.size() - 1); i >= 0; --i) {
+                        const Placeholder& placeholder = m_placeholders[i];
+                        std::string value = get(tuple, i, [&placeholder]<typename T>(const T& value) -> std::string {
+                            return stringify(value, placeholder.formatting);
+                        });
+                        
+                        const InsertionPoint& insertion_point = m_insertion_points[i];
+                        result.insert(insertion_point.insert_position, value);
+                    }
+                }
+                else {
+                    // Format string contains only positional / named placeholders.
+
+                    // Format all unique placeholders once to save on computation power, since placeholders can be reused.
+                    std::vector<std::string> formatted_placeholders;
+                    formatted_placeholders.reserve(m_placeholders.size());
+                    
+                    for (std::size_t i = 0u; i < m_placeholders.size(); ++i) {
+                        const Placeholder& placeholder = m_placeholders[i];
+                        std::string formatted = get(tuple, i, [&placeholder]<typename T>(const T& value) -> std::string {
+                            return stringify(value, placeholder.formatting);
+                        });
+                        formatted_placeholders.emplace_back(std::move(formatted));
+                    }
+                    
+                    for (const InsertionPoint& insertion_point : m_insertion_points) {
+                        result.insert(insertion_point.insert_position, formatted_placeholders[insertion_point.placeholder_index]);
+                    }
+                }
             }
             
-            
-            get_type<arg>(tuple, [](const arg& value) {
-                std::cout << value.value << std::endl;
-            });
-            
-            for (const Placeholder& placeholder : m_placeholders) {
-                // Wrap the stringify function in a lambda since taking the address of a template function is illegal in c++.
-                std::string res = get(tuple, placeholder.identifier.position, []<typename T> (const T& v) -> std::string {
-                    return stringify(v);
-                });
-                std::cout << res << std::endl;
-                break;
-            }
-            
-            return result;
+            return std::move(result);
         }
         
     }
@@ -278,11 +311,11 @@ namespace utils {
         auto iter = std::begin(container);
         std::string result;
 
-        result.append(internal::stringify(*iter));
-        for (++iter; iter != std::end(container); ++iter) {
-            result.append(glue);
-            result.append(internal::stringify(*iter));
-        }
+//        result.append(internal::stringify(*iter));
+//        for (++iter; iter != std::end(container); ++iter) {
+//            result.append(glue);
+//            result.append(internal::stringify(*iter));
+//        }
 
         return std::move(result);
     }
