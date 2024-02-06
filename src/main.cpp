@@ -24,7 +24,7 @@ int main() {
     auto ocur = count_occurrences<std::string>(tup);
     
     try {
-        std::string a = format("test {{ as }} df {0} {hello} {{}} adf ", arg("test", true));
+        std::string a = format("test {{ as }} df {0} {hello} {{}} adf ", arg("hello", true), 9);
         std::cout << a << std::endl;
     }
     catch(std::runtime_error& e) {

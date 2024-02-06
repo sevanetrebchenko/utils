@@ -25,7 +25,6 @@ namespace utils {
         return internal::for_each_helper(tuple, fn);
     }
     
-    
 }
 
 #endif // UTILS_TUPLE_TPP

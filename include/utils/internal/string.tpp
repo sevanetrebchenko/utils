@@ -18,80 +18,67 @@
 namespace utils {
     namespace internal {
         
-        struct Placeholder {
-            class Identifier {
-                public:
-                    enum class Type {
-                        None = 0,
-                        Position,
-                        Name
-                    };
-    
-                    explicit Identifier(std::string_view identifier);
-                    static Result<Identifier> parse(std::string_view identifier) noexcept;
-                    
-                    Identifier();
-                    ~Identifier();
-                    
-                    [[nodiscard]] bool operator==(const Identifier& other) const;
-    
-                    Type type;
-                    int position; // Allows for ~2 billion unique positions in a single format string.
-                    std::string name;
-                    
-                private:
-                    explicit Identifier(int position);
-                    explicit Identifier(std::string name);
+        class PlaceholderIdentifier {
+            public:
+                enum class Type {
+                    None = 0,
+                    Position,
+                    Name
+                };
+
+                explicit PlaceholderIdentifier(std::string_view identifier);
+                static Result<PlaceholderIdentifier> parse(std::string_view identifier) noexcept;
+                
+                PlaceholderIdentifier();
+                ~PlaceholderIdentifier();
+                
+                [[nodiscard]] bool operator==(const PlaceholderIdentifier& other) const;
+
+                Type type;
+                int position; // Allows for ~2 billion unique positions in a single format string.
+                std::string name;
+                
+            private:
+                explicit PlaceholderIdentifier(int position);
+                explicit PlaceholderIdentifier(std::string name);
+        };
+        
+        struct PlaceholderFormatting {
+            enum Justification {
+                Right = 0,
+                Left,
+                Center
             };
             
-            struct Formatting {
-                enum Justification {
-                    Right = 0,
-                    Left,
-                    Center
-                };
-                
-                enum Representation {
-                    Decimal = 0,
-                    Binary,
-                    Unicode,
-                    Octal,
-                    Hexadecimal
-                };
-                
-                enum Sign {
-                    NegativeOnly = 0,
-                    Aligned,
-                    Both
-                };
-                
-                explicit Formatting(std::string_view specifiers);
-                static Result<Formatting> parse(std::string_view specifiers) noexcept;
-                
-                Formatting();
-                ~Formatting();
-                
-                [[nodiscard]] bool operator==(const Formatting& other) const;
-            
-                Justification justification;
-                Representation representation;
-                Sign sign;
-                char fill;
-                char separator;
-                unsigned width;
-                unsigned precision;
+            enum Representation {
+                Decimal = 0,
+                Binary,
+                Unicode,
+                Octal,
+                Hexadecimal
             };
             
-            explicit Placeholder(std::string_view placeholder);
-            static Result<Placeholder> parse(std::string_view placeholder) noexcept;
+            enum Sign {
+                NegativeOnly = 0,
+                Aligned,
+                Both
+            };
             
-            Placeholder();
-            ~Placeholder();
+            explicit PlaceholderFormatting(std::string_view specifiers);
+            static Result<PlaceholderFormatting> parse(std::string_view specifiers) noexcept;
             
-            [[nodiscard]] bool operator==(const Placeholder& other) const;
+            PlaceholderFormatting();
+            ~PlaceholderFormatting();
             
-            Identifier identifier;
-            Formatting formatting;
+            [[nodiscard]] bool operator==(const PlaceholderFormatting& other) const;
+        
+            Justification justification;
+            Representation representation;
+            Sign sign;
+            char fill;
+            char separator;
+            unsigned width;
+            unsigned precision;
         };
         
         class FormatString {
@@ -111,14 +98,15 @@ namespace utils {
                 
             private:
                 struct InsertionPoint {
-                    InsertionPoint(std::size_t placeholder_index, std::size_t insert_position);
+                    InsertionPoint(std::size_t placeholder_index, const PlaceholderFormatting& formatting, std::size_t insert_position);
                     ~InsertionPoint();
                     
                     std::size_t placeholder_index;
+                    PlaceholderFormatting formatting;
                     std::size_t insert_position;
                 };
 
-                void register_placeholder(const Placeholder& placeholder, std::size_t position);
+                void register_placeholder(const PlaceholderIdentifier& identifier, const PlaceholderFormatting& formatting, std::size_t position);
                 
                 // Verifies that placeholders are of the same type.
                 // A format string can either contain all auto-numbered placeholders or a mix of positional and named placeholders.
@@ -126,7 +114,7 @@ namespace utils {
                 [[nodiscard]] bool verify_placeholder_homogeneity() const;
                 
                 std::string m_format;
-                std::vector<Placeholder> m_placeholders;
+                std::vector<PlaceholderIdentifier> m_placeholder_identifiers;
                 std::vector<InsertionPoint> m_insertion_points;
         };
         
@@ -154,7 +142,7 @@ namespace utils {
         }
         
         template <typename T>
-        [[nodiscard]] std::string stringify(const T& value, const Placeholder::Formatting& formatting = {}) {
+        [[nodiscard]] std::string stringify(const T& value, const PlaceholderFormatting& formatting = {}) {
             using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
             
             if constexpr (std::is_fundamental<Type>::value) {
@@ -243,56 +231,88 @@ namespace utils {
         std::string FormatString::format(const Ts& ...args) const {
             std::string result = m_format;
 
-            if (!m_placeholders.empty()) {
+            if (!m_placeholder_identifiers.empty()) {
                 auto tuple = std::make_tuple(args...);
                 
-                if (m_placeholders.size() < sizeof...(args)) {
+                if (get_placeholder_count() > sizeof...(args)) {
+                    // Not enough arguments provided to format(...);
+                    return "missing arguments";
                 }
+                
+                auto is_named_argument_type = []<typename T>(const T& value) -> bool {
+                    return std::is_same<typename std::decay<T>::type, arg>::value;
+                };
                 
                 // Values for placeholders are inserted into the resulting string in reverse order of appearance so that
                 // inserting a placeholder value does not offset / affect the insertion positions of any placeholders that come before it.
                 
                 // The total number of placeholders is hard-capped to the maximum number able to be represented by an int.
                 
-                if (m_placeholders[0].identifier.type == Placeholder::Identifier::Type::None) {
+                if (m_placeholder_identifiers[0].type == PlaceholderIdentifier::Type::None) {
                     // Format string contains only auto-numbered placeholders.
                     
                     // Verify argument types.
-                    bool has_named_arguments = for_each(tuple, []<typename T>(const T& value) -> bool {
-                        return std::is_same<typename std::decay<T>::type, arg>::value;
-                    });
+                    bool has_named_arguments = for_each(tuple, is_named_argument_type);
+                    if (has_named_arguments) {
+                        // Named arguments not allowed in auto-numbered format list.
+                        return "name arguments not allowed";
+                    }
                     
                     // For auto-numbered placeholders, there is a 1:1 correlation between placeholder and insertion point.
                     // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
                     // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored in the resulting string.
                     
-                    for (int i = static_cast<int>(m_placeholders.size() - 1); i >= 0; --i) {
-                        const Placeholder& placeholder = m_placeholders[i];
-                        std::string value = get(tuple, i, [&placeholder]<typename T>(const T& value) -> std::string {
-                            return stringify(value, placeholder.formatting);
-                        });
-                        
+                    for (int i = static_cast<int>(m_insertion_points.size() - 1); i >= 0; --i) {
                         const InsertionPoint& insertion_point = m_insertion_points[i];
+                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
+                            return stringify(value, insertion_point.formatting);
+                        });
                         result.insert(insertion_point.insert_position, value);
                     }
                 }
                 else {
                     // Format string contains only positional / named placeholders.
-
-                    // Format all unique placeholders once to save on computation power, since placeholders can be reused.
-                    std::vector<std::string> formatted_placeholders;
-                    formatted_placeholders.reserve(m_placeholders.size());
                     
-                    for (std::size_t i = 0u; i < m_placeholders.size(); ++i) {
-                        const Placeholder& placeholder = m_placeholders[i];
-                        std::string formatted = get(tuple, i, [&placeholder]<typename T>(const T& value) -> std::string {
-                            return stringify(value, placeholder.formatting);
-                        });
-                        formatted_placeholders.emplace_back(std::move(formatted));
+                    std::size_t positional_placeholder_count = get_positional_placeholder_count();
+                    
+                    for (std::size_t i = 0u; i < positional_placeholder_count; ++i) {
+                        if (get(tuple, i, is_named_argument_type)) {
+                            return "positional arguments must come first";
+                        }
                     }
                     
-                    for (const InsertionPoint& insertion_point : m_insertion_points) {
-                        result.insert(insertion_point.insert_position, formatted_placeholders[insertion_point.placeholder_index]);
+                    for (std::size_t i = 0u; i < get_named_placeholder_count(); ++i) {
+                        if (!get(tuple, i + positional_placeholder_count, is_named_argument_type)) {
+                            return "expecting named argument type";
+                        }
+                    }
+                    
+                    // Verify that all named placeholders have a corresponding argument.
+                    for (std::size_t i = 0u; i < get_placeholder_count(); ++i) {
+                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[i];
+                        if (identifier.type == PlaceholderIdentifier::Type::Name) {
+                            bool found = for_each(tuple, [&identifier]<typename T>(const T& a) -> bool {
+                                if constexpr (std::is_same<typename std::decay<T>::type, arg>::value) {
+                                    return a.name == identifier.name;
+                                }
+                                else {
+                                    return false;
+                                }
+                            });
+                            
+                            if (!found) {
+                                return "named placeholder " + identifier.name + " missing argument";
+                            }
+                        }
+                    }
+
+                    // Format all unique placeholders once to save on computation power, since placeholders can be reused.
+                    for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
+                        const InsertionPoint& insertion_point = m_insertion_points[i];
+                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
+                            return stringify(value, insertion_point.formatting);
+                        });
+                        result.insert(insertion_point.insert_position, value);
                     }
                 }
             }

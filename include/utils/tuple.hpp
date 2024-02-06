@@ -27,6 +27,8 @@ namespace utils {
     template <typename T, typename F>
     auto for_each(const T& tuple, const F& fn);
     
+    template <typename T, typename Tuple, typename F>
+    auto for_each_type(const T& tuple, const F& fn);
     
     template <typename T, typename Tuple, typename F, std::size_t N = 0>
     void get_type(const Tuple& tuple, const F& fn) {
