@@ -92,18 +92,28 @@ namespace utils {
                 template <typename ...Ts>
                 [[nodiscard]] std::string format(const Ts&... args) const;
                 
-                [[nodiscard]] std::size_t get_placeholder_count() const;
+                [[nodiscard]] std::size_t get_total_placeholder_count() const; // Includes duplicates
+                [[nodiscard]] std::size_t get_unique_placeholder_count() const;
                 [[nodiscard]] std::size_t get_positional_placeholder_count() const;
                 [[nodiscard]] std::size_t get_named_placeholder_count() const;
                 
             private:
-                struct InsertionPoint {
-                    InsertionPoint(std::size_t placeholder_index, const PlaceholderFormatting& formatting, std::size_t insert_position);
-                    ~InsertionPoint();
+                struct FormattedPlaceholder {
+                    FormattedPlaceholder(std::size_t placeholder_index, const PlaceholderFormatting& formatting);
+                    ~FormattedPlaceholder();
+                    
+                    void add_insertion_point(std::size_t position);
                     
                     std::size_t placeholder_index;
                     PlaceholderFormatting formatting;
-                    std::size_t insert_position;
+
+                    // Positional and named placeholders can appear multiple times in the same format string.
+                    // An optimization we can make when formatting placeholders is to format all unique placeholders once and cache them for later. A placeholders
+                    // uniqueness is determined by its formatting specifiers - if a placeholder has the same identifier and format specifiers as another, both
+                    // placeholders will be formatted in the same way.
+                    // We can save on processing power by simply keeping track of the positions in which a given placeholder and formatting specifiers are
+                    // used to take advantage of work that was already done and avoid unnecessary duplicate formatting operations.
+                    std::vector<std::size_t> insertion_points;
                 };
 
                 void register_placeholder(const PlaceholderIdentifier& identifier, const PlaceholderFormatting& formatting, std::size_t position);
@@ -115,7 +125,7 @@ namespace utils {
                 
                 std::string m_format;
                 std::vector<PlaceholderIdentifier> m_placeholder_identifiers;
-                std::vector<InsertionPoint> m_insertion_points;
+                std::vector<FormattedPlaceholder> m_formatted_placeholders;
         };
         
         
@@ -234,7 +244,7 @@ namespace utils {
             if (!m_placeholder_identifiers.empty()) {
                 auto tuple = std::make_tuple(args...);
                 
-                if (get_placeholder_count() > sizeof...(args)) {
+                if (get_total_placeholder_count() > sizeof...(args)) {
                     // Not enough arguments provided to format(...);
                     return "missing arguments";
                 }
@@ -262,13 +272,13 @@ namespace utils {
                     // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
                     // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored in the resulting string.
                     
-                    for (int i = static_cast<int>(m_insertion_points.size() - 1); i >= 0; --i) {
-                        const InsertionPoint& insertion_point = m_insertion_points[i];
-                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
-                            return stringify(value, insertion_point.formatting);
-                        });
-                        result.insert(insertion_point.insert_position, value);
-                    }
+//                    for (int i = static_cast<int>(m_insertion_points.size() - 1); i >= 0; --i) {
+//                        const InsertionPoint& insertion_point = m_insertion_points[i];
+//                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
+//                            return stringify(value, insertion_point.formatting);
+//                        });
+//                        result.insert(insertion_point.insert_position, value);
+//                    }
                 }
                 else {
                     // Format string contains only positional / named placeholders.
@@ -306,14 +316,45 @@ namespace utils {
                         }
                     }
 
-                    // Format all unique placeholders once to save on computation power, since placeholders can be reused.
-                    for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
-                        const InsertionPoint& insertion_point = m_insertion_points[i];
-                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
-                            return stringify(value, insertion_point.formatting);
-                        });
-                        result.insert(insertion_point.insert_position, value);
+                    // Format all unique placeholders once to save on computation power, since positional / named placeholders can be reused.
+                    std::size_t unique_placeholder_count = get_unique_placeholder_count();
+                    
+                    std::vector<std::string> formatted_placeholders;
+                    formatted_placeholders.reserve(unique_placeholder_count);
+
+                    for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
+                        const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
+                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[placeholder.placeholder_index];
+
+                        if (identifier.type == PlaceholderIdentifier::Type::Position) {
+                            // Positional placeholder.
+                            formatted_placeholders.emplace_back(get(tuple, identifier.position, [&placeholder]<typename T>(const T& value) -> std::string {
+                                return stringify(value, placeholder.formatting);
+                            }));
+                        }
+                        else {
+                            // Named placeholder.
+                            Result<arg> res = get_type<arg>(tuple, [&identifier](const arg& value) -> bool {
+                                 return value.name == identifier.name;
+                            });
+                            
+                            if (!res.ok()) {
+                                return "should not happen";
+                            }
+                            
+                        }
+
                     }
+                    
+                    
+                    
+//                    for (int i = static_cast<int>(m_fo.size() - 1); i >= 0; --i) {
+//                        const InsertionPoint& insertion_point = m_insertion_points[i];
+//                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
+//                            return stringify(value, insertion_point.formatting);
+//                        });
+//                        result.insert(insertion_point.insert_position, value);
+//                    }
                 }
             }
             

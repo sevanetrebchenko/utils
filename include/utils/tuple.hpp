@@ -31,16 +31,20 @@ namespace utils {
     auto for_each_type(const T& tuple, const F& fn);
     
     template <typename T, typename Tuple, typename F, std::size_t N = 0>
-    void get_type(const Tuple& tuple, const F& fn) {
+    Result<T> get_type(const Tuple& tuple, const F& predicate) {
         const auto& value = std::get<N>(tuple);
         
         if constexpr (std::is_same_v<std::decay_t<decltype(value)>, T>) {
-            fn(value);
+            if (predicate(value)) {
+                return Result<T>(value);
+            }
         }
         
         if constexpr (N + 1 < std::tuple_size_v<Tuple>) {
-            get_type<T, Tuple, F, N + 1>(tuple, fn);
+            get_type<T, Tuple, F, N + 1>(tuple, predicate);
         }
+        
+        return Result<T>::NOT_OK("value not found");
     }
     
     

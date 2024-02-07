@@ -87,13 +87,12 @@ namespace utils {
         
         // Formatting implementation.
         PlaceholderFormatting::PlaceholderFormatting() : justification(Right),
-                                                representation(Decimal),
-                                                sign(NegativeOnly),
-                                                fill(' '),
-                                                separator('\0'), // empty
-                                                width(std::numeric_limits<unsigned>::max()),
-                                                precision(8)
-                                                {
+                                                         representation(Decimal),
+                                                         sign(NegativeOnly),
+                                                         fill(' '),
+                                                         separator('\0'), // empty
+                                                         width(std::numeric_limits<unsigned>::max()),
+                                                         precision(8) {
         }
         
         PlaceholderFormatting::~PlaceholderFormatting() = default;
@@ -138,7 +137,7 @@ namespace utils {
             std::size_t placeholder_start = in.length();
             std::size_t last_update_position = 0u;
             
-            for (std::size_t i = 0u; i < in.length(); ++i, ++processed_position) {
+            for (std::size_t i = 0u; i < in.length(); ++i) {
                 if (processing_placeholder) {
                     if (in[i] == '}') {
                         // Substring to get the placeholder without opening / closing braces.
@@ -169,8 +168,11 @@ namespace utils {
                         processing_placeholder = false;
                         placeholder_start = in.length(); // invalid index
                         
-                        // Placeholders are entirely omitted in the resulting string.
+                        // Placeholder braces are entirely omitted in the resulting string.
                         last_update_position = i + 1u;
+                        
+                        // Adjust the insertion position so that placeholders that are directly adjacent to one another do not get inserted at the same position and overlap.
+                        ++processed_position;
                     }
                 }
                 else {
@@ -181,7 +183,7 @@ namespace utils {
                     if (is_escape_sequence) {
                         // Escaped brace character.
                         // Resulting string will only have one brace (instead of the two in the format string), which affects the position for inserting processed placeholders.
-                        processed_position -= 1;
+                        ++processed_position;
                         
                         // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (inclusive).
                         format_string->m_format.append(in.substr(last_update_position, (i + 1u) - last_update_position));
@@ -195,6 +197,9 @@ namespace utils {
                         processing_placeholder = true;
                         placeholder_start = i;
                         
+                        // Placeholder braces exist only in the format string and will eventually be replaced with the formatted placeholder value.
+                        // ++processed_position;
+                        
                         // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (exclusive).
                         format_string->m_format.append(in.substr(last_update_position, i - last_update_position));
                     }
@@ -202,6 +207,10 @@ namespace utils {
                         // This code path would never be hit if the '}' character belonged to a previously-opened placeholder scope, as this path is processed above.
                         // Therefore, this is an unescaped '}' character that does NOT belong to a scope, which is not a valid format string.
                         return Result<FormatString>::NOT_OK("");
+                    }
+                    else {
+                        // Non-special characters are left unmodified.
+                        ++processed_position;
                     }
                 }
             }
@@ -225,7 +234,7 @@ namespace utils {
         FormatString::~FormatString() = default;
         
         void FormatString::register_placeholder(const PlaceholderIdentifier& identifier, const PlaceholderFormatting& formatting, std::size_t position) {
-            std::size_t placeholder_index = m_placeholder_identifiers.size();
+            std::size_t placeholder_index = m_placeholder_identifiers.size(); // invalid
             for (std::size_t i = 0u; i < m_placeholder_identifiers.size(); ++i) {
                 if (identifier == m_placeholder_identifiers[i]) {
                     placeholder_index = i;
@@ -237,8 +246,18 @@ namespace utils {
                 m_placeholder_identifiers.emplace_back(identifier);
             }
             
-            // Register insertion point.
-            m_insertion_points.emplace_back(placeholder_index, formatting, position);
+            bool found = false;
+            for (FormattedPlaceholder& placeholder : m_formatted_placeholders) {
+                if (placeholder.placeholder_index == placeholder_index && placeholder.formatting == formatting) {
+                    found = true;
+                    placeholder.add_insertion_point(position);
+                }
+            }
+            
+            if (!found) {
+                FormattedPlaceholder& placeholder = m_formatted_placeholders.emplace_back(placeholder_index, formatting);
+                placeholder.add_insertion_point(position);
+            }
         }
         
         bool FormatString::verify_placeholder_homogeneity() const {
@@ -257,7 +276,17 @@ namespace utils {
             return true;
         }
         
-        std::size_t FormatString::get_placeholder_count() const {
+        std::size_t FormatString::get_total_placeholder_count() const {
+            std::size_t count = 0u;
+            
+            for (const FormattedPlaceholder& placeholder : m_formatted_placeholders) {
+                count += placeholder.insertion_points.size();
+            }
+            
+            return count;
+        }
+        
+        std::size_t FormatString::get_unique_placeholder_count() const {
             return m_placeholder_identifiers.size();
         }
         
@@ -285,12 +314,11 @@ namespace utils {
             return count;
         }
         
-        FormatString::InsertionPoint::InsertionPoint(std::size_t placeholder_index, const PlaceholderFormatting& formatting, std::size_t insert_position) : placeholder_index(placeholder_index),
-                                                                                                                                                            formatting(formatting),
-                                                                                                                                                            insert_position(insert_position) {
+        FormatString::FormattedPlaceholder::FormattedPlaceholder(std::size_t placeholder_index, const PlaceholderFormatting& formatting) : placeholder_index(placeholder_index),
+                                                                                                                                           formatting(formatting) {
         }
         
-        FormatString::InsertionPoint::~InsertionPoint() = default;
+        FormatString::FormattedPlaceholder::~FormattedPlaceholder() = default;
         
     }
     

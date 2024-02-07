@@ -6,6 +6,7 @@
 
 #include <vector> // std::vector
 #include <string> // std::string
+#include <functional> // sd::function
 
 namespace utils {
 
@@ -35,7 +36,7 @@ namespace utils {
         explicit operator std::string() const;
         
         std::string name;
-        std::string value;
+        std::function<std::string(const internal::PlaceholderFormatting&)> m_formatter;
     };
     
     // Python f-string format
