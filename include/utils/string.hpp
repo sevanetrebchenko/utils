@@ -6,7 +6,7 @@
 
 #include <vector> // std::vector
 #include <string> // std::string
-#include <functional> // sd::function
+#include <functional> // std::function
 
 namespace utils {
 
@@ -28,15 +28,14 @@ namespace utils {
     
     // For formatting named format specifiers.
     // Note: custom types must define either a std::string conversion operator (T::operator std::string(), preferred) or a standalone to_string(const T&) function.
+
+    template <typename T>
     struct arg {
-        template <typename T>
         arg(std::string name, const T& value);
         ~arg();
-        
-        explicit operator std::string() const;
-        
+    
         std::string name;
-        std::function<std::string(const internal::PlaceholderFormatting&)> m_formatter;
+        const T& value; // Maintain reference for making dealing with non-trivially copyable types easier.
     };
     
     // Python f-string format

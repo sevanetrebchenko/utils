@@ -128,6 +128,11 @@ namespace utils {
                 std::vector<FormattedPlaceholder> m_formatted_placeholders;
         };
         
+        template <typename T>
+        struct is_format_arg : std::false_type { };
+        
+        template <typename T>
+        struct is_format_arg<arg<T>> : std::true_type { };
         
         template <typename T>
         [[nodiscard]] std::string pointer_to_string(T pointer) {
@@ -153,7 +158,7 @@ namespace utils {
         
         template <typename T>
         [[nodiscard]] std::string stringify(const T& value, const PlaceholderFormatting& formatting = {}) {
-            using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
+            using Type = typename std::decay<T>::type;
             
             if constexpr (std::is_fundamental<Type>::value) {
                 if constexpr (std::is_null_pointer<Type>::value) {
@@ -165,7 +170,7 @@ namespace utils {
                 }
                 else {
                     // TODO: other fundamental types.
-                    return "";
+                    return "9";
                 }
             }
             else if constexpr (is_standard_container<Type>::value) {
@@ -220,6 +225,9 @@ namespace utils {
                 // pointer types
                 return pointer_to_string(value);
             }
+            else if constexpr (is_format_arg<Type>::value) {
+                return stringify(value.value, formatting);
+            }
             // Utilize user-defined std::string conversion operators for all other custom types.
             // This implementation allows for either a std::string conversion class operator (T::operator std::string(), preferred) or a standalone to_string(const T&) function.
             else if constexpr (is_convertible_to_string<Type>) {
@@ -244,13 +252,13 @@ namespace utils {
             if (!m_placeholder_identifiers.empty()) {
                 auto tuple = std::make_tuple(args...);
                 
-                if (get_total_placeholder_count() > sizeof...(args)) {
+                if (get_unique_placeholder_count() > sizeof...(args)) {
                     // Not enough arguments provided to format(...);
                     return "missing arguments";
                 }
                 
                 auto is_named_argument_type = []<typename T>(const T& value) -> bool {
-                    return std::is_same<typename std::decay<T>::type, arg>::value;
+                    return is_format_arg<typename std::decay<T>::type>::value;
                 };
                 
                 // Values for placeholders are inserted into the resulting string in reverse order of appearance so that
@@ -298,11 +306,11 @@ namespace utils {
                     }
                     
                     // Verify that all named placeholders have a corresponding argument.
-                    for (std::size_t i = 0u; i < get_placeholder_count(); ++i) {
+                    for (std::size_t i = 0u; i < get_unique_placeholder_count(); ++i) {
                         const PlaceholderIdentifier& identifier = m_placeholder_identifiers[i];
                         if (identifier.type == PlaceholderIdentifier::Type::Name) {
                             bool found = for_each(tuple, [&identifier]<typename T>(const T& a) -> bool {
-                                if constexpr (std::is_same<typename std::decay<T>::type, arg>::value) {
+                                if constexpr (is_format_arg<typename std::decay<T>::type>::value) {
                                     return a.name == identifier.name;
                                 }
                                 else {
@@ -324,37 +332,39 @@ namespace utils {
 
                     for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
                         const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
-                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[placeholder.placeholder_index];
-
-                        if (identifier.type == PlaceholderIdentifier::Type::Position) {
-                            // Positional placeholder.
-                            formatted_placeholders.emplace_back(get(tuple, identifier.position, [&placeholder]<typename T>(const T& value) -> std::string {
-                                return stringify(value, placeholder.formatting);
-                            }));
-                        }
-                        else {
-                            // Named placeholder.
-                            Result<arg> res = get_type<arg>(tuple, [&identifier](const arg& value) -> bool {
-                                 return value.name == identifier.name;
-                            });
-                            
-                            if (!res.ok()) {
-                                return "should not happen";
-                            }
-                            
-                        }
-
+                        const PlaceholderFormatting& formatting = placeholder.formatting;
+                        
+                        formatted_placeholders.emplace_back(get(tuple, i, [&formatting]<typename T>(const T& value) -> std::string {
+                            return stringify(value, formatting);
+                        }));
                     }
                     
+                    // Values for placeholders are inserted into the resulting string in reverse order of appearance so that inserting a
+                    // placeholder value does not offset the insertion positions of any placeholders that come before it.
+
+                    std::size_t previous = std::numeric_limits<std::size_t>::max();
                     
-                    
-//                    for (int i = static_cast<int>(m_fo.size() - 1); i >= 0; --i) {
-//                        const InsertionPoint& insertion_point = m_insertion_points[i];
-//                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
-//                            return stringify(value, insertion_point.formatting);
-//                        });
-//                        result.insert(insertion_point.insert_position, value);
-//                    }
+                    for (std::size_t i = 0u; i < get_total_placeholder_count(); ++i) {
+                        std::size_t placeholder_index = 0u;
+                        std::size_t current = 0u;
+                        
+                        for (std::size_t j = 0u; j < unique_placeholder_count; ++j) {
+                            const FormattedPlaceholder& placeholder = m_formatted_placeholders[j];
+                            
+                            for (std::size_t insertion_point : placeholder.insertion_points) {
+                                if (insertion_point > current && insertion_point < previous) {
+                                    current = insertion_point;
+                                    placeholder_index = placeholder.placeholder_index;
+                                }
+                            }
+                        }
+                        
+                        result.erase(current - 1, 1);
+                        result.insert(current - 1, formatted_placeholders[placeholder_index]);
+                        
+                        // Update maximum for the next iteration.
+                        previous = current;
+                    }
                 }
             }
             
@@ -382,9 +392,12 @@ namespace utils {
     }
 
     template <typename T>
-    arg::arg(std::string name, const T& value) : name(std::move(name)),
-                                                 value(internal::stringify(value)) {
+    arg<T>::arg(std::string name, const T& value) : name(std::move(name)),
+                                                    value(value) {
     }
+    
+    template <typename T>
+    arg<T>::~arg() = default;
     
     template <typename ...Ts>
     std::string format(const std::string& format_string, const Ts&... ts) {

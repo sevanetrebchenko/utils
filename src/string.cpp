@@ -320,6 +320,10 @@ namespace utils {
         
         FormatString::FormattedPlaceholder::~FormattedPlaceholder() = default;
         
+        void FormatString::FormattedPlaceholder::add_insertion_point(std::size_t position) {
+            insertion_points.emplace_back(position);
+        }
+        
     }
     
     
@@ -349,12 +353,5 @@ namespace utils {
         static const char* ws = " \t\n\r";
         return in.substr(in.find_first_not_of(ws), in.length() - (in.find_last_not_of(ws) + 1));
     }
-
-    arg::~arg() = default;
-
-    arg::operator std::string() const {
-        return value;
-    }
-    
     
 }
