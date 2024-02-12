@@ -10,25 +10,21 @@
 
 namespace utils {
     
-    template <typename T, typename F, std::size_t N = 0>
-    auto get(const T& tuple, std::size_t index, const F& fn) {
+    template <typename Tuple, typename Fn, std::size_t N = 0>
+    auto runtime_get(const Tuple& tuple, std::size_t index, const Fn& fn) {
         if (N == index) {
             return fn(std::get<N>(tuple));
         }
         
-        if constexpr (N + 1 < std::tuple_size_v<T>) {
-            return get<T, F, N + 1>(tuple, index, fn);
+        if constexpr (N + 1 < std::tuple_size<Tuple>::value) {
+            return runtime_get<Tuple, Fn, N + 1>(tuple, index, fn);
         }
         
-        throw std::out_of_range(format("tuple index {} out of range", index));
+        throw std::out_of_range(format("invalid tuple index {} provided to runtime_get", index));
     }
     
-    
     template <typename T, typename F>
-    auto for_each(const T& tuple, const F& fn);
-    
-    template <typename T, typename Tuple, typename F>
-    auto for_each_type(const T& tuple, const F& fn);
+    void for_each(const T& tuple, const F& fn);
     
     template <typename T, typename Tuple, typename F, std::size_t N = 0>
     Result<T> get_type(const Tuple& tuple, const F& predicate) {

@@ -123,19 +123,18 @@ namespace utils {
         FormatString::FormatString(std::string_view in) {
             Result<FormatString> result = parse(in);
             if (!result.ok()) {
-                throw std::runtime_error(format("error encountered while parsing format string - {}", result.what()));
+//                throw std::runtime_error(format("error encountered while parsing format string - {}", result.what()));
             }
             *this = *result;
         }
         
         Result<FormatString> FormatString::parse(std::string_view in) {
             Result<FormatString> format_string { };
-            int processed_position = -1;
             
             // To save on processing power, the resulting string is only updated when a brace character is encountered.
             bool processing_placeholder = false;
             std::size_t placeholder_start = in.length();
-            std::size_t last_update_position = 0u;
+            std::size_t last_placeholder_end = in.length();
             
             for (std::size_t i = 0u; i < in.length(); ++i) {
                 if (processing_placeholder) {
@@ -149,7 +148,7 @@ namespace utils {
                             return Result<FormatString>::NOT_OK("error parsing format string - {}", identifier.what());
                         }
 
-                        // A placeholder is registered to the position it should be inserted at accounting for other placeholders / escaped characters.
+                        std::size_t insertion_point = format_string->m_format.length();
                         
                         // Placeholder formatting specifiers are optional.
                         if (split_position != std::string::npos) {
@@ -157,22 +156,16 @@ namespace utils {
                             if (!formatting.ok()) {
                                 return Result<FormatString>::NOT_OK("error parsing format string - {}", formatting.what());
                             }
-                            
-                            format_string->register_placeholder(*identifier, *formatting, processed_position);
+                        
+                            format_string->register_placeholder(*identifier, *formatting, insertion_point);
                         }
                         else {
                             // Use default formatting.
-                            format_string->register_placeholder(*identifier, { }, processed_position);
+                            format_string->register_placeholder(*identifier, { }, insertion_point);
                         }
                         
                         processing_placeholder = false;
-                        placeholder_start = in.length(); // invalid index
-                        
-                        // Placeholder braces are entirely omitted in the resulting string.
-                        last_update_position = i + 1u;
-                        
-                        // Adjust the insertion position so that placeholders that are directly adjacent to one another do not get inserted at the same position and overlap.
-                        ++processed_position;
+                        last_placeholder_end = i;
                     }
                 }
                 else {
@@ -182,26 +175,17 @@ namespace utils {
                     
                     if (is_escape_sequence) {
                         // Escaped brace character.
-                        // Resulting string will only have one brace (instead of the two in the format string), which affects the position for inserting processed placeholders.
-                        ++processed_position;
-                        
-                        // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (inclusive).
-                        format_string->m_format.append(in.substr(last_update_position, (i + 1u) - last_update_position));
+                        // Resulting string will only have one brace (instead of the two in the format string).
+                        format_string->m_format += in[i];
                         
                         // Skip over the second brace character.
                         i += 1u;
-                        last_update_position = i + 1u;
                     }
                     else if (in[i] == '{') {
                         // Start of placeholder.
                         processing_placeholder = true;
                         placeholder_start = i;
                         
-                        // Placeholder braces exist only in the format string and will eventually be replaced with the formatted placeholder value.
-                        // ++processed_position;
-                        
-                        // Update the resulting string with the contents of the format string starting from the last update position up until the brace character (exclusive).
-                        format_string->m_format.append(in.substr(last_update_position, i - last_update_position));
                     }
                     else if (in[i] == '}') {
                         // This code path would never be hit if the '}' character belonged to a previously-opened placeholder scope, as this path is processed above.
@@ -210,7 +194,7 @@ namespace utils {
                     }
                     else {
                         // Non-special characters are left unmodified.
-                        ++processed_position;
+                        format_string->m_format += in[i];
                     }
                 }
             }
@@ -223,9 +207,6 @@ namespace utils {
                 return Result<FormatString>::NOT_OK("format string placeholders must be homogeneous - auto-numbered placeholders cannot be mixed in with positional/named ones");
             }
             
-            // Append any remaining characters present between the last brace and the end of the format string.
-            format_string->m_format.append(in.substr(last_update_position));
-            
             return format_string;
         }
         
@@ -235,10 +216,14 @@ namespace utils {
         
         void FormatString::register_placeholder(const PlaceholderIdentifier& identifier, const PlaceholderFormatting& formatting, std::size_t position) {
             std::size_t placeholder_index = m_placeholder_identifiers.size(); // invalid
-            for (std::size_t i = 0u; i < m_placeholder_identifiers.size(); ++i) {
-                if (identifier == m_placeholder_identifiers[i]) {
-                    placeholder_index = i;
-                    break;
+
+            if (identifier.type != PlaceholderIdentifier::Type::None) {
+                // Auto-numbered placeholders should not be de-duped and always count as a new placeholder.
+                for (std::size_t i = 0u; i < m_placeholder_identifiers.size(); ++i) {
+                    if (identifier == m_placeholder_identifiers[i]) {
+                        placeholder_index = i;
+                        break;
+                    }
                 }
             }
             
@@ -267,7 +252,10 @@ namespace utils {
             
             bool is_auto_numbered = m_placeholder_identifiers[0].type == PlaceholderIdentifier::Type::None;
             for (std::size_t i = 1u; i < m_placeholder_identifiers.size(); ++i) {
-                if (is_auto_numbered && m_placeholder_identifiers[i].type != PlaceholderIdentifier::Type::None) {
+                bool is_matching_type = (is_auto_numbered && m_placeholder_identifiers[i].type == PlaceholderIdentifier::Type::None) ||
+                                        (!is_auto_numbered && m_placeholder_identifiers[i].type != PlaceholderIdentifier::Type::None);
+                
+                if (!is_matching_type) {
                     // Detected placeholder of a different type.
                     return false;
                 }
@@ -291,15 +279,17 @@ namespace utils {
         }
         
         std::size_t FormatString::get_positional_placeholder_count() const {
-            std::size_t count = 0u;
+            std::size_t highest_position = 0u;
             
+            // The number of positional placeholders depends on the highest placeholder value encountered in the format string.
             for (const PlaceholderIdentifier& identifier : m_placeholder_identifiers) {
                 if (identifier.type == PlaceholderIdentifier::Type::Position) {
-                    ++count;
+                    // Positional placeholders indices start with 0.
+                    highest_position = std::max(identifier.position + 1, highest_position);
                 }
             }
             
-            return count;
+            return highest_position;
         }
         
         std::size_t FormatString::get_named_placeholder_count() const {

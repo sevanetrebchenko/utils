@@ -24,10 +24,11 @@ int main() {
     auto ocur = count_occurrences<std::string>(tup);
     
     try {
-        std::string a = format("test {{ as }} df {0} {hello}{hello} {{}} adf  '", 9, arg("hello", true));
+//        std::string a = format("test {{ as }} df {0} {hello}{hello} {{}} adf  '", 9);
+        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
         std::cout << a << std::endl;
     }
-    catch(std::runtime_error& e) {
+    catch (std::runtime_error& e) {
         std::cout << e.what() << std::endl;
     }
     
@@ -35,8 +36,3 @@ int main() {
     
     return 0;
 }
-
-// test {{ as }} df {0} {hello}{hello} {{}} adf
-// test { as } df 9 truetrue {{}} adf
-//01234567890123456789012345678901234
-

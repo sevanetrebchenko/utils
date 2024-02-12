@@ -14,6 +14,7 @@
 #include <tuple> // std::tuple_cat, std::make_tuple
 #include <regex> // std::regex_match
 #include <iostream>
+#include <cassert>
 
 namespace utils {
     namespace internal {
@@ -35,7 +36,7 @@ namespace utils {
                 [[nodiscard]] bool operator==(const PlaceholderIdentifier& other) const;
 
                 Type type;
-                int position; // Allows for ~2 billion unique positions in a single format string.
+                std::size_t position; // Allows for ~2 billion unique positions in a single format string.
                 std::string name;
                 
             private:
@@ -90,7 +91,7 @@ namespace utils {
                 ~FormatString();
 
                 template <typename ...Ts>
-                [[nodiscard]] std::string format(const Ts&... args) const;
+                [[nodiscard]] Result<std::string> format(const Ts&... args) const;
                 
                 [[nodiscard]] std::size_t get_total_placeholder_count() const; // Includes duplicates
                 [[nodiscard]] std::size_t get_unique_placeholder_count() const;
@@ -109,8 +110,8 @@ namespace utils {
 
                     // Positional and named placeholders can appear multiple times in the same format string.
                     // An optimization we can make when formatting placeholders is to format all unique placeholders once and cache them for later. A placeholders
-                    // uniqueness is determined by its formatting specifiers - if a placeholder has the same identifier and format specifiers as another, both
-                    // placeholders will be formatted in the same way.
+                    // uniqueness is determined by its formatting specifiers - that is, if a placeholder has the same identifier and format specifiers as another,
+                    // both placeholders will be formatted in the same way.
                     // We can save on processing power by simply keeping track of the positions in which a given placeholder and formatting specifiers are
                     // used to take advantage of work that was already done and avoid unnecessary duplicate formatting operations.
                     std::vector<std::size_t> insertion_points;
@@ -239,136 +240,175 @@ namespace utils {
             }
         }
         
-//        template <typename T, typename ...Rest>
-//        auto to_string_tuple(const T& value, const Rest&... rest) {
-//            return std::tuple_cat(std::make_tuple(stringify(value)), internal::to_string_tuple<Rest>(rest)...);
-//        }
-
+        template <typename Tuple, std::size_t N = 0>
+        bool is_structured_argument_type(const Tuple& tuple, std::size_t index) {
+            if (N == index) {
+                using Type = typename std::decay<decltype(std::get<N>(tuple))>::type;
+                return is_format_arg<Type>::value;
+            }
+            
+            if constexpr (N + 1 < std::tuple_size<Tuple>::value) {
+                return is_structured_argument_type<Tuple, N + 1>(tuple, index);
+            }
+            
+            throw std::out_of_range(format("invalid tuple index {} provided to is_named_argument_type", index));
+        }
         
         template <typename ...Ts>
-        std::string FormatString::format(const Ts& ...args) const {
-            std::string result = m_format;
-
+        Result<std::string> FormatString::format(const Ts& ...args) const {
+            Result<std::string> result { m_format };
+            
             if (!m_placeholder_identifiers.empty()) {
                 auto tuple = std::make_tuple(args...);
                 
-                if (get_unique_placeholder_count() > sizeof...(args)) {
-                    // Not enough arguments provided to format(...);
-                    return "missing arguments";
-                }
-                
-                auto is_named_argument_type = []<typename T>(const T& value) -> bool {
-                    return is_format_arg<typename std::decay<T>::type>::value;
-                };
-                
-                // Values for placeholders are inserted into the resulting string in reverse order of appearance so that
-                // inserting a placeholder value does not offset / affect the insertion positions of any placeholders that come before it.
-                
-                // The total number of placeholders is hard-capped to the maximum number able to be represented by an int.
-                
                 if (m_placeholder_identifiers[0].type == PlaceholderIdentifier::Type::None) {
-                    // Format string contains only auto-numbered placeholders.
-                    
-                    // Verify argument types.
-                    bool has_named_arguments = for_each(tuple, is_named_argument_type);
-                    if (has_named_arguments) {
-                        // Named arguments not allowed in auto-numbered format list.
-                        return "name arguments not allowed";
-                    }
-                    
-                    // For auto-numbered placeholders, there is a 1:1 correlation between placeholder and insertion point.
+                    // For auto-numbered placeholders, there is a 1:1 correlation between a placeholder value and its insertion point.
                     // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
-                    // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored in the resulting string.
+                    // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored.
+                    std::size_t placeholder_count = get_unique_placeholder_count();
                     
-//                    for (int i = static_cast<int>(m_insertion_points.size() - 1); i >= 0; --i) {
-//                        const InsertionPoint& insertion_point = m_insertion_points[i];
-//                        std::string value = get(tuple, i, [&insertion_point]<typename T>(const T& value) -> std::string {
-//                            return stringify(value, insertion_point.formatting);
-//                        });
-//                        result.insert(insertion_point.insert_position, value);
-//                    }
-                }
-                else {
-                    // Format string contains only positional / named placeholders.
-                    
-                    std::size_t positional_placeholder_count = get_positional_placeholder_count();
-                    
-                    for (std::size_t i = 0u; i < positional_placeholder_count; ++i) {
-                        if (get(tuple, i, is_named_argument_type)) {
-                            return "positional arguments must come first";
-                        }
+                    if (placeholder_count > sizeof...(args)) {
+                        // Not enough arguments provided to format(...);
+                        return Result<std::string>::NOT_OK("expecting {} arguments, but received {}", placeholder_count, sizeof...(args));
                     }
                     
-                    for (std::size_t i = 0u; i < get_named_placeholder_count(); ++i) {
-                        if (!get(tuple, i + positional_placeholder_count, is_named_argument_type)) {
-                            return "expecting named argument type";
-                        }
-                    }
-                    
-                    // Verify that all named placeholders have a corresponding argument.
-                    for (std::size_t i = 0u; i < get_unique_placeholder_count(); ++i) {
-                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[i];
-                        if (identifier.type == PlaceholderIdentifier::Type::Name) {
-                            bool found = for_each(tuple, [&identifier]<typename T>(const T& a) -> bool {
-                                if constexpr (is_format_arg<typename std::decay<T>::type>::value) {
-                                    return a.name == identifier.name;
+                    // Format string should only auto-numbered placeholders.
+                    // Verify that there are no positional / named argument values in the argument list.
+                    for (std::size_t i = 0u; i < placeholder_count; ++i) {
+                        if (is_structured_argument_type(tuple, i)) {
+                            const std::string& name = runtime_get(tuple, i, [i]<typename T>(const T& value) -> const std::string& {
+                                if constexpr (is_format_arg<T>::value) {
+                                    return value.name;
                                 }
-                                else {
-                                    return false;
-                                }
+                                // This should never happen.
+                                throw std::runtime_error(utils::format("internal runtime_get error - invalid type at tuple index {}", i));
                             });
                             
-                            if (!found) {
-                                return "named placeholder " + identifier.name + " missing argument";
-                            }
+                            return Result<std::string>::NOT_OK("encountered value for named placeholder {} at index {} - structured placeholder values are not allowed in auto-numbered format strings", name, i);
                         }
                     }
-
-                    // Format all unique placeholders once to save on computation power, since positional / named placeholders can be reused.
-                    std::size_t unique_placeholder_count = get_unique_placeholder_count();
+                }
+                else {
+                    // Format string should only contain positional / named placeholders.
+                    std::size_t positional_placeholder_count = get_positional_placeholder_count();
+                    std::size_t named_placeholder_count = get_named_placeholder_count();
                     
-                    std::vector<std::string> formatted_placeholders;
-                    formatted_placeholders.reserve(unique_placeholder_count);
-
-                    for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
-                        const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
-                        const PlaceholderFormatting& formatting = placeholder.formatting;
-                        
-                        formatted_placeholders.emplace_back(get(tuple, i, [&formatting]<typename T>(const T& value) -> std::string {
-                            return stringify(value, formatting);
-                        }));
+                    if (positional_placeholder_count + named_placeholder_count > sizeof...(args)) {
+                        // Not enough arguments provided to format(...);
+                        return Result<std::string>::NOT_OK("expecting {} arguments, but received {}", positional_placeholder_count + named_placeholder_count, sizeof...(args));
                     }
                     
-                    // Values for placeholders are inserted into the resulting string in reverse order of appearance so that inserting a
-                    // placeholder value does not offset the insertion positions of any placeholders that come before it.
+                    for (std::size_t i = 0u; i < positional_placeholder_count; ++i) {
+                        if (is_structured_argument_type(tuple, i)) {
+                            const std::string& name = runtime_get(tuple, i, [i]<typename T>(const T& value) -> const std::string& {
+                                if constexpr (is_format_arg<T>::value) {
+                                    return value.name;
+                                }
+                                // This should never happen.
+                                throw std::runtime_error(utils::format("internal runtime_get error - invalid type at tuple index {}", i));
+                            });
 
-                    std::size_t previous = std::numeric_limits<std::size_t>::max();
-                    
-                    for (std::size_t i = 0u; i < get_total_placeholder_count(); ++i) {
-                        std::size_t placeholder_index = 0u;
-                        std::size_t current = 0u;
-                        
-                        for (std::size_t j = 0u; j < unique_placeholder_count; ++j) {
-                            const FormattedPlaceholder& placeholder = m_formatted_placeholders[j];
-                            
-                            for (std::size_t insertion_point : placeholder.insertion_points) {
-                                if (insertion_point > current && insertion_point < previous) {
-                                    current = insertion_point;
-                                    placeholder_index = placeholder.placeholder_index;
+                            // Retrieve the first position at which this placeholder was referenced.
+                            std::size_t position = std::string::npos;
+                            for (const FormattedPlaceholder& placeholder : m_formatted_placeholders) {
+                                if (placeholder.placeholder_index == i && !placeholder.insertion_points.empty()) {
+                                    position = placeholder.insertion_points[0];
                                 }
                             }
+                            
+                            if (position != std::string::npos) {
+                                return Result<std::string>::NOT_OK("expecting value for positional placeholder {} (not referenced), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, name);
+                            }
+                            else {
+                                return Result<std::string>::NOT_OK("expecting value for positional placeholder {} (first referenced at index {}), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, position, name);
+                            }
                         }
-                        
-                        result.erase(current - 1, 1);
-                        result.insert(current - 1, formatted_placeholders[placeholder_index]);
-                        
-                        // Update maximum for the next iteration.
-                        previous = current;
                     }
+                    
+//                    for (std::size_t i = 0u; i < named_placeholder_count; ++i) {
+//                        if (!get(tuple, i + positional_placeholder_count, is_named_argument_type)) {
+//                            return Result<std::string>::NOT_OK("expecting named argument type");
+//                        }
+//                    }
+
+                    // Verify that all named placeholders have a corresponding argument.
+//                    for (std::size_t i = 0u; i < get_unique_placeholder_count(); ++i) {
+//                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[i];
+//                        if (identifier.type == PlaceholderIdentifier::Type::Name) {
+//                            bool found = for_each(tuple, [&identifier]<typename T>(const T& a) -> bool {
+//                                if constexpr (is_format_arg<typename std::decay<T>::type>::value) {
+//                                    return a.name == identifier.name;
+//                                }
+//                                else {
+//                                    return false;
+//                                }
+//                            });
+//
+//                            if (!found) {
+//                                return "named placeholder " + identifier.name + " missing argument";
+//                            }
+//                        }
+//                    }
+                }
+                
+                // Format all unique placeholders once to save on computation power.
+                // This is only really applicable for positional / named placeholder values, since these can be referenced multiple times
+                // in the format string, but this logic is near identical for auto-numbered placeholder values.
+                std::size_t unique_placeholder_count = get_unique_placeholder_count();
+                
+                std::vector<std::string> formatted_placeholders;
+                formatted_placeholders.reserve(unique_placeholder_count);
+
+                for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
+                    const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
+                    const PlaceholderFormatting& formatting = placeholder.formatting;
+                    
+                    formatted_placeholders.emplace_back(runtime_get(tuple, i, [&formatting] <typename T>(const T& value) -> std::string {
+                        return stringify(value, formatting);
+                    }));
+                }
+                
+                // Values for placeholders are inserted into the resulting string in reverse order of appearance so that inserting a
+                // placeholder value does not offset the insertion positions of any placeholders that come before it.
+
+                struct InsertionPoint {
+                    std::size_t placeholder_index; // Index of the placeholder to insert.
+                    std::size_t position; // Position at which the placeholder should be inserted.
+                };
+                
+                // Comparator to create a min heap based on the insertion point position.
+                static auto comparator = [](const InsertionPoint& a, const InsertionPoint& b) -> bool {
+                    return a.position > b.position;
+                };
+                
+                std::priority_queue<InsertionPoint, std::vector<InsertionPoint>, decltype(comparator)> insertion_points(comparator);
+                for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
+                    const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
+                    
+                    for (std::size_t position : placeholder.insertion_points) {
+                        insertion_points.emplace(placeholder.placeholder_index, position);
+                    }
+                }
+                
+                // Placeholder values are inserted into the string front to back. This allows an easier way of handling insertions for
+                // placeholders that are directly adjacent due to peculiarities with the std::string::insert() function inserting starting at
+                // the character right before the indicated position. By keeping track of an offset and adjusting the insertion point of
+                // subsequent placeholders accordingly, we can insert values for adjacent placeholders without any extra whitespace.
+                
+                std::size_t offset = 0u;
+                
+                while (!insertion_points.empty()) {
+                    const InsertionPoint& insertion_point = insertion_points.top();
+                    const std::string& placeholder_value = formatted_placeholders[insertion_point.placeholder_index];
+                    
+                    result->insert(insertion_point.position + offset, placeholder_value);
+                    offset += placeholder_value.length();
+                    
+                    insertion_points.pop();
                 }
             }
             
-            return std::move(result);
+            return result;
         }
         
     }
@@ -400,15 +440,22 @@ namespace utils {
     arg<T>::~arg() = default;
     
     template <typename ...Ts>
-    std::string format(const std::string& format_string, const Ts&... ts) {
+    std::string format(const std::string& fmt, const Ts&... args) {
         using namespace internal;
         
-        Result<FormatString> result = FormatString::parse(format_string);
-        if (!result.ok()) {
-            throw std::runtime_error(result.what());
+        Result<FormatString> parse_result = FormatString::parse(fmt);
+        if (!parse_result.ok()) {
+            throw std::runtime_error(parse_result.what());
         }
         
-        return result->format(ts...);
+        const FormatString& format_string = *parse_result;
+
+        Result<std::string> format_result = format_string.format(args...);
+        if (!format_result.ok()) {
+            throw std::runtime_error(format_result.what());
+        }
+        
+        return *format_result;
     }
     
 }

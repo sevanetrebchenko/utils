@@ -40,7 +40,7 @@ namespace utils {
     
     // Python f-string format
     template <typename ...Ts>
-    [[nodiscard]] std::string format(const std::string& format, const Ts&... args);
+    [[nodiscard]] std::string format(const std::string& fmt, const Ts&... args);
     
 }
 
