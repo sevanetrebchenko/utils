@@ -7,10 +7,8 @@
 
 namespace utils {
     
-    // Unlike Result<T>, a Response instance does not contain a data payload. This is suitable, for example, for when
+    // Unlike Result, a Response instance does not contain a data payload. This is suitable, for example, for when
     // a validating function doesn't need to return any value on success but returns an error message on failure.
-    // These classes are purposefully designed without polymorphism in mind, and users should interact with these classes
-    // through their concrete types (and not through pointers / references to the base Response class).
     
     class Response {
         public:
@@ -21,30 +19,34 @@ namespace utils {
             [[nodiscard]] bool ok() const;
             [[nodiscard]] const std::string& what() const;
             
-        protected:
+        private:
             Response();
             explicit Response(std::string error);
             
             std::string m_error;
     };
     
-    template <typename T>
-    class Result final : public Response {
+    template <typename T, typename E>
+    class Result final {
         public:
-            template <typename ...Args>
-            static Result<T> NOT_OK(const std::string& format_string, const Args&... args);
+            template <typename ...Ts>
+            static Result<T, E> OK(const Ts&... args);
             
             template <typename ...Ts>
-            explicit Result(Ts&&... args);
-            Result();
+            static Result<T, E> NOT_OK(const Ts&... args);
+            
             ~Result();
             
-            [[nodiscard]] T& operator*();
-            [[nodiscard]] T& get();
-            [[nodiscard]] T* operator->();
+            [[nodiscard]] bool ok() const;
+            
+            [[nodiscard]] T& result();
+            [[nodiscard]] const E& error() const;
             
         private:
+            Result();
+            
             std::optional<T> m_result;
+            std::optional<E> m_error;
     };
     
 }

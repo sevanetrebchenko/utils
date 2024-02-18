@@ -23,25 +23,25 @@ namespace utils {
         throw std::out_of_range(format("invalid tuple index {} provided to runtime_get", index));
     }
     
-    template <typename T, typename F>
-    void for_each(const T& tuple, const F& fn);
-    
-    template <typename T, typename Tuple, typename F, std::size_t N = 0>
-    Result<T> get_type(const Tuple& tuple, const F& predicate) {
-        const auto& value = std::get<N>(tuple);
-        
-        if constexpr (std::is_same_v<std::decay_t<decltype(value)>, T>) {
-            if (predicate(value)) {
-                return Result<T>(value);
-            }
-        }
-        
-        if constexpr (N + 1 < std::tuple_size_v<Tuple>) {
-            get_type<T, Tuple, F, N + 1>(tuple, predicate);
-        }
-        
-        return Result<T>::NOT_OK("value not found");
-    }
+//    template <typename T, typename F>
+//    void for_each(const T& tuple, const F& fn);
+//
+//    template <typename T, typename Tuple, typename F, std::size_t N = 0>
+//    Result<T> get_type(const Tuple& tuple, const F& predicate) {
+//        const auto& value = std::get<N>(tuple);
+//
+//        if constexpr (std::is_same_v<std::decay_t<decltype(value)>, T>) {
+//            if (predicate(value)) {
+//                return Result<T>(value);
+//            }
+//        }
+//
+//        if constexpr (N + 1 < std::tuple_size_v<Tuple>) {
+//            get_type<T, Tuple, F, N + 1>(tuple, predicate);
+//        }
+//
+//        return Result<T>::NOT_OK("value not found");
+//    }
     
     
     template <typename T, typename Tuple, std::size_t N = 0>

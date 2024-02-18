@@ -25,7 +25,9 @@ int main() {
     
     try {
 //        std::string a = format("test {{ as }} df {0} {hello}{hello} {{}} adf  '", 9);
-        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
+//        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
+
+        std::string a = format("testing pointer value: {}", nullptr);
         std::cout << a << std::endl;
     }
     catch (std::runtime_error& e) {

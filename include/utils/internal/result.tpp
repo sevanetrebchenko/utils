@@ -8,52 +8,70 @@
 
 namespace utils {
 
-    template <typename T>
+    template <typename T, typename E>
+    Result<T, E>::Result() = default;
+    
+    template <typename T, typename E>
+    Result<T, E>::~Result() = default;
+    
+    template <typename T, typename E>
     template <typename ...Ts>
-    Result<T>::Result(Ts&& ...args) : Response(),
-                                      m_result(std::move(args)...)
-                                      {
-    }
-    
-    template <typename T>
-    Result<T>::Result() : Response(),
-                          m_result(T { })
-                          {
-    }
-    
-    template <typename T>
-    Result<T>::~Result() = default;
-    
-    template <typename T>
-    template <typename ...Args>
-    Result<T> Result<T>::NOT_OK(const std::string& format_string, const Args&... args) {
-        Result<T> result { };
+    Result<T, E> Result<T, E>::OK(const Ts&... args) {
+        using ResultType = typename std::decay<E>::type;
         
-        if constexpr (sizeof...(Args) > 0u) {
-            result.m_error = format(format_string, args...);
+        Result<T, E> result { };
+        
+        if constexpr (std::is_same<ResultType, std::string>::value && sizeof...(args) > 1u) {
+            // Treat first argument as format string and the rest as positional argument values.
+            result.m_result.emplace(format(args...));
         }
         else {
-            result.m_error = format_string;
+            result.m_result.emplace(args...);
         }
-
-        return result;
+        
+        return std::move(result);
     }
     
-    template <typename T>
-    [[nodiscard]] T& Result<T>::operator*() {
+    template <typename T, typename E>
+    template <typename ...Ts>
+    Result<T, E> Result<T, E>::NOT_OK(const Ts&... args) {
+        using ErrorType = typename std::decay<E>::type;
+        Result<T, E> result { };
+        
+        if constexpr (std::is_same<ErrorType, std::string>::value && sizeof...(args) > 1u) {
+            // Treat first argument as format string and the rest as positional argument values.
+            result.m_error.emplace(format(args...));
+        }
+        else {
+            result.m_error.emplace(args...);
+        }
+        
+        return std::move(result);
+    }
+    
+    template <typename T, typename E>
+    bool Result<T, E>::ok() const {
+        return m_result.has_value();
+    }
+
+    template <typename T, typename E>
+    T& Result<T, E>::result() {
+        if (!m_result.has_value()) {
+            throw std::runtime_error("result() called on Result that is not ok!");
+        }
+        
         return m_result.value();
     }
     
-    template <typename T>
-    [[nodiscard]] T& Result<T>::get() {
-        return m_result.value();
+    template <typename T, typename E>
+    const E& Result<T, E>::error() const {
+        if (!m_error.has_value()) {
+            throw std::runtime_error("error() called on Result that is ok!");
+        }
+        
+        return m_error.value();
     }
     
-    template <typename T>
-    T* Result<T>::operator->() {
-        return &m_result.value();
-    }
-
 }
 
 #endif // UTILS_RESULT_TPP

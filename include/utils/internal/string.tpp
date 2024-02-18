@@ -15,83 +15,20 @@
 #include <regex> // std::regex_match
 #include <iostream>
 #include <cassert>
+#include <ostream>
+#include <sstream>
+#include <iomanip>
 
 namespace utils {
     namespace internal {
         
-        class PlaceholderIdentifier {
-            public:
-                enum class Type {
-                    None = 0,
-                    Position,
-                    Name
-                };
-
-                explicit PlaceholderIdentifier(std::string_view identifier);
-                static Result<PlaceholderIdentifier> parse(std::string_view identifier) noexcept;
-                
-                PlaceholderIdentifier();
-                ~PlaceholderIdentifier();
-                
-                [[nodiscard]] bool operator==(const PlaceholderIdentifier& other) const;
-
-                Type type;
-                std::size_t position; // Allows for ~2 billion unique positions in a single format string.
-                std::string name;
-                
-            private:
-                explicit PlaceholderIdentifier(int position);
-                explicit PlaceholderIdentifier(std::string name);
-        };
-        
-        struct PlaceholderFormatting {
-            enum Justification {
-                Right = 0,
-                Left,
-                Center
-            };
-            
-            enum Representation {
-                Decimal = 0,
-                Binary,
-                Unicode,
-                Octal,
-                Hexadecimal
-            };
-            
-            enum Sign {
-                NegativeOnly = 0,
-                Aligned,
-                Both
-            };
-            
-            explicit PlaceholderFormatting(std::string_view specifiers);
-            static Result<PlaceholderFormatting> parse(std::string_view specifiers) noexcept;
-            
-            PlaceholderFormatting();
-            ~PlaceholderFormatting();
-            
-            [[nodiscard]] bool operator==(const PlaceholderFormatting& other) const;
-        
-            Justification justification;
-            Representation representation;
-            Sign sign;
-            char fill;
-            char separator;
-            unsigned width;
-            unsigned precision;
-        };
-        
         class FormatString {
             public:
-                explicit FormatString(std::string_view format_string);
-                static Result<FormatString> parse(std::string_view format_string);
-            
-                FormatString();
+                FormatString(std::string_view in);
                 ~FormatString();
 
                 template <typename ...Ts>
-                [[nodiscard]] Result<std::string> format(const Ts&... args) const;
+                [[nodiscard]] std::string format(const Ts&... args) const;
                 
                 [[nodiscard]] std::size_t get_total_placeholder_count() const; // Includes duplicates
                 [[nodiscard]] std::size_t get_unique_placeholder_count() const;
@@ -100,13 +37,13 @@ namespace utils {
                 
             private:
                 struct FormattedPlaceholder {
-                    FormattedPlaceholder(std::size_t placeholder_index, const PlaceholderFormatting& formatting);
+                    FormattedPlaceholder(std::size_t placeholder_index, const Formatting& formatting);
                     ~FormattedPlaceholder();
                     
                     void add_insertion_point(std::size_t position);
                     
                     std::size_t placeholder_index;
-                    PlaceholderFormatting formatting;
+                    Formatting formatting;
 
                     // Positional and named placeholders can appear multiple times in the same format string.
                     // An optimization we can make when formatting placeholders is to format all unique placeholders once and cache them for later. A placeholders
@@ -116,8 +53,41 @@ namespace utils {
                     // used to take advantage of work that was already done and avoid unnecessary duplicate formatting operations.
                     std::vector<std::size_t> insertion_points;
                 };
+                
+                struct Identifier {
+                    enum class Type {
+                        None = 0,
+                        Position,
+                        Name
+                    };
+        
+                    Identifier();
+                    explicit Identifier(int position);
+                    explicit Identifier(std::string name);
+                    ~Identifier();
+                    
+                    [[nodiscard]] bool operator==(const Identifier& other) const;
+        
+                    Type type;
+                    int position; // Allows for ~2 billion unique positions in a single format string.
+                    std::string name;
+                };
 
-                void register_placeholder(const PlaceholderIdentifier& identifier, const PlaceholderFormatting& formatting, std::size_t position);
+                // Allow external functions to convert
+                friend std::string to_string(Identifier::Type);
+                
+                // Errors returned while parsing a format string.
+                enum class ErrorCode {
+                    Whitespace = 0,
+                    DomainError,
+                    InvalidIdentifier,
+                    InvalidFormatSpecifier
+                };
+                
+                [[nodiscard]] Result<Identifier, ErrorCode> parse_identifier(std::string_view in) const;
+                [[nodiscard]] Result<Formatting, ErrorCode> parse_formatting(std::string_view in) const;
+                
+                void register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position);
                 
                 // Verifies that placeholders are of the same type.
                 // A format string can either contain all auto-numbered placeholders or a mix of positional and named placeholders.
@@ -125,7 +95,7 @@ namespace utils {
                 [[nodiscard]] bool verify_placeholder_homogeneity() const;
                 
                 std::string m_format;
-                std::vector<PlaceholderIdentifier> m_placeholder_identifiers;
+                std::vector<Identifier> m_placeholder_identifiers;
                 std::vector<FormattedPlaceholder> m_formatted_placeholders;
         };
         
@@ -135,96 +105,268 @@ namespace utils {
         template <typename T>
         struct is_format_arg<arg<T>> : std::true_type { };
         
-        template <typename T>
-        [[nodiscard]] std::string pointer_to_string(T pointer) {
-            using Type = typename std::remove_reference<typename std::remove_cv<T>::type>::type;
-            static_assert(std::is_pointer<Type>::value || std::is_null_pointer<Type>::value, "non-pointer type provided to pointer_to_string");
-            
-            static char buffer[2u * sizeof(void*) + 3u] { '\0' }; // Enough space to store a pointer address + an optional '0x' prefix (2 bytes) + null terminator (1 byte).
-            static std::size_t buffer_size = sizeof(buffer) / sizeof(buffer[0]);
-            
-            int num_characters = std::snprintf(buffer, buffer_size, "%p", (void*)(pointer));
-            if (num_characters < 0) {
-                throw std::runtime_error("encoding error in pointer_to_string");
+        [[nodiscard]] inline char to_specifier(Formatting::Justification justification) {
+            switch (justification) {
+                case Formatting::Justification::Right:
+                    return '>';
+                case Formatting::Justification::Left:
+                    return '<';
+                case Formatting::Justification::Center:
+                    return '^';
             }
             
-            // The inclusion of the '0x' prefix is implementation dependent, and not all compilers may include it.
-            if (buffer[0] == '0' && buffer[1] == 'x') {
-                return { buffer, static_cast<std::size_t>(num_characters) };
+            throw std::runtime_error("unknown justification");
+        }
+        
+        [[nodiscard]] inline char to_specifier(Formatting::Representation representation) {
+            switch (representation) {
+                case Formatting::Representation::Decimal:
+                    return 'd';
+                case Formatting::Representation::Scientific:
+                    return 'e';
+                case Formatting::Representation::Percentage:
+                    return '%';
+                case Formatting::Representation::Fixed:
+                    return 'f';
+                case Formatting::Representation::Binary:
+                    return 'b';
+                case Formatting::Representation::Octal:
+                    return 'o';
+                case Formatting::Representation::Hexadecimal:
+                    return 'x';
             }
-            else {
-                return "0x" + std::string(buffer, static_cast<std::size_t>(num_characters));
+            
+            throw std::runtime_error("unknown representation");
+        }
+        
+        [[nodiscard]] inline char to_specifier(Formatting::Sign sign) {
+            switch (sign) {
+                case Formatting::Sign::NegativeOnly:
+                    return '-';
+                case Formatting::Sign::Aligned:
+                    return ' ';
+                case Formatting::Sign::Both:
+                    return '+';
             }
+            
+            throw std::runtime_error("unknown sign");
         }
         
         template <typename T>
-        [[nodiscard]] std::string stringify(const T& value, const PlaceholderFormatting& formatting = {}) {
+        [[nodiscard]] std::string pointer_to_string(T pointer, const Formatting& formatting) {
+            using Type = typename std::decay<T>::type;
+            static_assert(std::is_pointer<Type>::value || std::is_null_pointer<Type>::value, "non-pointer type provided to pointer_to_string");
+
+            std::stringstream builder { };
+            
+            // Formatting: sign
+            if (formatting.sign.has_custom_value()) {
+                // Signs on pointer values are not supported.
+                char specifier = to_specifier(*formatting.sign);
+                throw FormatError("error formatting format string - invalid specifier {} for pointer type", specifier);
+            }
+            
+            // Formatting: separator
+            if (formatting.use_separator.has_custom_value()) {
+                throw FormatError("error formatting format string - invalid specifier ',' for pointer type");
+            }
+            
+            // Formatting: data representation
+            if (!formatting.representation.has_custom_value() || *formatting.representation == Formatting::Representation::Hexadecimal) {
+                // By default, or explicitly, hexadecimal is used for representing pointer addresses.
+                builder << std::hex;
+            }
+            else {
+                char specifier = to_specifier(*formatting.representation);
+                throw FormatError("error formatting format string - invalid specifier {} for pointer type", specifier);
+            }
+            
+            if (*formatting.use_base_prefix) {
+                builder << std::showbase;
+            }
+            
+            builder << pointer ? (void*) pointer : "nullptr";
+            std::string value = std::move(builder.str());
+            builder.str(std::string()); // Clear builder internals.
+            
+            std::int64_t current_width = static_cast<std::int64_t>(value.length());
+            unsigned desired_width = *formatting.width;
+            std::int64_t left_padding = 0u;
+            std::int64_t right_padding = 0u;
+            
+            // Formatting: justification
+            Formatting::Justification justification = *formatting.justification;
+            if (justification == Formatting::Justification::Right) {
+                if (desired_width > current_width) {
+                    left_padding = current_width - desired_width;
+                }
+            }
+            else if (justification == Formatting::Justification::Left) {
+                if (desired_width > current_width) {
+                    right_padding = current_width - desired_width;
+                }
+            }
+            else {
+                if (desired_width > current_width) {
+                    std::int64_t extra = current_width - desired_width;
+                    std::int64_t half = extra / 2;
+                    if (extra % 2 == 0) {
+                        left_padding = half;
+                        right_padding = half;
+                    }
+                    else {
+                        left_padding = half + 1;
+                        right_padding = half;
+                    }
+                }
+            }
+            
+            char fill_character = *formatting.fill;
+            builder << std::setw(left_padding) << std::setfill(fill_character) << "" << value << std::setw(right_padding) << std::setfill(fill_character) << "";
+            
+            return std::move(builder.str());
+        }
+        
+        template <typename T>
+        [[nodiscard]] std::string fundamental_to_string(const T value, const Formatting& formatting) {
+            return "";
+            
+//            using Type = typename std::decay<T>::type;
+//            static_assert(std::is_fundamental<Type>::value, "type provided to fundamental_to_string must be built-in");
+//
+//            std::ostringstream out { };
+//
+//            // Convert true/false to their alphanumeric format
+//            out << std::boolalpha;
+//
+//            // Formatting: width
+//            // Maintains default std::stringstream width (to fit) if not specified.
+//            if (formatting.width != -1) {
+//                out << std::setw(formatting.width);
+//            }
+//
+//            // Formatting: fill character
+//            out << std::setfill(formatting.fill);
+//
+//            // Formatting: justification
+//            switch (formatting.justification) {
+//                case PlaceholderFormatting::Justification::Right:
+//                    out << std::right;
+//                    break;
+//                case PlaceholderFormatting::Justification::Left:
+//                    out << std::left;
+//                    break;
+//            }
+//
+//            // Formatting: representation (only applicable to integral type).
+//            if (std::is_integral<Type>::value) {
+//                switch (formatting.representation) {
+//                    case PlaceholderFormatting::Representation::Decimal:
+//                        out << std::setbase(10);
+//                        break;
+//                    case PlaceholderFormatting::Representation::Binary:
+//                        out << std::setbase(2);
+//                        break;
+//                    case PlaceholderFormatting::Representation::Octal:
+//                        out << std::setbase(8);
+//                        break;
+//                    case PlaceholderFormatting::Representation::Hexadecimal:
+//                        out << std::setbase(16);
+//                        break;
+//                }
+//            }
+//            else {
+//                throw std::runtime_error("");
+//            }
+//
+//            // Formatting: precision (floating point values only).
+//            if (std::is_floating_point<Type>::value) {
+//                // Maintains default std::stringstream precision (6) if not specified.
+//                if (formatting.precision != -1) {
+//                    out << std::setprecision(formatting.precision);
+//                }
+//            }
+//            else {
+//                throw std::runtime_error("");
+//            }
+//
+//            if constexpr (std::is_null_pointer<Type>::value) {
+//                out << "nullptr";
+//            }
+//            else {
+//                out << value;
+//            }
+//
+//            return std::move(out.str());
+        }
+        
+        template <typename T>
+        [[nodiscard]] std::string container_to_string(const T& container, const Formatting& formatting) {
+            static_assert(is_const_iterable<T>, "container type provided to container_to_string must support const iteration (begin/end).");
+            auto current = std::begin(container);
+            auto end = std::end(container);
+            
+            if ((end - current) == 0u) {
+                // Special formatting for when a container has no elements.
+                return "[]";
+            }
+            
+            std::string result = "[ ";
+            
+            // If custom formatting is specified, it is applied to container elements.
+            result.append(stringify(*current, formatting));
+            for (++current; current != end; ++current) {
+                result.append(", " + stringify(*current, formatting));
+            }
+            
+            result.append(" ]");
+
+            return std::move(result);
+        }
+        
+        template <typename T>
+        [[nodiscard]] std::string tuple_to_string(const T& value, const Formatting& formatting) {
+            using Type = typename std::decay<T>::type;
+            static_assert(is_pair<Type>::value || is_tuple<Type>::value, "type provided to tuple_to_string must be a tuple type");
+            
+            std::string result = "{ ";
+            
+            // Use std::apply + fold expression to iterate over and format the elements of the tuple.
+            std::apply([&result, &formatting](const auto&&... args) {
+                ((result.append(stringify(args, formatting) + ", ")), ...);
+            }, value);
+            
+            // Overwrite the trailing ", " with " }".
+            std::size_t length = result.length();
+            result[length - 2u] = ' ';
+            result[length - 1u] = '}';
+            return result;
+        }
+        
+        
+        template <typename T>
+        [[nodiscard]] std::string stringify(const T& value, const Formatting& formatting = {}) {
             using Type = typename std::decay<T>::type;
             
-            if constexpr (std::is_fundamental<Type>::value) {
-                if constexpr (std::is_null_pointer<Type>::value) {
-                    // std::nullptr_t (nullptr)
-                    return pointer_to_string(value);
-                }
-                else if constexpr (std::is_same<Type, bool>::value) {
-                    return value ? "true" : "false";
-                }
-                else {
-                    // TODO: other fundamental types.
-                    return "9";
-                }
+            if constexpr (std::is_fundamental<Type>::value && !std::is_null_pointer<Type>::value) {
+                // C++ built-ins
+                return fundamental_to_string(value, formatting);
             }
             else if constexpr (is_standard_container<Type>::value) {
-                // Standard container types.
-                auto iter = std::begin(value);
-                auto end = std::end(value);
-                
-                if ((end - iter) == 0u) {
-                    // Container has no elements.
-                    return "[ ]";
-                }
-                
-                std::string result = "[ ";
-                result.append(stringify(*iter));
-                for (++iter; iter != end; ++iter) {
-                    result.append(", " + stringify(*iter));
-                }
-                result.append(" ]");
-
-                return std::move(result);
+                // standard C++ container
+                return container_to_string(value, formatting);
             }
-            else if constexpr (is_pair<Type>::value) {
-                // std::pair
-                std::string result = "{ ";
-                result.append(stringify(value.first));
-                result.append(", ");
-                result.append(stringify(value.second));
-                result.append(" }");
-                return std::move(result);
-            }
-            else if constexpr (is_tuple<Type>::value) {
-                // std::tuple
-                std::string result = "{ ";
-                
-                // Use std::apply + fold expression to iterate over and format the elements of the tuple.
-                std::apply([&result](auto&&... args) {
-                    ((result.append(stringify(args) + ", ")), ...);
-                }, value);
-                
-                // Overwrite the trailing ", " with " }".
-                std::size_t length = result.length();
-                result[length - 2u] = ' ';
-                result[length - 1u] = '}';
-                
-                return std::move(result);
+            else if constexpr (is_pair<Type>::value || is_tuple<Type>::value) {
+                // std::pair, std::tuple
+                return tuple_to_string(value, formatting);
             }
             else if constexpr (std::is_same<Type, std::string>::value) {
                 // std::string
                 return "\"" + value + "\"";
             }
-            else if constexpr (std::is_pointer<Type>::value) {
+            else if constexpr (std::is_pointer<Type>::value || std::is_null_pointer<Type>::value) {
                 // pointer types
-                return pointer_to_string(value);
+                return pointer_to_string(value, formatting);
             }
             else if constexpr (is_format_arg<Type>::value) {
                 return stringify(value.value, formatting);
@@ -255,13 +397,13 @@ namespace utils {
         }
         
         template <typename ...Ts>
-        Result<std::string> FormatString::format(const Ts& ...args) const {
-            Result<std::string> result { m_format };
+        std::string FormatString::format(const Ts& ...args) const {
+            std::string result = m_format;
             
             if (!m_placeholder_identifiers.empty()) {
                 auto tuple = std::make_tuple(args...);
                 
-                if (m_placeholder_identifiers[0].type == PlaceholderIdentifier::Type::None) {
+                if (m_placeholder_identifiers[0].type == Identifier::Type::None) {
                     // For auto-numbered placeholders, there is a 1:1 correlation between a placeholder value and its insertion point.
                     // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
                     // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored.
@@ -269,7 +411,7 @@ namespace utils {
                     
                     if (placeholder_count > sizeof...(args)) {
                         // Not enough arguments provided to format(...);
-                        return Result<std::string>::NOT_OK("expecting {} arguments, but received {}", placeholder_count, sizeof...(args));
+                        throw std::runtime_error(utils::format("error in call to format(...) - expecting {} arguments, but received {}", placeholder_count, sizeof...(args)));
                     }
                     
                     // Format string should only auto-numbered placeholders.
@@ -284,7 +426,7 @@ namespace utils {
                                 throw std::runtime_error(utils::format("internal runtime_get error - invalid type at tuple index {}", i));
                             });
                             
-                            return Result<std::string>::NOT_OK("encountered value for named placeholder {} at index {} - structured placeholder values are not allowed in auto-numbered format strings", name, i);
+                            throw std::runtime_error(utils::format("encountered value for named placeholder {} at index {} - structured placeholder values are not allowed in auto-numbered format strings", name, i));
                         }
                     }
                 }
@@ -295,7 +437,7 @@ namespace utils {
                     
                     if (positional_placeholder_count + named_placeholder_count > sizeof...(args)) {
                         // Not enough arguments provided to format(...);
-                        return Result<std::string>::NOT_OK("expecting {} arguments, but received {}", positional_placeholder_count + named_placeholder_count, sizeof...(args));
+                        throw std::runtime_error(utils::format("expecting {} arguments, but received {}", positional_placeholder_count + named_placeholder_count, sizeof...(args)));
                     }
                     
                     for (std::size_t i = 0u; i < positional_placeholder_count; ++i) {
@@ -317,10 +459,10 @@ namespace utils {
                             }
                             
                             if (position != std::string::npos) {
-                                return Result<std::string>::NOT_OK("expecting value for positional placeholder {} (not referenced), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, name);
+                                throw std::runtime_error(utils::format("expecting value for positional placeholder {} (not referenced), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, name));
                             }
                             else {
-                                return Result<std::string>::NOT_OK("expecting value for positional placeholder {} (first referenced at index {}), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, position, name);
+                                throw std::runtime_error(utils::format("expecting value for positional placeholder {} (first referenced at index {}), but received value for named placeholder {} - values for all positional placeholders must come before any values for named placeholders", i, position, name));
                             }
                         }
                     }
@@ -361,7 +503,7 @@ namespace utils {
 
                 for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
                     const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
-                    const PlaceholderFormatting& formatting = placeholder.formatting;
+                    const Formatting& formatting = placeholder.formatting;
                     
                     formatted_placeholders.emplace_back(runtime_get(tuple, i, [&formatting] <typename T>(const T& value) -> std::string {
                         return stringify(value, formatting);
@@ -401,7 +543,7 @@ namespace utils {
                     const InsertionPoint& insertion_point = insertion_points.top();
                     const std::string& placeholder_value = formatted_placeholders[insertion_point.placeholder_index];
                     
-                    result->insert(insertion_point.position + offset, placeholder_value);
+                    result.insert(insertion_point.position + offset, placeholder_value);
                     offset += placeholder_value.length();
                     
                     insertion_points.pop();
@@ -432,6 +574,38 @@ namespace utils {
     }
 
     template <typename T>
+    FormattingSpecifier<T>::FormattingSpecifier(T value) : m_value(std::make_pair(value, false)) {
+    }
+
+    template <typename T>
+    FormattingSpecifier<T>::~FormattingSpecifier() = default;
+    
+    template <typename T>
+    void FormattingSpecifier<T>::set_value(T value) {
+        m_value.first = value;
+        m_value.second = true; // Now holds a custom value.
+    }
+    
+    template <typename T>
+    bool FormattingSpecifier<T>::has_custom_value() const {
+        return m_value.second;
+    }
+    
+    template <typename T>
+    T FormattingSpecifier<T>::operator*() const {
+        return m_value.first;
+    }
+    
+    template <typename T>
+    T FormattingSpecifier<T>::get() const {
+        return m_value.first;
+    }
+    
+    template <typename ...Ts>
+    FormatError::FormatError(std::string fmt, const Ts& ...args) : std::runtime_error(format(fmt, args...)) {
+    }
+    
+    template <typename T>
     arg<T>::arg(std::string name, const T& value) : name(std::move(name)),
                                                     value(value) {
     }
@@ -440,22 +614,17 @@ namespace utils {
     arg<T>::~arg() = default;
     
     template <typename ...Ts>
-    std::string format(const std::string& fmt, const Ts&... args) {
+    std::string format(const std::string& in, const Ts&... args) {
         using namespace internal;
+        FormatString format_string = FormatString(in);
         
-        Result<FormatString> parse_result = FormatString::parse(fmt);
-        if (!parse_result.ok()) {
-            throw std::runtime_error(parse_result.what());
+        if constexpr (sizeof...(args) > 0u) {
+            return format_string.format(args...);
         }
-        
-        const FormatString& format_string = *parse_result;
-
-        Result<std::string> format_result = format_string.format(args...);
-        if (!format_result.ok()) {
-            throw std::runtime_error(format_result.what());
+        else {
+            // TODO: check for placeholders.
+            throw FormatError("");
         }
-        
-        return *format_result;
     }
     
 }
