@@ -84,8 +84,17 @@ namespace utils {
                     InvalidFormatSpecifier
                 };
                 
-                [[nodiscard]] Result<Identifier, ErrorCode> parse_identifier(std::string_view in) const;
-                [[nodiscard]] Result<Formatting, ErrorCode> parse_formatting(std::string_view in) const;
+                struct Error {
+                    Error(ErrorCode code);
+                    Error(ErrorCode code, int position);
+                    ~Error();
+                    
+                    ErrorCode code;
+                    int position; // optional
+                };
+                
+                [[nodiscard]] Result<Identifier, Error> parse_identifier(std::string_view in) const;
+                [[nodiscard]] Result<Formatting, Error> parse_formatting(std::string_view in) const;
                 
                 void register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position);
                 
@@ -180,7 +189,7 @@ namespace utils {
                 builder << std::showbase;
             }
             
-            builder << pointer ? (void*) pointer : "nullptr";
+            builder << (pointer ? (void*) pointer : "nullptr");
             std::string value = std::move(builder.str());
             builder.str(std::string()); // Clear builder internals.
             
@@ -618,7 +627,7 @@ namespace utils {
         }
         else {
             // TODO: check for placeholders.
-            throw FormatError("");
+            return in;
         }
     }
     

@@ -91,15 +91,13 @@ namespace utils {
                         
                         // Parse identifier and handle format string errors.
                         std::string_view identifier = placeholder.substr(0, split_position);
-                        Result<Identifier, ErrorCode> parse_identifier_result = parse_identifier(identifier);
+                        Result<Identifier, Error> parse_identifier_result = parse_identifier(identifier);
                         if (!parse_identifier_result.ok()) {
-                            switch (parse_identifier_result.error()) {
-                                case ErrorCode::Whitespace: {
-                                    static char whitespace[] = { ' ', '\n', '\t', '\v', '\f', '\r' };
-                                    std::size_t whitespace_position = identifier.find_first_of(whitespace);
-                                    // TODO: assert
-                                    throw FormatError("error parsing format string - encountered whitespace character at position {}", whitespace_position);
-                                }
+                            const Error& error = parse_identifier_result.error();
+                            switch (error.code) {
+                                case ErrorCode::Whitespace:
+                                    // TODO: assert error position
+                                    throw FormatError("error parsing format string - encountered whitespace character at position {}", error.position);
                                 case ErrorCode::DomainError:
                                     throw FormatError("error parsing format string - positional placeholder value {} at position {} is out of range", identifier, placeholder_start);
                                 case ErrorCode::InvalidIdentifier:
@@ -137,12 +135,16 @@ namespace utils {
                             split_position = placeholder.find(':', start);
                             std::string_view format_specifiers = placeholder.substr(start, split_position - start);
 
-                            Result<Formatting, FormatString::ErrorCode> parse_formatting_result = parse_formatting(format_specifiers);
+                            Result<Formatting, Error> parse_formatting_result = parse_formatting(format_specifiers);
                             if (!parse_formatting_result.ok()) {
-                                switch (parse_formatting_result.error()) {
+                                const Error& error = parse_formatting_result.error();
+                                switch (error.code) {
                                     case FormatString::ErrorCode::InvalidFormatSpecifier:
+                                        // TODO: assert error position
+                                        throw FormatError(utils::format("error parsing format string - unknown format specifier {} at position {}", format_specifiers[error.position], error.position + placeholder_start + 1u));
+                                    default:
+                                        // TODO: assert
                                         break;
-//                                        throw std::runtime_error(utils::format("error parsing format string - unknown format specifier {} at index {}", format_specifiers[error.position], error.position + placeholder_start + 1u));
                                 }
                             }
 
@@ -255,16 +257,16 @@ namespace utils {
 
 #include <iostream>
         
-        Result<FormatString::Identifier, FormatString::ErrorCode> FormatString::parse_identifier(std::string_view in) const {
+        Result<FormatString::Identifier, FormatString::Error> FormatString::parse_identifier(std::string_view in) const {
             if (in.empty()) {
                 // Detected auto-numbered placeholder - {}.
-                return Result<Identifier, ErrorCode>::OK();
+                return Result<Identifier, Error>::OK();
             }
             else {
                 // A placeholder identifier should not have any whitespace characters.
-                for (char i : in) {
-                    if (std::isspace(i)) {
-                        return Result<Identifier, ErrorCode>::NOT_OK(ErrorCode::Whitespace);
+                for (std::size_t i = 0u; i < in.length(); ++i) {
+                    if (std::isspace(in[i])) {
+                        return Result<Identifier, Error>::NOT_OK(ErrorCode::Whitespace, static_cast<int>(i));
                     }
                 }
                 
@@ -284,19 +286,19 @@ namespace utils {
                     // Regex check asserts that std::from_chars(...) will only return std::errc::result_out_of_range if the position value exceeds that of an integer.
                     // Note that this value is ~2.14 billion and should be considered a hard limit on the number of positional arguments for a single format string.
                     if (conversion_result.ec == std::errc::result_out_of_range) {
-                        return Result<Identifier, ErrorCode>::NOT_OK(ErrorCode::DomainError);
+                        return Result<Identifier, Error>::NOT_OK(ErrorCode::DomainError);
                     }
                     
-                    return Result<Identifier, ErrorCode>::OK(index);
+                    return Result<Identifier, Error>::OK(index);
                 }
                 // Named placeholders follow the same naming convention as C++ identifiers:
                 //  - start with a letter or underscore
                 //  - followed by any combination of letters, digits, or underscores (\w)
                 else if (std::regex_match(in.begin(), in.end(), std::regex("[a-zA-Z_]\\w*"))) {
-                    return Result<Identifier, ErrorCode>::OK(std::string(in));
+                    return Result<Identifier, Error>::OK(std::string(in));
                 }
                 else {
-                    return Result<Identifier, ErrorCode>::NOT_OK(ErrorCode::InvalidIdentifier);
+                    return Result<Identifier, Error>::NOT_OK(ErrorCode::InvalidIdentifier);
                 }
             }
         }
@@ -315,7 +317,7 @@ namespace utils {
         //   - : display minus sign for negative values only
         //     : display minus sign for negative values, insert space before positive values (aligned)
         //   + : display minus sign for negative values, plus sign for positive values
-        Result<Formatting, FormatString::ErrorCode> FormatString::parse_formatting(std::string_view in) const {
+        Result<Formatting, FormatString::Error> FormatString::parse_formatting(std::string_view in) const {
             // ( [fill] [alignment] ) [sign] [#] [width] [,] [.precision] [representation]
             Formatting formatting { };
             
@@ -328,10 +330,8 @@ namespace utils {
             // Parse whether to use a separator for thousands - (\,)?
             // Parse floating point precision - (\.\d*)?
             // Parse for type representation - ([de%fbox])?
-            std::regex pattern = std::regex(R"(([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?)");
             std::match_results<std::string_view::const_iterator> match { };
-            
-            if (std::regex_match(in.begin(), in.end(), match, pattern)) {
+            if (std::regex_match(in.begin(), in.end(), match, std::regex("([\\s\\S]?[<>^])?([+ -])?(\\#)?(\\d*)?(\\,)?(\\.\\d*)?([de%fbox])?"))) {
                 // Group 0: entire format string (skipped).
                 unsigned group = 0u;
                 ++group;
@@ -391,10 +391,35 @@ namespace utils {
                 ++group;
             }
             else {
-            
+                // Determine the earliest position at which the regex does not match.
+                int position = 0;
+                std::string_view::const_iterator start = in.begin();
+                std::string_view::const_iterator end = in.end();
+                
+                std::regex_search(start + position, end, match, std::regex("([\\s\\S]?[<>^])?"));
+                position += static_cast<int>(match.length()); // maximum 2 characters
+                
+                std::regex_search(start + position, in.end(), match, std::regex("([+ -])?"));
+                position += static_cast<int>(match.length()); // maximum 1 character
+                
+                std::regex_search(start + position, in.end(), match, std::regex("(\\#)?"));
+                position += static_cast<int>(match.length()); // maximum 1 character
+                
+                std::regex_search(start + position, in.end(), match, std::regex("(\\d*)?"));
+                position += static_cast<int>(match.length()); // TODO: maximum ~200 characters?
+                
+                std::regex_search(start + position, in.end(), match, std::regex("(\\,)?"));
+                position += static_cast<int>(match.length()); // maximum 1 character
+                
+                std::regex_search(start + position, in.end(), match, std::regex("(\\.\\d*)?"));
+                position += static_cast<int>(match.length()); // maximum 256 characters
+                
+                std::regex_search(start + position, in.end(), match, std::regex("([de%fbox])?"));
+                
+                return Result<Formatting, Error>::NOT_OK(ErrorCode::InvalidFormatSpecifier, position);
             }
             
-            return Result<Formatting, FormatString::ErrorCode>::OK(formatting);
+            return Result<Formatting, Error>::OK(formatting);
         }
         
         void FormatString::register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position) {
@@ -466,6 +491,16 @@ namespace utils {
         void FormatString::FormattedPlaceholder::add_insertion_point(std::size_t position) {
             insertion_points.emplace_back(position);
         }
+        
+        FormatString::Error::Error(ErrorCode code) : code(code),
+                                                     position(-1) {
+        }
+
+        FormatString::Error::Error(ErrorCode code, int position) : code(code),
+                                                                   position(position) {
+        }
+        
+        FormatString::Error::~Error() = default;
         
     }
     
