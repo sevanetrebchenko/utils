@@ -89,11 +89,6 @@ namespace utils {
                 
                 void register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position);
                 
-                // Verifies that placeholders are of the same type.
-                // A format string can either contain all auto-numbered placeholders or a mix of positional and named placeholders.
-                // Auto-numbered placeholders cannot be mixed in with placeholders of the other two types.
-                [[nodiscard]] bool verify_placeholder_homogeneity() const;
-                
                 std::string m_format;
                 std::vector<Identifier> m_placeholder_identifiers;
                 std::vector<FormattedPlaceholder> m_formatted_placeholders;
@@ -362,7 +357,7 @@ namespace utils {
             }
             else if constexpr (std::is_same<Type, std::string>::value) {
                 // std::string
-                return "\"" + value + "\"";
+                return value;
             }
             else if constexpr (std::is_pointer<Type>::value || std::is_null_pointer<Type>::value) {
                 // pointer types

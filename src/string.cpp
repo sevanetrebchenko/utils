@@ -23,6 +23,56 @@ namespace utils {
             return "";
         }
         
+        Formatting::Justification to_justification(char justification) {
+            switch (justification) {
+                case '<':
+                    return Formatting::Justification::Left;
+                case '>':
+                    return Formatting::Justification::Right;
+                case '^':
+                    return Formatting::Justification::Center;
+                default:
+                    // TODO: assert
+                    break;
+            }
+        }
+        
+        Formatting::Sign to_sign(char sign) {
+            switch (sign) {
+                case '-':
+                    return Formatting::Sign::NegativeOnly;
+                case ' ':
+                    return Formatting::Sign::Aligned;
+                case '+':
+                    return Formatting::Sign::Both;
+                default:
+                    // TODO: assert
+                    break;
+            }
+        }
+        
+        Formatting::Representation to_representation(char representation) {
+            switch (representation) {
+                case 'd':
+                    return Formatting::Representation::Decimal;
+                case 'e':
+                    return Formatting::Representation::Scientific;
+                case '%':
+                    return Formatting::Representation::Percentage;
+                case 'f':
+                    return Formatting::Representation::Fixed;
+                case 'b':
+                    return Formatting::Representation::Binary;
+                case 'o':
+                    return Formatting::Representation::Octal;
+                case 'x':
+                    return Formatting::Representation::Hexadecimal;
+                default:
+                    // TODO: assert
+                    break;
+            }
+        }
+        
         // FormatString implementation
         FormatString::FormatString(std::string_view in) {
             bool processing_placeholder = false;
@@ -82,21 +132,21 @@ namespace utils {
                         
                         // Placeholder formatting specifiers are optional.
                         if (split_position != std::string::npos) {
-//                            // Parse top-level formatting specifiers.
-//                            std::size_t start = split_position + 1u;
-//                            split_position = placeholder.find(':', start);
-//                            std::string_view format_specifiers = placeholder.substr(start, split_position - start);
-//
-//                            Result<Formatting, FormatErrorType> parse_formatting_result = parse_formatting(format_specifiers);
-//                            if (!parse_formatting_result.ok()) {
-//                                const FormatError& error = parse_formatting_result.error();
-//                                switch (error.type) {
-//                                    case FormatError::Type::InvalidFormatSpecifier:
+                            // Parse top-level formatting specifiers.
+                            std::size_t start = split_position + 1u;
+                            split_position = placeholder.find(':', start);
+                            std::string_view format_specifiers = placeholder.substr(start, split_position - start);
+
+                            Result<Formatting, FormatString::ErrorCode> parse_formatting_result = parse_formatting(format_specifiers);
+                            if (!parse_formatting_result.ok()) {
+                                switch (parse_formatting_result.error()) {
+                                    case FormatString::ErrorCode::InvalidFormatSpecifier:
+                                        break;
 //                                        throw std::runtime_error(utils::format("error parsing format string - unknown format specifier {} at index {}", format_specifiers[error.position], error.position + placeholder_start + 1u));
-//                                }
-//                            }
-//
-//                            Formatting& formatting = parse_formatting_result.result();
+                                }
+                            }
+
+                            Formatting& formatting = parse_formatting_result.result();
 //
 //                            while (split_position != std::string::npos) {
 //                                start = split_position + 1u;
@@ -202,6 +252,8 @@ namespace utils {
             
             return count;
         }
+
+#include <iostream>
         
         Result<FormatString::Identifier, FormatString::ErrorCode> FormatString::parse_identifier(std::string_view in) const {
             if (in.empty()) {
@@ -249,8 +301,100 @@ namespace utils {
             }
         }
         
+        // Valid format specifiers:
+        //   > : right-justify content to available space
+        //   < : left-justify content to available space
+        //   ^ : center content to available space
+        //   d : decimal
+        //   e : scientific notation
+        //   % : percentage
+        //   f : fixed
+        //   b : binary
+        //   o : octal
+        //   x : hexadecimal
+        //   - : display minus sign for negative values only
+        //     : display minus sign for negative values, insert space before positive values (aligned)
+        //   + : display minus sign for negative values, plus sign for positive values
         Result<Formatting, FormatString::ErrorCode> FormatString::parse_formatting(std::string_view in) const {
-            return Result<Formatting, ErrorCode>::OK();
+            // ( [fill] [alignment] ) [sign] [#] [width] [,] [.precision] [representation]
+            Formatting formatting { };
+            
+            // Regex expression for valid format specifiers: ([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?
+            // Breakdown:
+            // Parse alignment and (optionally) fill character - ([\s\S]?[<>^])?
+            // Parse sign - ([+ -])?
+            // Parse whether to use base prefix or not - (\#)?
+            // Parse minimum output width - (\d*)?
+            // Parse whether to use a separator for thousands - (\,)?
+            // Parse floating point precision - (\.\d*)?
+            // Parse for type representation - ([de%fbox])?
+            std::regex pattern = std::regex(R"(([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?)");
+            std::match_results<std::string_view::const_iterator> match { };
+            
+            if (std::regex_match(in.begin(), in.end(), match, pattern)) {
+                // Group 0: entire format string (skipped).
+                unsigned group = 0u;
+                ++group;
+                
+                // Group 1: fill character, justification
+                if (match[group].matched) {
+                    std::string submatch = match[group].str();
+                    if (submatch.length() == 1) {
+                        // Justification is the only required format specifier for group 1 (fill character is optional and defaults to a whitespace, ' ').
+                        formatting.justification = to_justification(submatch[0]);
+                    }
+                    else {
+                        formatting.fill = submatch[0];
+                        formatting.justification = to_justification(submatch[1]);
+                    }
+                }
+                ++group;
+                
+                // Group 2: sign
+                if (match[group].matched) {
+                    formatting.sign = to_sign(match[group].str()[0]);
+                }
+                ++group;
+                
+                // Group 3: base prefix
+                if (match[group].matched) {
+                    formatting.use_base_prefix = true;
+                }
+                ++group;
+                
+                // Group 4: minimum output width
+                if (match[group].matched) {
+                    formatting.width = std::stoul(match[group].str());
+                }
+                ++group;
+                
+                // Group 5: thousands separator
+                if (match[group].matched) {
+                    formatting.use_separator = true;
+                }
+                ++group;
+                
+                // Group 6: floating point maximum precision
+                if (match[group].matched) {
+                    std::uint32_t precision = std::stoul(match[group].str().substr(1)); // Do not include leading '.'
+                    if (precision > std::numeric_limits<std::uint8_t>::max()) {
+                        // TODO: warning message
+                    }
+                    formatting.precision = static_cast<std::uint8_t>(precision);
+                }
+                ++group;
+                
+                // Group 7: representation
+                if (match[group].matched) {
+                    formatting.representation = to_representation(match[group].str()[0]);
+                }
+                ++group;
+            }
+            else {
+            
+            }
+            
+            return Result<Formatting, FormatString::ErrorCode>::OK(formatting);
         }
         
         void FormatString::register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position) {
@@ -358,7 +502,7 @@ namespace utils {
                                use_base_prefix(false),
                                precision(6u),
                                width(0u),
-                               nested_formatting(std::shared_ptr<Formatting>(nullptr)) {
+                               nested(std::shared_ptr<Formatting>(nullptr)) {
     }
     
     Formatting::~Formatting() = default;
@@ -372,7 +516,7 @@ namespace utils {
                *use_base_prefix == *other.use_base_prefix &&
                *precision == *other.precision &&
                *width == *other.width &&
-               *nested_formatting == *other.nested_formatting;
+               *nested == *other.nested;
     }
     
     FormatError::~FormatError() {

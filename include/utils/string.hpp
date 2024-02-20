@@ -34,7 +34,7 @@ namespace utils {
     template <typename T>
     class FormattingSpecifier {
         public:
-            explicit FormattingSpecifier(T value); // Value by default.
+            FormattingSpecifier(T value); // Value by default.
             ~FormattingSpecifier();
             
             void set_value(T value);
@@ -83,9 +83,9 @@ namespace utils {
         FormattingSpecifier<bool> use_separator;
         FormattingSpecifier<bool> use_base_prefix;
         FormattingSpecifier<std::uint8_t> precision;
-        FormattingSpecifier<std::uint8_t> width; // minimum width.
+        FormattingSpecifier<std::uint32_t> width; // minimum width.
         
-        std::shared_ptr<Formatting> nested_formatting;
+        std::shared_ptr<Formatting> nested;
     };
     
     struct FormatError final : public std::runtime_error {
