@@ -47,15 +47,53 @@ namespace utils {
             std::pair<T, bool> m_value;
     };
     
+    // Pattern for specifying custom formatting: ([fill character][justification]) [sign][#][minimum width][,][.precision][type representation]
+    
+    // Section: justification
+    // The justification value controls how formatted placeholder values are aligned within the available space. A valid justification format
+    // specifier can be accompanied by a fill character. This can be any character (defaults to a whitespace if not specified) and fills the
+    // remaining space around the formatted placeholder value. Providing just a fill character without a justification format specifier is not
+    // supported.
+    // Valid format specifiers for justification:
+    //   > : right-justify content to available space
+    //   < : left-justify content to available space
+    //   ^ : center content to available space
+    
+    // Section: sign
+    // The sign value controls how the positive / negative signs are formatted for numeric values. As such, this format specifier is only
+    // applicable to numeric types. Providing a sign format specifier for a type that is not a numeric argument throws a FormatError exception.
+    //   - : display minus sign for negative values only
+    //     : display minus sign for negative values, insert space before positive values (aligned)
+    //   + : display minus sign for negative values, plus sign for positive values
+    
+    // Section: base prefix
+    // The '#' format specifier is applicable only for integer types and forces the inclusion of a base prefix. This works in combination with
+    // the type representation to use the respective prefix that corresponds to the type of the placeholder. These prefixes include: '0b' for
+    // binary, '0o' for octal, and '0x' for hexadecimal. Providing a base prefix format specifier for a non-integer value throws a FormatError
+    // exception.
+
+    // Section: minimum width
+    
+    // Section: separator
+    
+    // Section: precision
+    
+    // Section: type representation
+    //   d : decimal
+    //   e : scientific notation
+    //   % : percentage
+    //   f : fixed
+    //   b : binary
+    //   o : octal
+    //   x : hexadecimal
+    
     struct Formatting {
-        // Alignment of the value within the available space.
         enum class Justification : std::uint8_t {
             Right,
             Left,
             Center
         };
         
-        // Desired output format of the value.
         enum class Representation : std::uint8_t {
             Decimal,
             Scientific,
@@ -83,14 +121,14 @@ namespace utils {
         FormattingSpecifier<bool> use_separator;
         FormattingSpecifier<bool> use_base_prefix;
         FormattingSpecifier<std::uint8_t> precision;
-        FormattingSpecifier<std::uint32_t> width; // minimum width.
+        FormattingSpecifier<std::uint32_t> width;
         
         std::shared_ptr<Formatting> nested;
     };
     
     struct FormatError final : public std::runtime_error {
         template <typename ...Ts>
-        explicit FormatError(std::string fmt, const Ts&... args);
+        explicit FormatError(const std::string& fmt, const Ts&... args);
         ~FormatError() override;
     };
     

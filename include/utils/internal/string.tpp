@@ -606,7 +606,7 @@ namespace utils {
     }
     
     template <typename ...Ts>
-    FormatError::FormatError(std::string fmt, const Ts& ...args) : std::runtime_error(format(fmt, args...)) {
+    FormatError::FormatError(const std::string& fmt, const Ts& ...args) : std::runtime_error(format(fmt, args...)) {
     }
     
     template <typename T>
@@ -618,16 +618,16 @@ namespace utils {
     arg<T>::~arg() = default;
     
     template <typename ...Ts>
-    std::string format(const std::string& in, const Ts&... args) {
+    std::string format(const std::string& fmt, const Ts&... args) {
         using namespace internal;
-        FormatString format_string = FormatString(in);
+        FormatString format_string = FormatString(fmt);
         
         if constexpr (sizeof...(args) > 0u) {
             return format_string.format(args...);
         }
         else {
             // TODO: check for placeholders.
-            return in;
+            return fmt;
         }
     }
     

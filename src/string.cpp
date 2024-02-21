@@ -77,8 +77,6 @@ namespace utils {
         FormatString::FormatString(std::string_view in) {
             bool processing_placeholder = false;
             std::size_t placeholder_start = in.length();
-            
-            Identifier::Type format_string_type;
             bool is_format_string_structured = false;
             
             for (std::size_t i = 0u; i < in.length(); ++i) {
@@ -112,7 +110,6 @@ namespace utils {
                         const Identifier& parsed_identifier = parse_identifier_result.result();
                         if (m_placeholder_identifiers.empty()) {
                             // The type of a format string is determined by the type of the first placeholder.
-                            format_string_type = parsed_identifier.type;
                             is_format_string_structured = parsed_identifier.type != Identifier::Type::None;
                         }
                         else {
@@ -303,33 +300,19 @@ namespace utils {
             }
         }
         
-        // Valid format specifiers:
-        //   > : right-justify content to available space
-        //   < : left-justify content to available space
-        //   ^ : center content to available space
-        //   d : decimal
-        //   e : scientific notation
-        //   % : percentage
-        //   f : fixed
-        //   b : binary
-        //   o : octal
-        //   x : hexadecimal
-        //   - : display minus sign for negative values only
-        //     : display minus sign for negative values, insert space before positive values (aligned)
-        //   + : display minus sign for negative values, plus sign for positive values
         Result<Formatting, FormatString::Error> FormatString::parse_formatting(std::string_view in) const {
-            // ( [fill] [alignment] ) [sign] [#] [width] [,] [.precision] [representation]
             Formatting formatting { };
             
-            // Regex expression for valid format specifiers: ([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?
-            // Breakdown:
-            // Parse alignment and (optionally) fill character - ([\s\S]?[<>^])?
-            // Parse sign - ([+ -])?
-            // Parse whether to use base prefix or not - (\#)?
-            // Parse minimum output width - (\d*)?
-            // Parse whether to use a separator for thousands - (\,)?
-            // Parse floating point precision - (\.\d*)?
-            // Parse for type representation - ([de%fbox])?
+            // Pattern for specifying custom formatting: ([fill][alignment]) [sign][#][minimum width][,][.precision][representation]
+            // Regex expression: ([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?
+            //   - alignment and (optionally) fill character - ([\s\S]?[<>^])?
+            //   - sign - ([+ -])?
+            //   - use type base prefix - (\#)?
+            //   - minimum output width - (\d*)?
+            //   - separate thousands+ with a comma - (\,)?
+            //   - floating point precision - (\.\d*)?
+            //   - type representation - ([de%fbox])?
+            // Note: custom format specifiers are entirely optional and the input string may contain all or none.
             std::match_results<std::string_view::const_iterator> match { };
             if (std::regex_match(in.begin(), in.end(), match, std::regex("([\\s\\S]?[<>^])?([+ -])?(\\#)?(\\d*)?(\\,)?(\\.\\d*)?([de%fbox])?"))) {
                 // Group 0: entire format string (skipped).
@@ -391,30 +374,35 @@ namespace utils {
                 ++group;
             }
             else {
-                // Determine the earliest position at which the regex does not match.
+                // By breaking down the regex used in the check above into its logical components and keeping track of the position and length of matches,
+                // we can determine and report back the position at which the regex first does not match the input string. Note that all the formatting
+                // specifiers are entirely optional. A successful match moves the starting position by the length of the matched substring - this greedy
+                // approach ensures that  characters are matched only once and at the earliest possible point. Upon failure to match, either due to
+                // encountering an unsupported or out of place format specifier, the algorithm simply moves on and attempts to match against the next
+                // regex at the same position. For improperly formed input strings, this position will be somewhere in the middle - this indicates the
+                // first position at which the input diverged from the expected formatting specification. For properly formed input strings, this position
+                // will be at the end (all characters matched). Note that this approach can also be used for determining valid input strings, but is less
+                // performant as it evaluates multiple regex instead of the single one used above. This hit to performance is ignored is this code branch,
+                // as specifying invalid or out of place format specifiers ultimately results in a runtime exception being thrown anyway.
+                
+                // (see breakdown of regex logical component ordering above):
+                static const char* patterns[7] = { "^([\\s\\S]?[<>^])?", "^([+ -])?", "^(\\#)?", "^(\\d*)?", "^(\\,)?", "^(\\.\\d*)?", "^([de%fbox])?" };
+                
+                // Valid custom format specifier strings have an upper bound on their length.
                 int position = 0;
                 std::string_view::const_iterator start = in.begin();
                 std::string_view::const_iterator end = in.end();
                 
-                std::regex_search(start + position, end, match, std::regex("([\\s\\S]?[<>^])?"));
-                position += static_cast<int>(match.length()); // maximum 2 characters
+                for (const char* pattern : patterns) {
+                    if (std::regex_search(start + position, end, match, std::regex(pattern))) {
+                        // The characters matched represent a valid format specifier and should be ignored when determining the position of the first invalid one.
+                        position += static_cast<int>(match.length());
+                    }
+                }
                 
-                std::regex_search(start + position, in.end(), match, std::regex("([+ -])?"));
-                position += static_cast<int>(match.length()); // maximum 1 character
-                
-                std::regex_search(start + position, in.end(), match, std::regex("(\\#)?"));
-                position += static_cast<int>(match.length()); // maximum 1 character
-                
-                std::regex_search(start + position, in.end(), match, std::regex("(\\d*)?"));
-                position += static_cast<int>(match.length()); // TODO: maximum ~200 characters?
-                
-                std::regex_search(start + position, in.end(), match, std::regex("(\\,)?"));
-                position += static_cast<int>(match.length()); // maximum 1 character
-                
-                std::regex_search(start + position, in.end(), match, std::regex("(\\.\\d*)?"));
-                position += static_cast<int>(match.length()); // maximum 256 characters
-                
-                std::regex_search(start + position, in.end(), match, std::regex("([de%fbox])?"));
+                if (position == in.length()) {
+                    // TODO: assert (valid input string, should not be hit).
+                }
                 
                 return Result<Formatting, Error>::NOT_OK(ErrorCode::InvalidFormatSpecifier, position);
             }
@@ -554,7 +542,6 @@ namespace utils {
                *nested == *other.nested;
     }
     
-    FormatError::~FormatError() {
-    }
+    FormatError::~FormatError() = default;
     
 }
