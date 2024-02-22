@@ -78,10 +78,14 @@ namespace utils {
                 
                 // Errors returned while parsing a format string.
                 enum class ErrorCode {
+                    // Error codes for use when parsing placeholder identifiers
                     Whitespace = 0,
                     DomainError,
                     InvalidIdentifier,
-                    InvalidFormatSpecifier
+                    
+                    // Error codes for use when parsing placeholder format specifier strings
+                    InvalidFormatSpecifier,
+                    EmptyFormatSpecifierString
                 };
                 
                 struct Error {
@@ -582,17 +586,28 @@ namespace utils {
     }
 
     template <typename T>
+    FormattingSpecifier<T>::FormattingSpecifier(const FormattingSpecifier<T>& other) : m_value(other.m_value) {
+    }
+    
+    template <typename T>
     FormattingSpecifier<T>::~FormattingSpecifier() = default;
     
     template <typename T>
-    void FormattingSpecifier<T>::set_value(T value) {
+    bool FormattingSpecifier<T>::has_custom_value() const {
+        return m_value.second;
+    }
+    
+    template <typename T>
+    void FormattingSpecifier<T>::set(T value) {
         m_value.first = value;
         m_value.second = true; // Now holds a custom value.
     }
     
     template <typename T>
-    bool FormattingSpecifier<T>::has_custom_value() const {
-        return m_value.second;
+    FormattingSpecifier<T>& FormattingSpecifier<T>::operator=(T value) {
+        m_value.first = value;
+        m_value.second = true; // Now holds a custom value.
+        return *this;
     }
     
     template <typename T>

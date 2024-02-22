@@ -27,7 +27,7 @@ int main() {
 //        std::string a = format("test {{ as }} df {0} {hello}{hello} {{}} adf  '", 9);
 //        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
 
-        std::string a = format("testing pointer value: {:1>+#15,90f}", nullptr);
+        std::string a = format("testing pointer value: {:1>+#15,.90f:1>}", nullptr);
         std::cout << a << std::endl;
     }
     catch (FormatError& e) {

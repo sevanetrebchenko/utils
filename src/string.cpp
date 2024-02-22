@@ -85,10 +85,11 @@ namespace utils {
                         // Substring to get the placeholder without opening / closing braces.
                         std::string_view placeholder = in.substr(placeholder_start + 1u, i - placeholder_start - 1u);
                         
+                        std::size_t offset = 0u;
                         std::size_t split_position = placeholder.find(':');
                         
                         // Parse identifier and handle format string errors.
-                        std::string_view identifier = placeholder.substr(0, split_position);
+                        std::string_view identifier = placeholder.substr(offset, split_position);
                         Result<Identifier, Error> parse_identifier_result = parse_identifier(identifier);
                         if (!parse_identifier_result.ok()) {
                             const Error& error = parse_identifier_result.error();
@@ -109,7 +110,7 @@ namespace utils {
                         // Verify format string placeholder homogeneity - auto-numbered placeholders cannot be mixed with positional / named ones.
                         const Identifier& parsed_identifier = parse_identifier_result.result();
                         if (m_placeholder_identifiers.empty()) {
-                            // The type of a format string is determined by the type of the first placeholder.
+                            // The format string type is determined by the type of the first placeholder.
                             is_format_string_structured = parsed_identifier.type != Identifier::Type::None;
                         }
                         else {
@@ -125,52 +126,57 @@ namespace utils {
                         
                         std::size_t insertion_point = m_format.length();
                         
-                        // Placeholder formatting specifiers are optional.
-                        if (split_position != std::string::npos) {
-                            // Parse top-level formatting specifiers.
-                            std::size_t start = split_position + 1u;
-                            split_position = placeholder.find(':', start);
-                            std::string_view format_specifiers = placeholder.substr(start, split_position - start);
-
+                        // Format specifier strings can be nested, separated by ':'. This is particularly useful for formatting containers of objects, where it is desirable
+                        // to specify separate format specifiers for the container and individual container items. Format specifiers are always applied in a top-down fashion.
+                        
+                        Formatting formatting { };
+                        std::vector<Formatting*> nested_formatting { };
+                        bool first = true;
+                        
+                        // If there are no format specifier strings, formatting remains default-initialized.
+                        while (split_position != std::string::npos) {
+                            std::size_t previous_split_position = split_position;
+                            
+                            // Do not include ':' separator in further searches / substrings.
+                            offset = split_position + 1u;
+                            split_position = placeholder.find(':', offset);
+                            std::string_view format_specifiers = placeholder.substr(offset, split_position - offset);
+                            
                             Result<Formatting, Error> parse_formatting_result = parse_formatting(format_specifiers);
                             if (!parse_formatting_result.ok()) {
                                 const Error& error = parse_formatting_result.error();
                                 switch (error.code) {
                                     case FormatString::ErrorCode::InvalidFormatSpecifier:
                                         // TODO: assert error position
-                                        throw FormatError(utils::format("error parsing format string - unknown format specifier {} at position {}", format_specifiers[error.position], error.position + placeholder_start + 1u));
+                                        throw FormatError("error parsing format string - unknown format specifier {} at position {}", format_specifiers[error.position], error.position + placeholder_start + 1u);
+                                    case FormatString::ErrorCode::EmptyFormatSpecifierString:
+                                        throw FormatError("");
                                     default:
                                         // TODO: assert
                                         break;
                                 }
                             }
-
-                            Formatting& formatting = parse_formatting_result.result();
-//
-//                            while (split_position != std::string::npos) {
-//                                start = split_position + 1u;
-//                                split_position = placeholder.find(':', start);
-//                                format_specifiers = placeholder.substr(start, split_position - start);
-//
-//                                Result<Formatting, FormatError> result = parse_formatting(format_specifiers);
-//                                if (!result.ok()) {
-//                                    const FormatError& error = result.error();
-//                                    switch (error.type) {
-//                                        case FormatError::Type::InvalidFormatSpecifier:
-//                                            throw std::runtime_error(utils::format("error parsing format string - unknown format specifier {} at index {}", format_specifiers[error.position], error.position + placeholder_start + 1u));
-//                                    }
-//                                }
-//
-//                                formatting.nested_formatting = std::make_shared<Formatting>(result.result());
-//                            }
-//
-//                            register_placeholder(parse_identifier_result.result(), formatting, insertion_point);
-                        }
-                        else {
-                            // Use default formatting.
-                            register_placeholder(parse_identifier_result.result(), { }, insertion_point);
+                            
+                            if (first) {
+                                formatting = parse_formatting_result.result();
+                                first = false;
+                            }
+                            else {
+                                nested_formatting.emplace_back(new Formatting(parse_formatting_result.result()));
+                            }
                         }
                         
+                        // Configure the formatting parent chain so that nested Formatting objects can be accessed properly.
+                        for (int j = static_cast<int>(nested_formatting.size()) - 2; j >= 0; --j) {
+                            nested_formatting[j]->set_nested_formatting(nested_formatting[j + 1]);
+                        }
+
+                        if (!nested_formatting.empty()) {
+                            // Connect nested chain to the top-level Formatting object.
+                            formatting.set_nested_formatting(nested_formatting[0]);
+                        }
+                        
+                        register_placeholder(parse_identifier_result.result(), formatting, insertion_point);
                         processing_placeholder = false;
                     }
                 }
@@ -301,20 +307,24 @@ namespace utils {
         }
         
         Result<Formatting, FormatString::Error> FormatString::parse_formatting(std::string_view in) const {
+            if (in.empty()) {
+                return Result<Formatting, FormatString::Error>::NOT_OK(ErrorCode::EmptyFormatSpecifierString);
+            }
+            
             Formatting formatting { };
             
             // Pattern for specifying custom formatting: ([fill][alignment]) [sign][#][minimum width][,][.precision][representation]
-            // Regex expression: ([\s\S]?[<>^])?([+ -])?(\#)?(\d*)?(\,)?(\.\d*)?([de%fbox])?
+            // Regex expression: ([\s\S]?[<>^])?([+ -])?(\#)?(\d+)?(\,)?(\.\d*)?([de%fbox])?
             //   - alignment and (optionally) fill character - ([\s\S]?[<>^])?
             //   - sign - ([+ -])?
             //   - use type base prefix - (\#)?
-            //   - minimum output width - (\d*)?
+            //   - minimum output width - (\d+)?
             //   - separate thousands+ with a comma - (\,)?
             //   - floating point precision - (\.\d*)?
             //   - type representation - ([de%fbox])?
             // Note: custom format specifiers are entirely optional and the input string may contain all or none.
             std::match_results<std::string_view::const_iterator> match { };
-            if (std::regex_match(in.begin(), in.end(), match, std::regex("([\\s\\S]?[<>^])?([+ -])?(\\#)?(\\d*)?(\\,)?(\\.\\d*)?([de%fbox])?"))) {
+            if (std::regex_match(in.begin(), in.end(), match, std::regex("([\\s\\S]?[<>^])?([+ -])?(\\#)?(\\d+)?(\\,)?(\\.\\d*)?([de%fbox])?"))) {
                 // Group 0: entire format string (skipped).
                 unsigned group = 0u;
                 ++group;
@@ -324,36 +334,36 @@ namespace utils {
                     std::string submatch = match[group].str();
                     if (submatch.length() == 1) {
                         // Justification is the only required format specifier for group 1 (fill character is optional and defaults to a whitespace, ' ').
-                        formatting.justification = to_justification(submatch[0]);
+                        formatting.justification.set(to_justification(submatch[0]));
                     }
                     else {
                         formatting.fill = submatch[0];
-                        formatting.justification = to_justification(submatch[1]);
+                        formatting.justification.set(to_justification(submatch[1]));
                     }
                 }
                 ++group;
                 
                 // Group 2: sign
                 if (match[group].matched) {
-                    formatting.sign = to_sign(match[group].str()[0]);
+                    formatting.sign.set(to_sign(match[group].str()[0]));
                 }
                 ++group;
                 
                 // Group 3: base prefix
                 if (match[group].matched) {
-                    formatting.use_base_prefix = true;
+                    formatting.use_base_prefix.set(true);
                 }
                 ++group;
                 
                 // Group 4: minimum output width
                 if (match[group].matched) {
-                    formatting.width = std::stoul(match[group].str());
+                    formatting.width.set(std::stoul(match[group].str()));
                 }
                 ++group;
                 
                 // Group 5: thousands separator
                 if (match[group].matched) {
-                    formatting.use_separator = true;
+                    formatting.use_separator.set(true);
                 }
                 ++group;
                 
@@ -363,13 +373,13 @@ namespace utils {
                     if (precision > std::numeric_limits<std::uint8_t>::max()) {
                         // TODO: warning message
                     }
-                    formatting.precision = static_cast<std::uint8_t>(precision);
+                    formatting.precision.set(static_cast<std::uint8_t>(precision));
                 }
                 ++group;
                 
                 // Group 7: representation
                 if (match[group].matched) {
-                    formatting.representation = to_representation(match[group].str()[0]);
+                    formatting.representation.set(to_representation(match[group].str()[0]));
                 }
                 ++group;
             }
@@ -386,7 +396,7 @@ namespace utils {
                 // as specifying invalid or out of place format specifiers ultimately results in a runtime exception being thrown anyway.
                 
                 // (see breakdown of regex logical component ordering above):
-                static const char* patterns[7] = { "^([\\s\\S]?[<>^])?", "^([+ -])?", "^(\\#)?", "^(\\d*)?", "^(\\,)?", "^(\\.\\d*)?", "^([de%fbox])?" };
+                static const char* patterns[7] = { "^([\\s\\S]?[<>^])?", "^([+ -])?", "^(\\#)?", "^(\\d+)?", "^(\\,)?", "^(\\.\\d*)?", "^([de%fbox])?" };
                 
                 // Valid custom format specifier strings have an upper bound on their length.
                 int position = 0;
@@ -525,21 +535,79 @@ namespace utils {
                                use_base_prefix(false),
                                precision(6u),
                                width(0u),
-                               nested(std::shared_ptr<Formatting>(nullptr)) {
+                               m_nested(nullptr) {
     }
     
-    Formatting::~Formatting() = default;
+    Formatting::Formatting(const Formatting& other) : justification(other.justification),
+                                                      representation(other.representation),
+                                                      sign(other.sign),
+                                                      fill(other.fill),
+                                                      use_separator(other.use_separator),
+                                                      use_base_prefix(other.use_base_prefix),
+                                                      precision(other.precision),
+                                                      width(other.width),
+                                                      m_nested(nullptr) {
+        if (other.m_nested) {
+            // Perform deep copy.
+            m_nested = new Formatting(other.nested());
+        }
+    }
+    
+    Formatting::~Formatting() {
+        delete m_nested;
+    }
     
     bool Formatting::operator==(const Formatting& other) const {
-        return *justification == *other.justification &&
-               *representation == *other.representation &&
-               *sign == *other.sign &&
-               *fill == *other.fill &&
-               *use_separator == *other.use_separator &&
-               *use_base_prefix == *other.use_base_prefix &&
-               *precision == *other.precision &&
-               *width == *other.width &&
-               *nested == *other.nested;
+        bool formatting_equal = *justification == *other.justification &&
+                                *representation == *other.representation &&
+                                *sign == *other.sign &&
+                                *fill == *other.fill &&
+                                *use_separator == *other.use_separator &&
+                                *use_base_prefix == *other.use_base_prefix &&
+                                *precision == *other.precision &&
+                                *width == *other.width;
+        
+        // Recursively compare nested formatting, assuming both pointers are valid.
+        bool nested_formatting_equal = m_nested && other.m_nested && (*m_nested == *other.m_nested);
+        
+        return formatting_equal && nested_formatting_equal;
+    }
+    
+
+    
+    Formatting& Formatting::operator=(const Formatting& other) {
+        if (this == &other) {
+            return *this;
+        }
+
+        justification = other.justification;
+        representation = other.representation;
+        sign = other.sign;
+        fill = other.fill;
+        use_separator = other.use_separator;
+        use_base_prefix = other.use_base_prefix;
+        precision = other.precision;
+        width = other.width;
+        
+        if (other.m_nested) {
+            // Perform deep copy.
+            m_nested = new Formatting(*other.m_nested);
+        }
+        
+        return *this;
+    }
+    
+    void Formatting::set_nested_formatting(Formatting* nested) {
+        m_nested = nested;
+    }
+    
+    Formatting Formatting::nested() const {
+        if (m_nested) {
+            return *m_nested;
+        }
+        
+        // No nested formatting provided, use defaults.
+        return { };
     }
     
     FormatError::~FormatError() = default;

@@ -35,10 +35,13 @@ namespace utils {
     class FormattingSpecifier {
         public:
             FormattingSpecifier(T value); // Value by default.
+            FormattingSpecifier(const FormattingSpecifier<T>& other);
             ~FormattingSpecifier();
             
-            void set_value(T value);
             [[nodiscard]] bool has_custom_value() const;
+            
+            void set(T value);
+            FormattingSpecifier<T>& operator=(T value);
             
             [[nodiscard]] T operator*() const;
             [[nodiscard]] T get() const;
@@ -87,43 +90,56 @@ namespace utils {
     //   o : octal
     //   x : hexadecimal
     
-    struct Formatting {
-        enum class Justification : std::uint8_t {
-            Right,
-            Left,
-            Center
-        };
-        
-        enum class Representation : std::uint8_t {
-            Decimal,
-            Scientific,
-            Percentage,
-            Fixed,
-            Binary,
-            Octal,
-            Hexadecimal
-        };
-        
-        enum class Sign : std::uint8_t {
-            NegativeOnly,
-            Aligned,
-            Both,
-        };
-        
-        Formatting();
-        ~Formatting();
-        [[nodiscard]] bool operator==(const Formatting& other) const;
-        
-        FormattingSpecifier<Justification> justification;
-        FormattingSpecifier<Representation> representation;
-        FormattingSpecifier<Sign> sign;
-        FormattingSpecifier<char> fill;
-        FormattingSpecifier<bool> use_separator;
-        FormattingSpecifier<bool> use_base_prefix;
-        FormattingSpecifier<std::uint8_t> precision;
-        FormattingSpecifier<std::uint32_t> width;
-        
-        std::shared_ptr<Formatting> nested;
+    class Formatting {
+        public:
+            enum class Justification : std::uint8_t {
+                Right,
+                Left,
+                Center
+            };
+            
+            enum class Representation : std::uint8_t {
+                Decimal,
+                Scientific,
+                Percentage,
+                Fixed,
+                Binary,
+                Octal,
+                Hexadecimal
+            };
+            
+            enum class Sign : std::uint8_t {
+                NegativeOnly,
+                Aligned,
+                Both,
+            };
+            
+            Formatting();
+            Formatting(const Formatting& other);
+            ~Formatting();
+            [[nodiscard]] bool operator==(const Formatting& other) const;
+            Formatting& operator=(const Formatting& other);
+            
+            void set_nested_formatting(Formatting* nested);
+            
+            // The nested() function returns a default-initialized Formatting object if there is no nested formatting available.
+            // This makes formatting custom types easier as it doesn't require the user to provide format specifier strings for each
+            // nested type. An example of when this would be useful is when formatting a container of objects of a custom type - by hiding the
+            // nested formatting (which may or may not be null, if not provided) behind a proxy, the user can provide a format specifier string
+            // for the container and use default formatting for the container elements.
+            [[nodiscard]] Formatting nested() const;
+            
+            FormattingSpecifier<Justification> justification;
+            FormattingSpecifier<Representation> representation;
+            FormattingSpecifier<Sign> sign;
+            FormattingSpecifier<char> fill;
+            FormattingSpecifier<bool> use_separator;
+            FormattingSpecifier<bool> use_base_prefix;
+            FormattingSpecifier<std::uint8_t> precision;
+            FormattingSpecifier<std::uint32_t> width;
+            
+        private:
+            Formatting* m_nested;
     };
     
     struct FormatError final : public std::runtime_error {
