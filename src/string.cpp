@@ -549,7 +549,7 @@ namespace utils {
                                                       m_nested(nullptr) {
         if (other.m_nested) {
             // Perform deep copy.
-            m_nested = new Formatting(other.nested());
+            m_nested = new Formatting(*other.m_nested);
         }
     }
     

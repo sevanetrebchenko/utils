@@ -584,13 +584,24 @@ namespace utils {
     template <typename T>
     FormattingSpecifier<T>::FormattingSpecifier(T value) : m_value(std::make_pair(value, false)) {
     }
-
-    template <typename T>
-    FormattingSpecifier<T>::FormattingSpecifier(const FormattingSpecifier<T>& other) : m_value(other.m_value) {
-    }
     
     template <typename T>
     FormattingSpecifier<T>::~FormattingSpecifier() = default;
+    
+    template <typename T>
+    FormattingSpecifier<T>::FormattingSpecifier(const FormattingSpecifier<T>& other) : m_value(other.m_value) {
+        // Preserve whether this holds a custom value or not.
+    }
+    
+    template <typename T>
+    FormattingSpecifier<T>& FormattingSpecifier<T>::operator=(const FormattingSpecifier<T>& other) {
+        // Preserve whether this holds a custom value or not.
+        if (this != &other) {
+            m_value = other.m_value;
+        }
+        
+        return *this;
+    }
     
     template <typename T>
     bool FormattingSpecifier<T>::has_custom_value() const {
@@ -600,13 +611,13 @@ namespace utils {
     template <typename T>
     void FormattingSpecifier<T>::set(T value) {
         m_value.first = value;
-        m_value.second = true; // Now holds a custom value.
+        m_value.second = true;
     }
     
     template <typename T>
     FormattingSpecifier<T>& FormattingSpecifier<T>::operator=(T value) {
         m_value.first = value;
-        m_value.second = true; // Now holds a custom value.
+        m_value.second = true;
         return *this;
     }
     

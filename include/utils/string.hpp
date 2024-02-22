@@ -35,14 +35,18 @@ namespace utils {
     class FormattingSpecifier {
         public:
             FormattingSpecifier(T value); // Value by default.
-            FormattingSpecifier(const FormattingSpecifier<T>& other);
             ~FormattingSpecifier();
+            
+            FormattingSpecifier(const FormattingSpecifier<T>& other);
+            FormattingSpecifier<T>& operator=(const FormattingSpecifier<T>& other);
             
             [[nodiscard]] bool has_custom_value() const;
             
+            // Set format specifier.
             void set(T value);
             FormattingSpecifier<T>& operator=(T value);
             
+            // Get format specifier.
             [[nodiscard]] T operator*() const;
             [[nodiscard]] T get() const;
             
