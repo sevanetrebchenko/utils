@@ -6,6 +6,8 @@
 #include "utils/concepts.hpp"
 #include "utils/result.hpp"
 #include "utils/tuple.hpp"
+#include "utils/assert.hpp"
+#include "utils/enum.hpp"
 
 #include <functional>
 #include <cstdio> // std::snprintf
@@ -18,9 +20,14 @@
 #include <ostream>
 #include <sstream>
 #include <iomanip>
+#include <charconv>
 
 namespace utils {
     namespace internal {
+
+        DEFINE_ENUM_BITFIELD_OPERATIONS(Formatting::Representation)
+        DEFINE_ENUM_BITFIELD_OPERATIONS(Formatting::Justification)
+        DEFINE_ENUM_BITFIELD_OPERATIONS(Formatting::Sign)
         
         class FormatString {
             public:
@@ -89,8 +96,7 @@ namespace utils {
                 };
                 
                 struct Error {
-                    Error(ErrorCode code);
-                    Error(ErrorCode code, int position);
+                    explicit Error(ErrorCode code, int position = -1);
                     ~Error();
                     
                     ErrorCode code;
@@ -113,39 +119,10 @@ namespace utils {
         template <typename T>
         struct is_format_arg<arg<T>> : std::true_type { };
         
-        [[nodiscard]] inline char to_specifier(Formatting::Justification justification) {
-            switch (justification) {
-                case Formatting::Justification::Right:
-                    return '>';
-                case Formatting::Justification::Left:
-                    return '<';
-                case Formatting::Justification::Center:
-                    return '^';
-            }
-            
-            throw std::runtime_error("unknown justification");
-        }
-        
-        [[nodiscard]] inline char to_specifier(Formatting::Representation representation) {
-            switch (representation) {
-                case Formatting::Representation::Decimal:
-                    return 'd';
-                case Formatting::Representation::Scientific:
-                    return 'e';
-                case Formatting::Representation::Percentage:
-                    return '%';
-                case Formatting::Representation::Fixed:
-                    return 'f';
-                case Formatting::Representation::Binary:
-                    return 'b';
-                case Formatting::Representation::Octal:
-                    return 'o';
-                case Formatting::Representation::Hexadecimal:
-                    return 'x';
-            }
-            
-            throw std::runtime_error("unknown representation");
-        }
+        [[nodiscard]] char to_specifier(Formatting::Justification justification);
+        [[nodiscard]] std::string to_string(Formatting::Justification justification);
+        [[nodiscard]] char to_specifier(Formatting::Representation representation);
+        [[nodiscard]] std::string to_string(Formatting::Representation representation);
         
         [[nodiscard]] inline char to_specifier(Formatting::Sign sign) {
             switch (sign) {
@@ -155,9 +132,10 @@ namespace utils {
                     return ' ';
                 case Formatting::Sign::Both:
                     return '+';
+                default:
+                    ASSERT(false, "unknown sign value ({})", static_cast<std::underlying_type<Formatting::Sign>::type>(sign));
+                    return '\0';
             }
-            
-            throw std::runtime_error("unknown sign");
         }
         
         template <typename T>
@@ -170,13 +148,12 @@ namespace utils {
             // Formatting: sign
             if (formatting.sign.has_custom_value()) {
                 // Signs on pointer values are not supported.
-                char specifier = to_specifier(*formatting.sign);
-                throw FormatError("error formatting format string - invalid specifier {} for pointer type", specifier);
+                throw FormatError("error formatting format string - invalid specifier '{}' for pointer type", to_specifier(*formatting.sign));
             }
             
             // Formatting: separator
-            if (formatting.use_separator.has_custom_value()) {
-                throw FormatError("error formatting format string - invalid specifier ',' for pointer type");
+            if (formatting.separator.has_custom_value()) {
+                throw FormatError("error formatting format string - invalid specifier '{}' for pointer type", *formatting.separator);
             }
             
             // Formatting: data representation
@@ -189,7 +166,7 @@ namespace utils {
                 throw FormatError("error formatting format string - invalid specifier {} for pointer type", specifier);
             }
             
-            if (*formatting.use_base_prefix) {
+            if (*formatting.wildcard) {
                 builder << std::showbase;
             }
             
@@ -236,76 +213,453 @@ namespace utils {
         }
         
         template <typename T>
-        [[nodiscard]] std::string fundamental_to_string(const T value, const Formatting& formatting) {
-            return "";
+        [[nodiscard]] std::string to_binary(T value, unsigned group_size = 0, char separator = ' ') {
+            static_assert(is_integer_type<T>::value, "value must be an integer type");
             
-//            using Type = typename std::decay<T>::type;
-//            static_assert(std::is_fundamental<Type>::value, "type provided to fundamental_to_string must be built-in");
-//
-//            std::ostringstream out { };
-//
-//            // Convert true/false to their alphanumeric format
-//            out << std::boolalpha;
-//
-//            // Formatting: width
-//            // Maintains default std::stringstream width (to fit) if not specified.
-//            if (formatting.width != -1) {
-//                out << std::setw(formatting.width);
-//            }
-//
-//            // Formatting: fill character
-//            out << std::setfill(formatting.fill);
-//
-//            // Formatting: justification
-//            switch (formatting.justification) {
-//                case PlaceholderFormatting::Justification::Right:
-//                    out << std::right;
-//                    break;
-//                case PlaceholderFormatting::Justification::Left:
-//                    out << std::left;
-//                    break;
-//            }
-//
-//            // Formatting: representation (only applicable to integral type).
-//            if (std::is_integral<Type>::value) {
-//                switch (formatting.representation) {
-//                    case PlaceholderFormatting::Representation::Decimal:
-//                        out << std::setbase(10);
-//                        break;
-//                    case PlaceholderFormatting::Representation::Binary:
-//                        out << std::setbase(2);
-//                        break;
-//                    case PlaceholderFormatting::Representation::Octal:
-//                        out << std::setbase(8);
-//                        break;
-//                    case PlaceholderFormatting::Representation::Hexadecimal:
-//                        out << std::setbase(16);
-//                        break;
-//                }
-//            }
-//            else {
-//                throw std::runtime_error("");
-//            }
-//
-//            // Formatting: precision (floating point values only).
-//            if (std::is_floating_point<Type>::value) {
-//                // Maintains default std::stringstream precision (6) if not specified.
-//                if (formatting.precision != -1) {
-//                    out << std::setprecision(formatting.precision);
-//                }
-//            }
-//            else {
-//                throw std::runtime_error("");
-//            }
-//
-//            if constexpr (std::is_null_pointer<Type>::value) {
-//                out << "nullptr";
-//            }
-//            else {
-//                out << value;
-//            }
-//
-//            return std::move(out.str());
+            std::string result;
+            
+            if (group_size) {
+                unsigned count = 0u;
+                
+                while (value > 0) {
+                    ++count;
+                    result += static_cast<char>((value % 2) + '0');
+                    value /= 2;
+    
+                    if (count % group_size == 0u) {
+                        result += separator;
+                    }
+                }
+                
+                // Make sure all groups contain the same number of characters.
+                while (count % group_size != 0u) {
+                    result += '0';
+                    ++count;
+                }
+            }
+            else {
+                while (value > 0) {
+                    result += static_cast<char>((value % 2) + '0');
+                    value /= 2;
+                }
+            }
+            
+            std::reverse(result.begin(), result.end());
+            return std::move(result);
+        }
+        
+        template <typename T>
+        [[nodiscard]] std::string to_hexadecimal(T value, unsigned group_size = 0u, char separator = ' ') {
+            static_assert(is_integer_type<T>::value, "value must be an integer type");
+            
+            std::string result;
+            
+            if (group_size) {
+                unsigned count = 0u;
+                
+                while (value > 0) {
+                    ++count;
+                    
+                    unsigned remainder = value % 16;
+                    if (remainder < 10) {
+                        result += static_cast<char>(value + '0');
+                    }
+                    else {
+                        remainder -= 10;
+                        result += static_cast<char>(value + 'A');
+                    }
+                    value /= 16;
+    
+                    if (count % group_size == 0u) {
+                        result += separator;
+                    }
+                }
+                
+                // Make sure all groups contain the same number of characters.
+                while (count % group_size != 0u) {
+                    result += '0';
+                    ++count;
+                }
+            }
+            else {
+                while (value > 0) {
+                    unsigned remainder = value % 16;
+                    if (remainder < 10) {
+                        result += static_cast<char>(value + '0');
+                    }
+                    else {
+                        remainder -= 10;
+                        result += static_cast<char>(value + 'A');
+                    }
+                    value /= 16;
+                }
+            }
+            
+            std::reverse(result.begin(), result.end());
+            return std::move(result);
+        }
+        
+        inline std::string apply_justification(const std::string& value, Formatting::Justification justification, unsigned minimum_width, char fill_character) {
+            std::size_t length = value.length();
+            if (length >= minimum_width) {
+                // Minimum width is less than the current width, justification is a noop.
+                return value;
+            }
+            
+            std::string result;
+            result.resize(minimum_width, fill_character);
+            
+            std::size_t offset;
+            
+            if (justification == Formatting::Justification::Left) {
+                offset = 0u;
+            }
+            else if (justification == Formatting::Justification::Right) {
+                offset = minimum_width - length;
+            }
+            else {
+                // Center justification.
+                offset = (minimum_width - length) / 2;
+            }
+            
+            for (std::size_t i = 0u; i < length; ++i) {
+                result[i + offset] = value[i];
+            }
+            
+            return std::move(result);
+        }
+        
+        [[nodiscard]] inline std::string separate(std::string_view in, char separator) {
+            std::ostringstream builder { };
+            std::size_t current;
+            
+            // Append decimal portion.
+            std::size_t start = in.find('.');
+            if (start != std::string::npos) {
+                if (start == in.length() - 1u) {
+                    builder << 0;
+                }
+                else {
+                    for (std::size_t i = in.length() - 1u; i != start; --i) {
+                        builder << in[i];
+                    }
+                }
+                
+                // Append decimal.
+                builder << '.';
+                current = start - 1u;
+            }
+            else {
+                current = in.length() - 1u;
+            }
+            
+            if (start != 0u) {
+                bool negative = true;
+                std::size_t end = in.find('-');
+                if (end == std::string::npos) {
+                    end = 0u;
+                    negative = false;
+                }
+        
+                std::size_t count = 0u;
+                while (current != end) {
+                    builder << in[current];
+                    ++count;
+                    
+                    if (count % 3u == 0u) {
+                        // Append separator.
+                        
+                        if (negative) {
+                            if (current - 1u != end) {
+                                // Avoid extra leading separator: -,123,456.789
+                                builder << separator;
+                            }
+                        }
+                        else {
+                            builder << separator;
+                        }
+                    }
+                    
+                    --current;
+                }
+                
+                if (negative) {
+                    builder << '-';
+                }
+                else {
+                    builder << in[end];
+                }
+            }
+            else {
+                // Decimal is at the first index of the input string.
+                builder << 0;
+            }
+            
+            std::string result = builder.str();
+            std::reverse(result.begin(), result.end());
+            return std::move(result);
+        }
+        
+        template <typename T>
+        [[nodiscard]] std::string fundamental_to_string(T value, const Formatting& formatting) {
+            using Type = typename std::decay<T>::type;
+            static_assert(std::is_fundamental<Type>::value, "type provided to fundamental_to_string must be built-in");
+            
+            // Format specifiers can be split into two categories: internal and external.
+            // Internal specifiers affect how the value is displayed:
+            //   - type representation
+            //   - sign
+            //   - separator character
+            //   - wildcard
+            //   - precision
+            // External specifiers affect how the space around the value is used:
+            //   - justification
+            //   - fill character
+            //   - width
+            
+            bool is_character_type = std::is_same<Type, char>::value || std::is_same<Type, signed char>::value;
+            std::ostringstream builder { };
+            
+            if (is_character_type) {
+                if (formatting.representation.has_custom_value()) {
+                    Formatting::Representation representation = *formatting.representation;
+                    throw FormatError("error formatting format string - invalid format specifier '{}' ({} representation is not supported for character types)", to_specifier(representation), to_string(representation));
+                }
+                
+                if (formatting.sign.has_custom_value()) {
+                    throw FormatError("error formatting format string - invalid format specifier '{}' (sign format specifiers are not supported for character types)", to_specifier(*formatting.sign));
+                }
+                
+                if (formatting.separator.has_custom_value()) {
+                    throw FormatError("error formatting format string - invalid format specifier '{}' (separator characters are not supported for character types)", *formatting.separator);
+                }
+                
+                if (formatting.wildcard.has_custom_value()) {
+                    throw FormatError("error formatting format string - invalid format specifier '{}' (wildcard format specifier is not valid for character types");
+                }
+                
+                if (formatting.precision.has_custom_value()) {
+                    throw FormatError("error formatting format string - precision specifier '.{}' is not valid for character types", std::to_string(*formatting.precision));
+                }
+                
+                builder << value;
+            }
+            else {
+                // Formatting: sign.
+                switch (*formatting.sign) {
+                    case Formatting::Sign::NegativeOnly:
+                        if (value < T(0)) {
+                            builder << '-';
+                            value = -value;
+                        }
+                        break;
+                    case Formatting::Sign::Aligned:
+                        if (value < T(0)) {
+                            builder << '-';
+                            value = -value;
+                        }
+                        else {
+                            builder << ' ';
+                        }
+                        break;
+                    case Formatting::Sign::Both:
+                        if (value < T(0)) {
+                            builder << '-';
+                            value = -value;
+                        }
+                        else if (value == T(0)) {
+                            builder << ' ';
+                        }
+                        else {
+                            builder << '+';
+                        }
+                        break;
+                }
+            
+                Formatting::Representation representation = *formatting.representation;
+                
+                if constexpr (is_integer_type<Type>::value) {
+                    switch (representation) {
+                        case Formatting::Representation::Decimal: {
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+                            if (formatting.precision.has_custom_value()) {
+                            }
+                            
+                            builder << value;
+                            
+                            if (formatting.separator.has_custom_value()) {
+                                std::string internal = builder.str();
+                                builder.str(std::string()); // Clear stream internals.
+                                
+                                builder << separate(internal, *formatting.separator);
+                            }
+                            
+                            break;
+                        }
+                        case Formatting::Representation::Binary: {
+                            // For binary representations of integer values, the wildcard specifier controls whether to add a base prefix to the result.
+                            bool use_base_prefix = *formatting.wildcard;
+                            if (use_base_prefix) {
+                                builder << "0b";
+                            }
+        
+                            bool has_custom_precision = formatting.precision.has_custom_value();
+                            bool has_custom_separator = formatting.separator.has_custom_value();
+                            
+                            if (has_custom_precision && has_custom_separator) {
+                                unsigned group_size = *formatting.precision;
+                                char separator = *formatting.separator;
+                                
+                                // Group size must be a power of 2.
+                                bool is_power_of_two = (group_size != 0u) && ((group_size & (group_size - 1u)) == 0u);
+                                if (!is_power_of_two) {
+                                    throw FormatError("error formatting format string - group size must be a power of 2 (received: {})", group_size);
+                                }
+        
+                                // If applicable, binary representation and base prefix are separated by the separator character.
+                                if (use_base_prefix) {
+                                    builder << separator;
+                                }
+                                builder << to_binary(value, group_size, separator);
+                            }
+                            else if (!has_custom_precision && !has_custom_separator) {
+                                builder << to_binary(value);
+                            }
+                            else {
+                                throw FormatError("error formatting format string - missing value for {} (group size and separator character must both be explicitly specified for structured binary representations)", has_custom_precision ? "separator character" : "group size");
+                            }
+                            break;
+                        }
+                        case Formatting::Representation::Hexadecimal: {
+                            // For hexadecimal representations of integer values, the wildcard specifier controls whether to add a base prefix to the result.
+                            bool use_base_prefix = *formatting.wildcard;
+                            if (use_base_prefix) {
+                                builder << "0x";
+                            }
+        
+                            bool has_custom_precision = formatting.precision.has_custom_value();
+                            bool has_custom_separator = formatting.separator.has_custom_value();
+                            
+                            if (has_custom_precision && has_custom_separator) {
+                                unsigned group_size = *formatting.precision;
+                                char separator = *formatting.separator;
+                                
+                                // Group size must be a power of 2.
+                                bool is_power_of_two = (group_size != 0u) && ((group_size & (group_size - 1u)) == 0u);
+                                if (!is_power_of_two) {
+                                    throw FormatError("error formatting format string - group size must be a power of 2 (received: {})", group_size);
+                                }
+                                
+                                // If the base prefix is applied, it is separated from the rest of the hexadecimal representation by the separator character.
+                                if (use_base_prefix) {
+                                    builder << separator;
+                                }
+                                
+                                builder << to_hexadecimal(value, group_size, separator);
+                            }
+                            else if (!has_custom_precision && !has_custom_separator) {
+                                builder << to_hexadecimal(value);
+                            }
+                            else {
+                                throw FormatError("error formatting format string - missing value for {} (group size and separator character must both be explicitly specified for structured hexadecimal representations)", has_custom_precision ? "separator character" : "group size");
+                            }
+                            break;
+                        }
+                        case Formatting::Representation::Scientific: {
+                            if (formatting.separator.has_custom_value()) {
+                            }
+                            
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+            
+                            // Integer values must be cast to a floating point type to be displayed properly using scientific notation.
+                            builder << std::scientific << std::setprecision(*formatting.precision) << static_cast<long double>(value);
+                            break;
+                        }
+                        case Formatting::Representation::Fixed: {
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+                            
+                            if (formatting.separator.has_custom_value()) {
+                                std::string internal = builder.str();
+                                builder.str(std::string()); // Clear stream internals.
+                                
+                                builder << separate(internal, *formatting.separator);
+                            }
+                            else {
+                                builder << value;
+                            }
+        
+                            // Integer values have no decimal places, but this can be faked manually if a fixed precision is requested.
+                            if (formatting.precision.has_custom_value()) {
+                                unsigned precision = *formatting.precision;
+                                if (precision > 0) {
+                                    builder << '.';
+                                    for (unsigned i = 0u; i < precision; ++i) {
+                                        builder << 0;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                else {
+                    // Floating point type.
+                    switch (representation) {
+                        case Formatting::Representation::Decimal: {
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+
+                            // Precision is applied by default for floating point numbers.
+                            builder << std::setprecision(*formatting.precision) << value;
+                            
+                            if (formatting.separator.has_custom_value()) {
+                                std::string internal = builder.str();
+                                builder.str(std::string()); // Clear stream internals.
+                                
+                                builder << separate(internal, *formatting.separator);
+                            }
+                            break;
+                        }
+                        case Formatting::Representation::Scientific: {
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+                            
+                            if (formatting.separator.has_custom_value()) {
+                            }
+                            
+                            // Precision is applied by default for floating point numbers.
+                            builder << std::scientific << std::setprecision(*formatting.precision) << value;
+                            break;
+                        }
+                        case Formatting::Representation::Fixed: {
+                            if (formatting.wildcard.has_custom_value()) {
+                            }
+                            
+                            // Precision is applied by default for floating point numbers.
+                            builder << std::fixed << std::setprecision(*formatting.precision) << value;
+
+                            if (formatting.separator.has_custom_value()) {
+                                std::string internal = builder.str();
+                                builder.str(std::string()); // Clear stream internals.
+                                
+                                builder << separate(internal, *formatting.separator);
+                            }
+                            break;
+                        }
+                        
+                        // Unsupported representations.
+                        case Formatting::Representation::Binary:
+                        case Formatting::Representation::Hexadecimal:
+                            throw FormatError("error formatting format string - invalid format specifier '{}' ({} representation of floating point numbers is not supported)", to_specifier(representation), to_string(representation));
+                    }
+                }
+            }
+            
+            // Apply external format specifiers.
+            return apply_justification(builder.str(), *formatting.justification, *formatting.width, *formatting.fill);
         }
         
         template <typename T>
@@ -322,9 +676,9 @@ namespace utils {
             std::string result = "[ ";
             
             // If custom formatting is specified, it is applied to container elements.
-            result.append(stringify(*current, formatting));
+            result.append(to_string(*current, formatting));
             for (++current; current != end; ++current) {
-                result.append(", " + stringify(*current, formatting));
+                result.append(", " + to_string(*current, formatting));
             }
             
             result.append(" ]");
@@ -351,11 +705,72 @@ namespace utils {
             return result;
         }
         
+        template <typename Tuple, std::size_t N = 0>
+        bool is_structured_argument_type(const Tuple& tuple, std::size_t index) {
+            if (N == index) {
+                using Type = typename std::decay<decltype(std::get<N>(tuple))>::type;
+                return is_format_arg<Type>::value;
+            }
+            
+            if constexpr (N + 1 < std::tuple_size<Tuple>::value) {
+                return is_structured_argument_type<Tuple, N + 1>(tuple, index);
+            }
+            
+            ASSERT(false, "tuple index {} is out of bounds", index);
+            return false;
+        }
+        
+        [[nodiscard]] inline std::string to_string(const Formatting& formatting) {
+            std::stringstream builder;
+            
+            builder << '{';
+            
+            if (formatting.justification.has_custom_value()) {
+                if (formatting.fill.has_custom_value()) {
+                    builder << *formatting.fill;
+                }
+                
+                builder << to_specifier(*formatting.justification);
+            }
+
+            if (formatting.sign.has_custom_value()) {
+                builder << to_specifier(*formatting.sign);
+            }
+            
+            if (*formatting.wildcard) {
+                builder << '#';
+            }
+            
+            if (formatting.width.has_custom_value()) {
+                builder << std::to_string(*formatting.width);
+            }
+            
+            if (formatting.separator.has_custom_value()) {
+                builder << *formatting.separator;
+            }
+            
+            if (formatting.precision.has_custom_value()) {
+                builder << '.' << std::to_string(*formatting.precision);
+            }
+            
+            if (formatting.representation.has_custom_value()) {
+                builder << to_specifier(*formatting.representation);
+            }
+            
+            builder << '}';
+            
+            return std::move(builder.str());
+        }
+        
+        template <typename ...Ts>
+        [[noreturn]] void reformat(const FormatError& error, const Ts&... args) {
+            throw FormatError(error.what(), args...);
+        }
         
         template <typename T>
-        [[nodiscard]] std::string stringify(const T& value, const Formatting& formatting = {}) {
+        [[nodiscard]] std::string to_string(const T& value, const Formatting& formatting) {
             using Type = typename std::decay<T>::type;
-            
+        
             if constexpr (std::is_fundamental<Type>::value && !std::is_null_pointer<Type>::value) {
                 // C++ built-ins
                 return fundamental_to_string(value, formatting);
@@ -377,7 +792,7 @@ namespace utils {
                 return pointer_to_string(value, formatting);
             }
             else if constexpr (is_format_arg<Type>::value) {
-                return stringify(value.value, formatting);
+                return ""; //to_string(value.value, formatting);
             }
             // Utilize user-defined std::string conversion operators for all other custom types.
             // This implementation allows for either a std::string conversion class operator (T::operator std::string(), preferred) or a standalone to_string(const T&) function.
@@ -390,51 +805,47 @@ namespace utils {
             }
         }
         
-        template <typename Tuple, std::size_t N = 0>
-        bool is_structured_argument_type(const Tuple& tuple, std::size_t index) {
-            if (N == index) {
-                using Type = typename std::decay<decltype(std::get<N>(tuple))>::type;
-                return is_format_arg<Type>::value;
-            }
-            
-            if constexpr (N + 1 < std::tuple_size<Tuple>::value) {
-                return is_structured_argument_type<Tuple, N + 1>(tuple, index);
-            }
-            
-            throw std::out_of_range(format("invalid tuple index {} provided to is_named_argument_type", index));
-        }
-        
         template <typename ...Ts>
         std::string FormatString::format(const Ts& ...args) const {
             std::string result = m_format;
+
+            if constexpr (sizeof...(args) == 0u) {
+                return m_format;
+            }
             
-            if (!m_placeholder_identifiers.empty()) {
+            if (m_placeholder_identifiers.empty()) {
+                if (sizeof...(args) > 0u) {
+                    // TODO: log warning message
+                }
+            }
+            else {
                 auto tuple = std::make_tuple(args...);
                 
                 if (m_placeholder_identifiers[0].type == Identifier::Type::None) {
-                    // For auto-numbered placeholders, there is a 1:1 correlation between a placeholder value and its insertion point.
+                    // For unstructured format strings, there is a 1:1 correlation between a placeholder value and its insertion point.
                     // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
                     // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored.
                     std::size_t placeholder_count = get_unique_placeholder_count();
-                    
                     if (placeholder_count > sizeof...(args)) {
                         // Not enough arguments provided to format(...);
-                        throw std::runtime_error(utils::format("error in call to format(...) - expecting {} arguments, but received {}", placeholder_count, sizeof...(args)));
+                        throw FormatError("error formatting format string - expecting {} arguments, but received {}", placeholder_count, sizeof...(args));
                     }
                     
-                    // Format string should only auto-numbered placeholders.
-                    // Verify that there are no positional / named argument values in the argument list.
+                    // Unstructured format strings should only contain auto-numbered placeholders - verify that there are no positional / named argument values present in the arguments provided to format(...).
                     for (std::size_t i = 0u; i < placeholder_count; ++i) {
                         if (is_structured_argument_type(tuple, i)) {
                             const std::string& name = runtime_get(tuple, i, [i]<typename T>(const T& value) -> const std::string& {
                                 if constexpr (is_format_arg<T>::value) {
                                     return value.name;
                                 }
+                                
                                 // This should never happen.
+                                
+                                // TODO: assert instead
                                 throw std::runtime_error(utils::format("internal runtime_get error - invalid type at tuple index {}", i));
                             });
                             
-                            throw std::runtime_error(utils::format("encountered value for named placeholder {} at index {} - structured placeholder values are not allowed in auto-numbered format strings", name, i));
+                            throw FormatError("error formatting format string - encountered value for named placeholder {} at index {} (structured placeholder values are not allowed in unstructured format strings)", name, i);
                         }
                     }
                 }
@@ -443,11 +854,13 @@ namespace utils {
                     std::size_t positional_placeholder_count = get_positional_placeholder_count();
                     std::size_t named_placeholder_count = get_named_placeholder_count();
                     
+                    // TODO: check positional placeholder indices, warn on gaps or non-consecutive values resulting in arguments not being used
+                    
                     if (positional_placeholder_count + named_placeholder_count > sizeof...(args)) {
                         // Not enough arguments provided to format(...);
-                        throw std::runtime_error(utils::format("expecting {} arguments, but received {}", positional_placeholder_count + named_placeholder_count, sizeof...(args)));
+                        throw FormatError("error formatting format string - expecting {} arguments, but received {}", positional_placeholder_count + named_placeholder_count, sizeof...(args));
                     }
-                    
+
                     for (std::size_t i = 0u; i < positional_placeholder_count; ++i) {
                         if (is_structured_argument_type(tuple, i)) {
                             const std::string& name = runtime_get(tuple, i, [i]<typename T>(const T& value) -> const std::string& {
@@ -455,6 +868,7 @@ namespace utils {
                                     return value.name;
                                 }
                                 // This should never happen.
+                                // TODO: assert
                                 throw std::runtime_error(utils::format("internal runtime_get error - invalid type at tuple index {}", i));
                             });
 
@@ -475,13 +889,7 @@ namespace utils {
                         }
                     }
                     
-//                    for (std::size_t i = 0u; i < named_placeholder_count; ++i) {
-//                        if (!get(tuple, i + positional_placeholder_count, is_named_argument_type)) {
-//                            return Result<std::string>::NOT_OK("expecting named argument type");
-//                        }
-//                    }
-
-                    // Verify that all named placeholders have a corresponding argument.
+                    // Verify that all named placeholders have
 //                    for (std::size_t i = 0u; i < get_unique_placeholder_count(); ++i) {
 //                        const PlaceholderIdentifier& identifier = m_placeholder_identifiers[i];
 //                        if (identifier.type == PlaceholderIdentifier::Type::Name) {
@@ -513,8 +921,13 @@ namespace utils {
                     const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
                     const Formatting& formatting = placeholder.formatting;
                     
-                    formatted_placeholders.emplace_back(runtime_get(tuple, i, [&formatting] <typename T>(const T& value) -> std::string {
-                        return stringify(value, formatting);
+                    formatted_placeholders.emplace_back(runtime_get(tuple, i, [i, &formatting] <typename T>(const T& value) -> std::string {
+                        try {
+                            return internal::to_string<T>(value, formatting);
+                        }
+                        catch (const FormatError& e) {
+                            reformat(e, arg("position", 5), arg("argind", i));
+                        }
                     }));
                 }
                 
@@ -632,7 +1045,7 @@ namespace utils {
     }
     
     template <typename ...Ts>
-    FormatError::FormatError(const std::string& fmt, const Ts& ...args) : std::runtime_error(format(fmt, args...)) {
+    FormatError::FormatError(const std::string& fmt, const Ts& ...args) : std::runtime_error(utils::format(fmt, args...)) {
     }
     
     template <typename T>
@@ -644,17 +1057,21 @@ namespace utils {
     arg<T>::~arg() = default;
     
     template <typename ...Ts>
-    std::string format(const std::string& fmt, const Ts&... args) {
+    std::string format(std::string_view fmt, const Ts&... args) {
         using namespace internal;
-        FormatString format_string = FormatString(fmt);
+        FormatString str = FormatString(fmt);
         
-        if constexpr (sizeof...(args) > 0u) {
-            return format_string.format(args...);
+        if constexpr (sizeof...(args) > 0) {
+            return str.format(args...);
         }
         else {
-            // TODO: check for placeholders.
-            return fmt;
+            return "";
         }
+    }
+    
+    template <typename T>
+    std::string to_string(const T& value, const Formatting& formatting) {
+        return internal::to_string<T>(value, formatting);
     }
     
 }

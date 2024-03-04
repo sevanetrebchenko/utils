@@ -54,7 +54,7 @@ namespace utils {
             std::pair<T, bool> m_value;
     };
     
-    // Pattern for specifying custom formatting: ([fill character][justification]) [sign][#][minimum width][,][.precision][type representation]
+    // Pattern for specifying custom formatting: ([fill character][justification]) [sign][wildcard][minimum width][,][.precision][type representation]
     
     // Section: justification
     // The justification value controls how formatted placeholder values are aligned within the available space. A valid justification format
@@ -76,8 +76,7 @@ namespace utils {
     // Section: base prefix
     // The '#' format specifier is applicable only for integer types and forces the inclusion of a base prefix. This works in combination with
     // the type representation to use the respective prefix that corresponds to the type of the placeholder. These prefixes include: '0b' for
-    // binary, '0o' for octal, and '0x' for hexadecimal. Providing a base prefix format specifier for a non-integer value throws a FormatError
-    // exception.
+    // binary, '0o' for octal, and '0x' for hexadecimal.
 
     // Section: minimum width
     
@@ -94,6 +93,15 @@ namespace utils {
     //   o : octal
     //   x : hexadecimal
     
+                    // For binary / hexadecimal representations, precision and separator values are optional. The user can specify the group size and
+                // separator character for making binary representations more readable. Group size is specified via the precision format specifier.
+                // For example, 0001 0111 is the binary representation of 23 with a group size of 4 and a whitespace (' ') as the separator character.
+                // Note that the representation was padded with additional leading 0s so that each group contains the same number of characters. The
+                // separator character can also be used to separate the representation from the base prefix: 0b 0001 0111. Specifying the group size
+                // or separator character without the other is not valid. This feature must be explicitly opted into, and hence any format specifier
+                // default values are not applicable.
+    
+    
     class Formatting {
         public:
             enum class Justification : std::uint8_t {
@@ -104,12 +112,10 @@ namespace utils {
             
             enum class Representation : std::uint8_t {
                 Decimal,
-                Scientific,
-                Percentage,
-                Fixed,
                 Binary,
-                Octal,
-                Hexadecimal
+                Hexadecimal,
+                Scientific,
+                Fixed, // Fixed number of decimal places
             };
             
             enum class Sign : std::uint8_t {
@@ -134,13 +140,14 @@ namespace utils {
             [[nodiscard]] Formatting nested() const;
             
             FormattingSpecifier<Justification> justification;
+            FormattingSpecifier<char> fill;
+            FormattingSpecifier<std::uint32_t> width;
+            
             FormattingSpecifier<Representation> representation;
             FormattingSpecifier<Sign> sign;
-            FormattingSpecifier<char> fill;
-            FormattingSpecifier<bool> use_separator;
-            FormattingSpecifier<bool> use_base_prefix;
+            FormattingSpecifier<char> separator;
+            FormattingSpecifier<bool> wildcard;
             FormattingSpecifier<std::uint8_t> precision;
-            FormattingSpecifier<std::uint32_t> width;
             
         private:
             Formatting* m_nested;
@@ -163,7 +170,11 @@ namespace utils {
     
     // Python f-string format
     template <typename ...Ts>
-    [[nodiscard]] std::string format(const std::string& fmt, const Ts&... args);
+    [[nodiscard]] std::string format(std::string_view fmt, const Ts&... args);
+    
+    template <typename T>
+    [[nodiscard]] std::string to_string(const T& value, const Formatting& formatting = { });
+    
 }
 
 // Template definitions.

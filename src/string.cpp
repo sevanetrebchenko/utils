@@ -1,7 +1,7 @@
 
 #include "utils/string.hpp"
 #include "utils/result.hpp"
-#include "utils/internal/string.tpp"
+#include "utils/assert.hpp"
 
 #include <limits>
 #include <charconv>
@@ -17,10 +17,57 @@ namespace utils {
                     return "positional";
                 case FormatString::Identifier::Type::Name:
                     return "named";
+                default:
+                    ASSERT(false, "unknown identifier type ({})", static_cast<std::underlying_type<FormatString::Identifier::Type>::type>(type));
+                    return ""; // Silence compiler warnings.
             }
-            
-            // TODO: assert
-            return "";
+        }
+        
+        char to_specifier(Formatting::Justification justification) {
+            switch (justification) {
+                case Formatting::Justification::Right:
+                    return '>';
+                case Formatting::Justification::Left:
+                    return '<';
+                case Formatting::Justification::Center:
+                    return '^';
+                default:
+                    ASSERT(false, "unknown justification value ({})", static_cast<std::underlying_type<Formatting::Justification>::type>(justification));
+                    return '\0'; // Silence compiler warnings.
+            }
+        }
+        
+        char to_specifier(Formatting::Representation representation) {
+            switch (representation) {
+                case Formatting::Representation::Decimal:
+                    return 'd';
+                case Formatting::Representation::Scientific:
+                    return 'e';
+                case Formatting::Representation::Fixed:
+                    return 'f';
+                case Formatting::Representation::Binary:
+                    return 'b';
+                case Formatting::Representation::Hexadecimal:
+                    return 'x';
+                default:
+                    ASSERT(false, "unknown representation value ({})", static_cast<std::underlying_type<Formatting::Representation>::type>(representation));
+                    return '\0'; // Silence compiler warnings.
+            }
+        }
+        
+        std::string to_string(Formatting::Representation representation) {
+            switch (representation) {
+                case Formatting::Representation::Decimal:
+                    return "decimal";
+                case Formatting::Representation::Binary:
+                    return "binary";
+                case Formatting::Representation::Hexadecimal:
+                    return "hexadecimal";
+                case Formatting::Representation::Scientific:
+                    return "scientific";
+                case Formatting::Representation::Fixed:
+                    return "fixed";
+            }
         }
         
         Formatting::Justification to_justification(char justification) {
@@ -32,8 +79,8 @@ namespace utils {
                 case '^':
                     return Formatting::Justification::Center;
                 default:
-                    // TODO: assert
-                    break;
+                    ASSERT(false, "unknown justification value ({})", justification);
+                    return Formatting::Justification::Right;
             }
         }
         
@@ -46,8 +93,7 @@ namespace utils {
                 case '+':
                     return Formatting::Sign::Both;
                 default:
-                    // TODO: assert
-                    break;
+                    ASSERT(false, "unknown sign value ({})", sign);
             }
         }
         
@@ -57,19 +103,14 @@ namespace utils {
                     return Formatting::Representation::Decimal;
                 case 'e':
                     return Formatting::Representation::Scientific;
-                case '%':
-                    return Formatting::Representation::Percentage;
                 case 'f':
                     return Formatting::Representation::Fixed;
                 case 'b':
                     return Formatting::Representation::Binary;
-                case 'o':
-                    return Formatting::Representation::Octal;
                 case 'x':
                     return Formatting::Representation::Hexadecimal;
                 default:
-                    // TODO: assert
-                    break;
+                    ASSERT(false, "unknown representation value ({})", representation);
             }
         }
         
@@ -95,15 +136,13 @@ namespace utils {
                             const Error& error = parse_identifier_result.error();
                             switch (error.code) {
                                 case ErrorCode::Whitespace:
-                                    // TODO: assert error position
                                     throw FormatError("error parsing format string - encountered whitespace character at position {}", error.position);
                                 case ErrorCode::DomainError:
                                     throw FormatError("error parsing format string - positional placeholder value {} at position {} is out of range", identifier, placeholder_start);
                                 case ErrorCode::InvalidIdentifier:
                                     throw FormatError("error parsing format string - named placeholder {} at position {} is not a valid identifier", identifier, placeholder_start);
                                 default:
-                                    // TODO: assert
-                                    break;
+                                    ASSERT(false, "unknown error code returned from parse_identifier ({}) while parsing identifier '{}'", static_cast<std::underlying_type<ErrorCode>::type>(error.code), identifier);
                             }
                         }
                         
@@ -147,13 +186,11 @@ namespace utils {
                                 const Error& error = parse_formatting_result.error();
                                 switch (error.code) {
                                     case FormatString::ErrorCode::InvalidFormatSpecifier:
-                                        // TODO: assert error position
                                         throw FormatError("error parsing format string - unknown format specifier {} at position {}", format_specifiers[error.position], error.position + placeholder_start + 1u);
                                     case FormatString::ErrorCode::EmptyFormatSpecifierString:
-                                        throw FormatError("");
+                                        throw FormatError("error parsing format string - empty format specifier string at position {}", previous_split_position);
                                     default:
-                                        // TODO: assert
-                                        break;
+                                        ASSERT(false, "unknown error code returned from parse_formatting ({}) while parsing format specifier string '{}'", static_cast<std::underlying_type<ErrorCode>::type>(error.code), format_specifiers);
                                 }
                             }
                             
@@ -258,8 +295,6 @@ namespace utils {
             return count;
         }
 
-#include <iostream>
-        
         Result<FormatString::Identifier, FormatString::Error> FormatString::parse_identifier(std::string_view in) const {
             if (in.empty()) {
                 // Detected auto-numbered placeholder - {}.
@@ -351,7 +386,7 @@ namespace utils {
                 
                 // Group 3: base prefix
                 if (match[group].matched) {
-                    formatting.use_base_prefix.set(true);
+                    formatting.wildcard.set(true);
                 }
                 ++group;
                 
@@ -363,7 +398,7 @@ namespace utils {
                 
                 // Group 5: thousands separator
                 if (match[group].matched) {
-                    formatting.use_separator.set(true);
+                    formatting.separator.set(match[group].str()[0]);
                 }
                 ++group;
                 
@@ -408,10 +443,6 @@ namespace utils {
                         // The characters matched represent a valid format specifier and should be ignored when determining the position of the first invalid one.
                         position += static_cast<int>(match.length());
                     }
-                }
-                
-                if (position == in.length()) {
-                    // TODO: assert (valid input string, should not be hit).
                 }
                 
                 return Result<Formatting, Error>::NOT_OK(ErrorCode::InvalidFormatSpecifier, position);
@@ -490,10 +521,6 @@ namespace utils {
             insertion_points.emplace_back(position);
         }
         
-        FormatString::Error::Error(ErrorCode code) : code(code),
-                                                     position(-1) {
-        }
-
         FormatString::Error::Error(ErrorCode code, int position) : code(code),
                                                                    position(position) {
         }
@@ -531,8 +558,8 @@ namespace utils {
                                representation(Representation::Decimal),
                                sign(Sign::NegativeOnly),
                                fill(' '),
-                               use_separator(false),
-                               use_base_prefix(false),
+                               separator(' '),
+                               wildcard(false),
                                precision(6u),
                                width(0u),
                                m_nested(nullptr) {
@@ -542,8 +569,8 @@ namespace utils {
                                                       representation(other.representation),
                                                       sign(other.sign),
                                                       fill(other.fill),
-                                                      use_separator(other.use_separator),
-                                                      use_base_prefix(other.use_base_prefix),
+                                                      separator(other.separator),
+                                                      wildcard(other.wildcard),
                                                       precision(other.precision),
                                                       width(other.width),
                                                       m_nested(nullptr) {
@@ -562,8 +589,8 @@ namespace utils {
                                 *representation == *other.representation &&
                                 *sign == *other.sign &&
                                 *fill == *other.fill &&
-                                *use_separator == *other.use_separator &&
-                                *use_base_prefix == *other.use_base_prefix &&
+                                *separator == *other.separator &&
+                                *wildcard == *other.wildcard &&
                                 *precision == *other.precision &&
                                 *width == *other.width;
         
@@ -584,8 +611,8 @@ namespace utils {
         representation = other.representation;
         sign = other.sign;
         fill = other.fill;
-        use_separator = other.use_separator;
-        use_base_prefix = other.use_base_prefix;
+        separator = other.separator;
+        wildcard = other.wildcard;
         precision = other.precision;
         width = other.width;
         

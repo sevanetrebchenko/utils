@@ -177,13 +177,29 @@ namespace utils {
     template <typename T, typename U>
     struct is_pair<std::pair<T, U>> : std::true_type { };
     
-    // std:: tuple
+    // std::tuple
     
     template <typename T>
     struct is_tuple : std::false_type { };
     
     template <typename ...Ts>
     struct is_tuple<std::tuple<Ts...>> : std::true_type { };
+    
+    // fundamental type categories
+    
+    template <typename T>
+    struct is_integer_type {
+        static constexpr bool value = std::is_same<T, unsigned char>::value ||
+                                      std::is_same<T, short>::value || std::is_same<T, unsigned short>::value ||
+                                      std::is_same<T, int>::value || std::is_same<T, unsigned int>::value ||
+                                      std::is_same<T, long>::value || std::is_same<T, unsigned long>::value ||
+                                      std::is_same<T, long long>::value || std::is_same<T, unsigned long long>::value;
+    };
+    
+    template <typename T>
+    struct is_floating_point_type {
+        static constexpr bool value = std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, long double>::value;
+    };
     
 }
 

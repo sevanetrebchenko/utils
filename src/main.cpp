@@ -4,6 +4,7 @@
 #include "utils/constexpr.hpp"
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 struct MyContainer {
     std::vector<int> raw;
@@ -15,7 +16,7 @@ struct MyContainer {
 int main() {
     using namespace utils;
     
-    std::vector<int> b { 1, 2, 3, 4, 5 };
+    std::vector<int> v { 1, 2, 3, 4, 5 };
     int* c = nullptr;
     
     std::pair<bool, char> pair = std::make_pair(true, 'a');
@@ -27,8 +28,15 @@ int main() {
 //        std::string a = format("test {{ as }} df {0} {hello}{hello} {{}} adf  '", 9);
 //        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
 
-        std::string a = format("testing pointer value: {:1>+#15,.90f:1>}", nullptr);
+        auto start = std::chrono::high_resolution_clock::now();
+            std::string a = format("testing value: {: > #15,.9f}", 3123123412.14159265358979323846);
+            std::string b = format("testing value: {: > #15,.9f}", -3435314123.14159265358979323846);
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
+        
         std::cout << a << std::endl;
+        std::cout << b << std::endl;
     }
     catch (FormatError& e) {
         std::cout << e.what() << std::endl;
