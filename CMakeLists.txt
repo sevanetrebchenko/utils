@@ -7,6 +7,7 @@ add_executable("${PROJECT_NAME}"
     "${PROJECT_SOURCE_DIR}/src/string.cpp"
     "${PROJECT_SOURCE_DIR}/src/result.cpp"
     "${PROJECT_SOURCE_DIR}/src/assert.cpp"
+    "${PROJECT_SOURCE_DIR}/src/logging.cpp"
 
     "${PROJECT_SOURCE_DIR}/src/main.cpp"
 )

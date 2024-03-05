@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include "utils/logging.hpp"
 
 struct MyContainer {
     std::vector<int> raw;
@@ -30,7 +31,7 @@ int main() {
 
         auto start = std::chrono::high_resolution_clock::now();
             std::string a = format("testing value: {: > #15,.9f}", 3123123412.14159265358979323846);
-            std::string b = format("testing value: {: > #15,.9f}", -3435314123.14159265358979323846);
+            std::string b = format("testing value: {: > #15,.29f}", -3435314123.14159265358979323846);
         auto end = std::chrono::high_resolution_clock::now();
         
         std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
@@ -41,6 +42,10 @@ int main() {
     catch (FormatError& e) {
         std::cout << e.what() << std::endl;
     }
+    
+    logging::add_adapter("stdout").with_filename("log.out").with_format("{}");
+    
+    logging::info("asdf", 1);
     
 //    std::string a = format("test ", arg("test", 2), b, pair, nullptr, c, tup);
     
