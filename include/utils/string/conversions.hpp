@@ -93,6 +93,10 @@ namespace utils {
     template <>
     [[nodiscard]] double from_string<double>(std::string_view value);
     
+    // String types
+    template <>
+    [[nodiscard]] std::string from_string(std::string_view value);
+    
 }
 
 // Template definitions.

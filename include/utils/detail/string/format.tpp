@@ -28,8 +28,37 @@ namespace utils {
     }
     
     template <typename T>
-    [[nodiscard]] T Formatting::Specifier::as() const {
-        return from_string<T>(m_raw);
+    bool Formatting::Specifier::operator==(T other) const {
+        using Type = std::decay<T>::type;
+        
+        if constexpr (std::is_same<Type, const char*>::value) {
+            return strcmp(m_raw.c_str(), other) == 0;
+        }
+        else {
+            return to<Type>() == other;
+        }
+    }
+    
+    template <typename T>
+    [[nodiscard]] T Formatting::Specifier::to() const {
+        using Type = std::decay<T>::type;
+        return static_cast<Type>(*this);
+    }
+    
+    template <typename T>
+    Formatting::Specifier::operator T() const {
+        using Type = std::decay<T>::type;
+        
+        // Conversion from raw type std::string to a string type (std::string, const char*, std::string_view) can be done directly and does not require a from_string function call.
+        if constexpr (std::is_same<Type, std::string>::value || std::is_same<Type, std::string_view>::value) {
+            return m_raw;
+        }
+        else if constexpr (std::is_same<Type, const char*>::value) {
+            return m_raw.c_str();
+        }
+        else {
+            return from_string<T>(m_raw);
+        }
     }
     
     template <typename ...Ts>
@@ -126,7 +155,7 @@ namespace utils {
     
             for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
                 const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
-                formatted_placeholders.emplace_back(runtime_get(tuple, i, [i, &placeholder] <typename T>(const T& value) -> std::string {
+                formatted_placeholders.emplace_back(runtime_get(tuple, placeholder.identifier_index, [&placeholder] <typename T>(const T& value) -> std::string {
                     if constexpr (detail::is_formattable<T>) {
                         return to_string(value, placeholder.formatting);
                     }
@@ -137,9 +166,6 @@ namespace utils {
                     }
                 }));
             }
-    
-            // Values for placeholders are inserted into the resulting string in reverse order of appearance so that inserting a
-            // placeholder value does not offset the insertion positions of any placeholders that come before it.
     
             struct InsertionPoint {
                 std::size_t placeholder_index; // Index of the placeholder to insert.
@@ -156,7 +182,7 @@ namespace utils {
                 const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
     
                 for (std::size_t position : placeholder.insertion_points) {
-                    insertion_points.emplace(placeholder.identifier_index, position);
+                    insertion_points.emplace(i, position);
                 }
             }
     

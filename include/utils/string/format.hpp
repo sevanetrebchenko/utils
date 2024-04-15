@@ -19,11 +19,17 @@ namespace utils {
                     
                     [[nodiscard]] bool operator==(const Specifier& other) const;
                     
+                    template <typename T>
+                    [[nodiscard]] bool operator==(T other) const;
+                    
                     Specifier& operator=(const std::string& value);
                     
                     // Conversion operators.
                     template <typename T>
-                    [[nodiscard]] T as() const;
+                    [[nodiscard]] T to() const;
+                    
+                    template <typename T>
+                    [[nodiscard]] operator T() const;
     
                 private:
                     std::string m_raw;

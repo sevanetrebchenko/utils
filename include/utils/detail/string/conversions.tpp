@@ -45,6 +45,10 @@ namespace utils {
 
         builder << " ]";
         
+        if (formatting["representation"] == "binary") {
+            builder << " to binary!";
+        }
+        
         return std::move(builder.str());
     }
     

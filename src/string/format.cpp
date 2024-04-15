@@ -16,7 +16,7 @@ namespace utils {
         m_raw = value;
         return *this;
     }
-
+    
     // Formatting implementation
 
     Formatting::Formatting() = default;
@@ -48,6 +48,7 @@ namespace utils {
         
         std::size_t length = in.length();
         std::size_t placeholder_start;
+        std::size_t placeholder_offset = 0u;
 
         for (std::size_t i = 0u; i < length; ++i) {
             if (in[i] == '{') {
@@ -72,7 +73,7 @@ namespace utils {
                         ++i;
                         
                         // Positional placeholders must only contain numbers
-                        while (!std::isdigit(in[i])) {
+                        while (std::isdigit(in[i])) {
                             ++i;
                         }
                         
@@ -151,7 +152,7 @@ namespace utils {
                                     ++i;
                                 }
                                 else {
-                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped as '[[' inside specifier values", i);
+                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
                                 }
                             }
                             else if (in[i] == ']') {
@@ -183,7 +184,8 @@ namespace utils {
                         }
                     }
                     
-                    register_placeholder(identifier, formatting, placeholder_start);
+                    register_placeholder(identifier, formatting, placeholder_start - placeholder_offset);
+                    placeholder_offset += (i - placeholder_start) + 1;
                 }
             }
             else if (in[i] == '}') {
@@ -192,24 +194,19 @@ namespace utils {
                     ++i;
                 }
                 else {
-                    throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped as '}}' inside format strings", i);
+                    throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped to '}}' inside format strings", i);
                 }
             }
-            
-            m_format += in[i];
+            else {
+                m_format += in[i];
+            }
         }
     }
     
     FormatString::~FormatString() = default;
     
     std::size_t FormatString::get_placeholder_count() const {
-        std::size_t count = 0u;
-        
-        for (const FormattedPlaceholder& placeholder : m_formatted_placeholders) {
-            count += placeholder.insertion_points.size();
-        }
-        
-        return count;
+        return m_formatted_placeholders.size();
     }
     
     std::size_t FormatString::get_positional_placeholder_count() const {

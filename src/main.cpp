@@ -43,7 +43,7 @@ int main() {
 //        std::string a = format("test {{ as }} df {0} {1}{3} {{}} adf  '", 9, arg("asdf", 9), arg("asdf", 9), 9);
 
         auto start = std::chrono::high_resolution_clock::now();
-            std::string a = utils::format("testing value: {}", v);
+            std::string a = utils::format("testing value: {0} {0|representation=[binary]}", v);
             std::string b = utils::format("testing value: {}", -3435314123.14159265358979323846);
         auto end = std::chrono::high_resolution_clock::now();
         
@@ -57,6 +57,14 @@ int main() {
     }
     
     logging::info("asdf", 1);
+    
+    utils::Formatting formatting { };
+    
+    formatting["a"] = "c";
+    formatting["b"] = "56";
+    formatting["c"] = "5.2";
+    formatting["d"] = "this is a string";
+    
 //
 //    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");
 //    adapter->info("asdf", 4);

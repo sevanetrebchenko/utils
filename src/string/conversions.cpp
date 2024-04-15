@@ -37,10 +37,10 @@ namespace utils {
     }
     
     std::string to_string(char value, const Formatting& formatting) {
-        Justification justification = formatting["justify"].as<Justification>();
-        unsigned width = formatting["width"].as<unsigned>();
-        char fill = formatting["fill"].as<char>();
-        Sign sign = formatting["sign"].as<Sign>();
+        Justification justification = formatting["justify"].to<Justification>();
+        unsigned width = formatting["width"].to<unsigned>();
+        char fill = formatting["fill"].to<char>();
+        Sign sign = formatting["sign"].to<Sign>();
         
         return justify(std::string(1, value), justification, width, fill);
     }
