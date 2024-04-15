@@ -2,7 +2,7 @@
 #ifndef UTILS_ENUM_HPP
 #define UTILS_ENUM_HPP
 
-#include <type_traits>
+#include <type_traits> // std::underlying_type
 
 #define DEFINE_ENUM_BITFIELD_OPERATIONS(T)                                      \
     [[nodiscard]] inline constexpr T operator|(T first, T second) {             \

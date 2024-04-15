@@ -24,6 +24,6 @@ namespace utils {
 
 
 // Template definitions.
-#include "utils/internal/assert.tpp"
+#include "utils/detail/assert.tpp"
 
 #endif // UTILS_ASSERT_HPP

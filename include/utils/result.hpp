@@ -1,4 +1,6 @@
 
+#pragma once
+
 #ifndef UTILS_RESULT_HPP
 #define UTILS_RESULT_HPP
 
@@ -51,6 +53,6 @@ namespace utils {
     
 }
 
-#include "utils/internal/result.tpp"
+#include "utils/detail/result.tpp"
 
 #endif // UTILS_RESULT_HPP

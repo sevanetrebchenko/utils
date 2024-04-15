@@ -3,6 +3,7 @@
 #define UTILS_RESULT_TPP
 
 #include "utils/string.hpp"
+
 #include <stdexcept> // std::runtime_error
 #include <utility> // std::move
 

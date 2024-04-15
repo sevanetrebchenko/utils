@@ -62,6 +62,6 @@ namespace utils {
     
 }
 
-#include "utils/internal/tuple.tpp"
+#include "utils/detail/tuple.tpp"
 
 #endif // UTILS_TUPLE_HPP

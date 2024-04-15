@@ -16,14 +16,22 @@ namespace utils {
     
     template <typename C>
     concept is_const_iterable = requires(const C container) {
-        // const-incrementable
-        { std::begin(container) } -> std::same_as<decltype(std::end(container))>;
-        { std::begin(container) } -> std::same_as<decltype(std::next(std::begin(container)))>;
-        
-        { *std::begin(container) } -> std::copy_constructible;
+        // Check container iterator
         requires std::is_pointer_v<decltype(std::begin(container).operator->())>;
+        // 1. must have valid begin / end function definitions
+        { std::begin(container) } -> std::same_as<decltype(std::end(container))>;
+        // 2. must be incrementable
+        { std::begin(container) } -> std::same_as<decltype(std::next(std::begin(container)))>;
+        // 3. must be copy-constructible
+        { *std::begin(container) } -> std::copy_constructible;
+        // 4. must support comparison operators
         { std::begin(container) == std::begin(container) } -> std::same_as<bool>;
         { std::begin(container) != std::begin(container) } -> std::same_as<bool>;
+    };
+    
+    template <typename Fn, typename T>
+    concept returns_type = requires(Fn predicate) {
+        { predicate() } -> std::same_as<T>;
     };
     
 }
