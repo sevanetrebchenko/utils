@@ -32,10 +32,10 @@ namespace utils {
     
     template <>
     [[nodiscard]] Sign from_string<Sign>(std::string_view str) {
-        if (str == "negativeonly") {
+        if (str == "negative" || str == "negativeonly") {
             return Sign::NegativeOnly;
         }
-        else if (str == "aligned") {
+        else if (str == "align" || str == "aligned") {
             return Sign::Aligned;
         }
         else if (str == "both") {

@@ -3,7 +3,7 @@
 #define UTILS_LOGGING_TPP
 
 #include "utils/logging/level.hpp"
-#include "utils/string.hpp"
+#include "utils/exceptions.hpp"
 
 #include <source_location> // std::source_location
 
@@ -16,28 +16,28 @@ namespace utils::logging {
     }
     
     template <typename ...Ts>
-    void info(FormatStringWrapper fmt, const Ts&... args) {
-        detail::log(MessageLevel::Info, utils::format(fmt, args...), fmt.source());
+    void info(const FormatString& fmt, const Ts&... args) {
+        detail::log(MessageLevel::Info, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void debug(FormatStringWrapper fmt, const Ts&... args) {
-        detail::log(MessageLevel::Debug, utils::format(fmt, args...), fmt.source());
+    void debug(const FormatString& fmt, const Ts&... args) {
+        detail::log(MessageLevel::Debug, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void warning(FormatStringWrapper fmt, const Ts&... args) {
-        detail::log(MessageLevel::Warning, utils::format(fmt, args...), fmt.source());
+    void warning(const FormatString& fmt, const Ts&... args) {
+        detail::log(MessageLevel::Warning, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void error(FormatStringWrapper fmt, const Ts&... args) {
-        detail::log(MessageLevel::Error, utils::format(fmt, args...), fmt.source());
+    void error(const FormatString& fmt, const Ts&... args) {
+        detail::log(MessageLevel::Error, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void fatal(FormatStringWrapper fmt, const Ts&... args) {
-        detail::log(MessageLevel::Fatal, utils::format(fmt, args...), fmt.source());
+    void fatal(const FormatString& fmt, const Ts&... args) {
+        detail::log(MessageLevel::Fatal, fmt.format(args...), fmt.source());
     }
 }
 

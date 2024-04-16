@@ -10,7 +10,7 @@
 #include "utils/tuple.hpp"
 #include "utils/assert.hpp"
 #include "utils/enum.hpp"
-#include "utils/exception.hpp"
+#include "utils/exceptions.hpp"
 #include "utils/logging/logging.hpp"
 
 #include <functional>

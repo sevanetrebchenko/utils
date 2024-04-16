@@ -1,5 +1,9 @@
 
 #include "utils/string/format.hpp"
+#include "utils/exceptions.hpp"
+#include "utils/assert.hpp"
+
+#include <charconv> // std::from_chars
 
 namespace utils {
 
@@ -41,166 +45,19 @@ namespace utils {
     
     // FormatString implementation
     
-    FormatString::FormatString(std::string_view in) {
-        if (in.empty()) {
-            return;
-        }
-        
-        std::size_t length = in.length();
-        std::size_t placeholder_start;
-        std::size_t placeholder_offset = 0u;
-
-        for (std::size_t i = 0u; i < length; ++i) {
-            if (in[i] == '{') {
-                if (i + 1u == length) {
-                    throw FormattedError("unterminated '{' at index {}", i);
-                }
-                else if (in[i + 1u] == '{') {
-                    // Escaped opening brace '{'
-                    ++i;
-                }
-                else {
-                    placeholder_start = i;
-                    
-                    // Skip opening brace '{'
-                    ++i;
-
-                    std::size_t identifier_start = i;
-                    
-                    // Parse placeholder identifier
-                    Identifier identifier { };
-                    if (std::isdigit(in[i])) {
-                        ++i;
-                        
-                        // Positional placeholders must only contain numbers
-                        while (std::isdigit(in[i])) {
-                            ++i;
-                        }
-                        
-                        if (in[i] != '|' && in[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", in[i], i);
-                        }
-                        
-                        std::size_t position;
-                        std::string_view str = in.substr(identifier_start, i - identifier_start);
-                        std::from_chars_result result = std::from_chars(str.data(), str.data() + str.length(), position);
-                        ASSERT(result.ec == std::errc(), "error while converting positional placeholder '{}': {}", str, make_error_code(result.ec).message());
-
-                        identifier = Identifier(position);
-                    }
-                    else if (std::isalpha(in[i]) || (in[i] == '_')) {
-                        ++i;
-                        
-                        // Named placeholders follow the same identifier rules as standard C/C++ identifiers
-                        while (std::isalpha(in[i]) || std::isdigit(in[i]) || (in[i] == '_')) {
-                            ++i;
-                        }
-                        
-                        if (in[i] != '|' && in[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", in[i], i);
-                        }
-                        
-                        identifier = Identifier(std::string(in.substr(identifier_start, i - identifier_start)));
-                    }
-                    else {
-                        // Identifiers for auto-numbered placeholders are default-initialized
-                        if (in[i] != '|' && in[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", in[i], i);
-                        }
-                    }
-                    
-                    // Parse custom formatting
-                    Formatting formatting { };
-                    while (in[i] != '}') {
-                        // Skip formatting separator '|' or comma separator ','
-                        ++i;
-                        
-                        std::size_t specifier_start = i;
-                        
-                        // Identifiers can contain letters, digits, or underscores, and must begin with a letter or an underscore
-                        while (std::isalpha(in[i]) || (in[i] == '_') || (i != specifier_start && std::isdigit(in[i]))) {
-                            ++i;
-                        }
-                        if (in[i] != ':' && in[i] != '=') {
-                            throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be ':' or '='", in[i], i);
-                        }
-
-                        std::string_view specifier = in.substr(specifier_start, i - specifier_start);
-                        
-                        // Skip separator ':' or '='
-                        ++i;
-                        
-                        // Format specifier values must be contained within square braces
-                        if (in[i] != '[') {
-                            throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", in[i], i);
-                        }
-                        
-                        std::size_t specifier_value_start = i;
-                        
-                        // Skip opening value brace '['
-                        ++i;
-                        
-                        std::string value;
-                        while (true) {
-                            if (in[i] == '[') {
-                                if (i + 1u == length) {
-                                    break;
-                                }
-                                
-                                if (in[i + 1u] == '[') {
-                                    // Escaped value brace '['
-                                    ++i;
-                                }
-                                else {
-                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
-                                }
-                            }
-                            else if (in[i] == ']') {
-                                if (i + 1u != length && in[i + 1u] == ']') {
-                                    // Escaped value brace ']'
-                                    ++i;
-                                }
-                                else {
-                                    break;
-                                }
-                            }
-
-                            value += in[i];
-                            ++i;
-                        }
-                        
-                        if (in[i] != ']') {
-                            // This is only true when we reach the end of the string before finding a closing format specifier brace in the while loop above
-                            throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
-                        }
-                        
-                        formatting[std::string(specifier)] = value;
-                        
-                        // Skip closing value brace ']'
-                        ++i;
-                        
-                        if (in[i] != ',' && in[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", in[i], i);
-                        }
-                    }
-                    
-                    register_placeholder(identifier, formatting, placeholder_start - placeholder_offset);
-                    placeholder_offset += (i - placeholder_start) + 1;
-                }
-            }
-            else if (in[i] == '}') {
-                if ((i + 1u != length) && in[i + 1u] == '}') {
-                    // Skip escaped '}' brace
-                    ++i;
-                }
-                else {
-                    throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped to '}}' inside format strings", i);
-                }
-            }
-            else {
-                m_format += in[i];
-            }
-        }
+    FormatString::FormatString(std::string_view fmt, std::source_location source) : m_format(fmt),
+                                                                                    m_source(source) {
+        parse();
+    }
+    
+    FormatString::FormatString(const char* fmt, std::source_location source) : m_format(fmt),
+                                                                               m_source(source) {
+        parse();
+    }
+    
+    FormatString::FormatString(std::string fmt, std::source_location source) : m_format(fmt),
+                                                                               m_source(source) {
+        parse();
     }
     
     FormatString::~FormatString() = default;
@@ -235,6 +92,170 @@ namespace utils {
         return count;
     }
 
+    void FormatString::parse() {
+        std::string_view fmt = std::string_view(m_format);
+        
+        if (fmt.empty()) {
+            return;
+        }
+        
+        std::size_t length = fmt.length();
+        std::size_t placeholder_start;
+        std::size_t placeholder_offset = 0u;
+
+        for (std::size_t i = 0u; i < length; ++i) {
+            if (fmt[i] == '{') {
+                if (i + 1u == length) {
+                    throw FormattedError("unterminated '{' at index {}", i);
+                }
+                else if (fmt[i + 1u] == '{') {
+                    // Escaped opening brace '{'
+                    ++i;
+                }
+                else {
+                    placeholder_start = i;
+                    
+                    // Skip opening brace '{'
+                    ++i;
+
+                    std::size_t identifier_start = i;
+                    
+                    // Parse placeholder identifier
+                    Identifier identifier { };
+                    if (std::isdigit(fmt[i])) {
+                        ++i;
+                        
+                        // Positional placeholders must only contain numbers
+                        while (std::isdigit(fmt[i])) {
+                            ++i;
+                        }
+                        
+                        if (fmt[i] != '|' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                        }
+                        
+                        std::size_t position;
+                        std::string_view str = fmt.substr(identifier_start, i - identifier_start);
+                        std::from_chars_result result = std::from_chars(str.data(), str.data() + str.length(), position);
+                        ASSERT(result.ec == std::errc(), "error while converting positional placeholder '{}': {}", str, make_error_code(result.ec).message());
+
+                        identifier = Identifier(position);
+                    }
+                    else if (std::isalpha(fmt[i]) || (fmt[i] == '_')) {
+                        ++i;
+                        
+                        // Named placeholders follow the same identifier rules as standard C/C++ identifiers
+                        while (std::isalpha(fmt[i]) || std::isdigit(fmt[i]) || (fmt[i] == '_')) {
+                            ++i;
+                        }
+                        
+                        if (fmt[i] != '|' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                        }
+                        
+                        identifier = Identifier(std::string(fmt.substr(identifier_start, i - identifier_start)));
+                    }
+                    else {
+                        // Identifiers for auto-numbered placeholders are default-initialized
+                        if (fmt[i] != '|' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                        }
+                    }
+                    
+                    // Parse custom formatting
+                    Formatting formatting { };
+                    while (fmt[i] != '}') {
+                        // Skip formatting separator '|' or comma separator ','
+                        ++i;
+                        
+                        std::size_t specifier_start = i;
+                        
+                        // Identifiers can contain letters, digits, or underscores, and must begin with a letter or an underscore
+                        while (std::isalpha(fmt[i]) || (fmt[i] == '_') || (i != specifier_start && std::isdigit(fmt[i]))) {
+                            ++i;
+                        }
+                        if (fmt[i] != ':' && fmt[i] != '=') {
+                            throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be ':' or '='", fmt[i], i);
+                        }
+
+                        std::string_view specifier = fmt.substr(specifier_start, i - specifier_start);
+                        
+                        // Skip separator ':' or '='
+                        ++i;
+                        
+                        // Format specifier values must be contained within square braces
+                        if (fmt[i] != '[') {
+                            throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", fmt[i], i);
+                        }
+                        
+                        std::size_t specifier_value_start = i;
+                        
+                        // Skip opening value brace '['
+                        ++i;
+                        
+                        std::string value;
+                        while (true) {
+                            if (fmt[i] == '[') {
+                                if (i + 1u == length) {
+                                    break;
+                                }
+                                
+                                if (fmt[i + 1u] == '[') {
+                                    // Escaped value brace '['
+                                    ++i;
+                                }
+                                else {
+                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
+                                }
+                            }
+                            else if (fmt[i] == ']') {
+                                if (i + 1u != length && fmt[i + 1u] == ']') {
+                                    // Escaped value brace ']'
+                                    ++i;
+                                }
+                                else {
+                                    break;
+                                }
+                            }
+
+                            value += fmt[i];
+                            ++i;
+                        }
+                        
+                        if (fmt[i] != ']') {
+                            // This is only true when we reach the end of the string before finding a closing format specifier brace in the while loop above
+                            throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
+                        }
+                        
+                        formatting[std::string(specifier)] = value;
+                        
+                        // Skip closing value brace ']'
+                        ++i;
+                        
+                        if (fmt[i] != ',' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", fmt[i], i);
+                        }
+                    }
+                    
+                    register_placeholder(identifier, formatting, placeholder_start - placeholder_offset);
+                    placeholder_offset += (i - placeholder_start) + 1;
+                }
+            }
+            else if (fmt[i] == '}') {
+                if ((i + 1u != length) && fmt[i + 1u] == '}') {
+                    // Skip escaped '}' brace
+                    ++i;
+                }
+                else {
+                    throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped to '}}' inside format strings", i);
+                }
+            }
+            else {
+                m_result += fmt[i];
+            }
+        }
+    }
+    
     void FormatString::register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position) {
         // Verify format string homogeneity.
         bool homogeneous = true;
@@ -296,6 +317,10 @@ namespace utils {
         return m_format;
     }
     
+    std::source_location FormatString::source() const {
+        return m_source;
+    }
+    
     // FormatString::Identifier implementation
     
     FormatString::Identifier::Identifier() : type(Type::Auto),
@@ -339,30 +364,6 @@ namespace utils {
     
     void FormatString::FormattedPlaceholder::add_insertion_point(std::size_t position) {
         insertion_points.emplace_back(position);
-    }
-    
-    // FormatStringWrapper implementation
-    
-    FormatStringWrapper::FormatStringWrapper(const char* fmt, std::source_location source) : m_format(fmt),
-                                                                                             m_source(source) {
-    }
-
-    FormatStringWrapper::FormatStringWrapper(const std::string& fmt, std::source_location source) : m_format(fmt),
-                                                                                                    m_source(source) {
-    }
-    
-    FormatStringWrapper::FormatStringWrapper(const FormatString& fmt, std::source_location source) : m_format(fmt),
-                                                                                                     m_source(source) {
-    }
-    
-    FormatStringWrapper::~FormatStringWrapper() = default;
-    
-    FormatString FormatStringWrapper::format_string() const {
-        return m_format;
-    }
-    
-    std::source_location FormatStringWrapper::source() const {
-        return m_source;
     }
     
 }

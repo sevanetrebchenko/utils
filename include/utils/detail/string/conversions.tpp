@@ -9,12 +9,12 @@
 namespace utils {
 
     template <typename T, typename S>
-    std::string utils::to_string(const std::pair<T, S>& value, const Formatting& formatting) {
+    std::string to_string(const std::pair<T, S>& value, const Formatting& formatting) {
         return "[" + to_string(value.first, formatting) + ", " + to_string(value.second, formatting) + "]";
     }
     
     template <typename... Ts>
-    std::string utils::to_string(const std::tuple<Ts...>& value, const Formatting& formatting) {
+    std::string to_string(const std::tuple<Ts...>& value, const Formatting& formatting) {
         std::string result = "[ ";
 
         // Use std::apply + fold expression to iterate over and format the elements of the tuple.
@@ -30,7 +30,7 @@ namespace utils {
     }
     
     template <typename T>
-    std::string utils::to_string(const T& value, const Formatting& formatting) requires is_const_iterable<T> {
+    std::string to_string(const T& value, const Formatting& formatting) requires is_const_iterable<T> {
         std::stringstream builder { };
         
         builder << "[ ";
@@ -45,20 +45,16 @@ namespace utils {
 
         builder << " ]";
         
-        if (formatting["representation"] == "binary") {
-            builder << " to binary!";
-        }
-        
         return std::move(builder.str());
     }
     
     template <typename T>
-    std::string utils::to_string(const T* value, const Formatting& formatting) {
+    std::string to_string(const T* value, const Formatting& formatting) {
         return std::string();
     }
     
     template <typename T>
-    std::string utils::to_string(const NamedArgument<T>& value, const Formatting& formatting) {
+    std::string to_string(const NamedArgument<T>& value, const Formatting& formatting) {
         return to_string(value.value, formatting);
     }
     

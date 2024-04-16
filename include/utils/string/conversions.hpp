@@ -60,42 +60,42 @@ namespace utils {
     
     
     template <typename T>
-    [[nodiscard]] T from_string(std::string_view value);
+    [[nodiscard]] T from_string(std::string_view str);
     
     // Character types
     template <>
-    [[nodiscard]] char from_string<char>(std::string_view value);
+    [[nodiscard]] char from_string<char>(std::string_view str);
     
     // Integer types
     template <>
-    [[nodiscard]] short from_string<short>(std::string_view value);
+    [[nodiscard]] short from_string<short>(std::string_view str);
     template <>
-    [[nodiscard]] int from_string<int>(std::string_view value);
+    [[nodiscard]] int from_string<int>(std::string_view str);
     template <>
-    [[nodiscard]] long int from_string<long int>(std::string_view value);
+    [[nodiscard]] long int from_string<long int>(std::string_view str);
     template <>
-    [[nodiscard]] long long int from_string<long long int>(std::string_view value);
+    [[nodiscard]] long long int from_string<long long int>(std::string_view str);
     
     template <>
-    [[nodiscard]] unsigned char from_string<unsigned char>(std::string_view value);
+    [[nodiscard]] unsigned char from_string<unsigned char>(std::string_view str);
     template <>
-    [[nodiscard]] unsigned short from_string<unsigned short>(std::string_view value);
+    [[nodiscard]] unsigned short from_string<unsigned short>(std::string_view str);
     template <>
-    [[nodiscard]] unsigned int from_string<unsigned int>(std::string_view value);
+    [[nodiscard]] unsigned int from_string<unsigned int>(std::string_view str);
     template <>
-    [[nodiscard]] unsigned long int from_string<unsigned long int>(std::string_view value);
+    [[nodiscard]] unsigned long int from_string<unsigned long int>(std::string_view str);
     template <>
-    [[nodiscard]] unsigned long long int from_string<unsigned long long int>(std::string_view value);
+    [[nodiscard]] unsigned long long int from_string<unsigned long long int>(std::string_view str);
     
     // Floating-point types
     template <>
-    [[nodiscard]] float from_string<float>(std::string_view value);
+    [[nodiscard]] float from_string<float>(std::string_view str);
     template <>
-    [[nodiscard]] double from_string<double>(std::string_view value);
+    [[nodiscard]] double from_string<double>(std::string_view str);
     
     // String types
     template <>
-    [[nodiscard]] std::string from_string(std::string_view value);
+    [[nodiscard]] std::string from_string(std::string_view str);
     
 }
 

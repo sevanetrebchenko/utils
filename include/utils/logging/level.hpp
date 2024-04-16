@@ -2,6 +2,8 @@
 #ifndef UTILS_LEVEL_HPP
 #define UTILS_LEVEL_HPP
 
+#include <string> // std::string
+
 namespace utils {
     namespace logging {
     
@@ -12,6 +14,8 @@ namespace utils {
             Error,
             Fatal
         };
+        
+        [[nodiscard]] std::string to_string(MessageLevel);
         
     }
 }

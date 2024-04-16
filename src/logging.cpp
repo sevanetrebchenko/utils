@@ -100,14 +100,34 @@
 
 #include "utils/logging/logging.hpp"
 
+#include <iostream>
+
 namespace utils::logging {
     
     namespace detail {
         
         void log(MessageLevel level, const std::string& message, std::source_location source) {
-            
+            std::cout << to_string(level) << " : " << message << ", from " << source.file_name() << ":" << source.line() << std::endl;
         }
         
+    }
+    
+    std::string to_string(MessageLevel level) {
+        if (level == MessageLevel::Info) {
+            return "info";
+        }
+        else if (level == MessageLevel::Debug) {
+            return "debug";
+        }
+        else if (level == MessageLevel::Warning) {
+            return "warning";
+        }
+        else if (level == MessageLevel::Error) {
+            return "error";
+        }
+        else {
+            return "fatal";
+        }
     }
     
 }

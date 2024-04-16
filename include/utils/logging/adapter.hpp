@@ -53,19 +53,19 @@ namespace utils {
                 [[nodiscard]] std::string_view format_string() const;
 
                 template <typename ...Ts>
-                void info(FormatStringWrapper fmt, const Ts&... args);
+                void info(const FormatString& fmt, const Ts&... args);
                 
                 template <typename ...Ts>
-                void debug(FormatStringWrapper fmt, const Ts&... args);
+                void debug(const FormatString& fmt, const Ts&... args);
                 
                 template <typename ...Ts>
-                void warning(FormatStringWrapper fmt, const Ts&... args);
+                void warning(const FormatString& fmt, const Ts&... args);
                 
                 template <typename ...Ts>
-                void error(FormatStringWrapper fmt, const Ts&... args);
+                void error(const FormatString& fmt, const Ts&... args);
                 
                 template <typename ...Ts>
-                void fatal(FormatStringWrapper fmt, const Ts&... args);
+                void fatal(const FormatString& fmt, const Ts&... args);
                 
             protected:
                 virtual void operator<<(const Log& log) = 0;

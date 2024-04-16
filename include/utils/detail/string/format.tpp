@@ -5,8 +5,8 @@
 #define UTILS_FORMAT_TPP
 
 #include "utils/string/conversions.hpp"
-#include "utils/exception.hpp"
 #include "utils/logging/logging.hpp"
+#include "utils/tuple.hpp"
 
 #include <queue> // std::priority_queue
 
@@ -64,10 +64,10 @@ namespace utils {
     template <typename ...Ts>
     std::string FormatString::format(const Ts& ...args) const {
         if constexpr (sizeof...(args) == 0u) {
-            return m_format;
+            return m_result;
         }
     
-        std::string result = m_format;
+        std::string result = m_result;
         
         if (!m_placeholder_identifiers.empty()) {
             auto tuple = std::make_tuple(args...);
@@ -216,8 +216,8 @@ namespace utils {
     NamedArgument<T>::~NamedArgument() = default;
     
     template <typename ...Ts>
-    std::string format(const FormatStringWrapper& fmt, const Ts&... args) {
-        return fmt.format_string().format(args...);
+    std::string format(const FormatString& fmt, const Ts&... args) {
+        return fmt.format(args...);
     }
     
 }

@@ -1,6 +1,6 @@
 
 #include "utils/string.hpp"
-#include "utils/exception.hpp"
+#include "utils/exceptions.hpp"
 
 namespace utils {
     

@@ -1,24 +1,25 @@
 
 #pragma once
 
-#ifndef UTILS_EXCEPTION_HPP
-#define UTILS_EXCEPTION_HPP
+#ifndef UTILS_EXCEPTIONS_HPP
+#define UTILS_EXCEPTIONS_HPP
 
 #include <stdexcept> // std::runtime_error
 
 namespace utils {
     
-    class FormatStringWrapper;
+    // Forward declarations.
+    class FormatString;
     
     struct FormattedError : public std::runtime_error {
         template <typename ...Ts>
-        explicit FormattedError(FormatStringWrapper fmt, const Ts&... args);
+        explicit FormattedError(FormatString fmt, const Ts&... args);
         ~FormattedError() override;
     };
     
 }
 
 // Template definitions.
-#include "utils/detail/exception.tpp"
+#include "utils/detail/exceptions.tpp"
 
-#endif // UTILS_EXCEPTION_HPP
+#endif // UTILS_EXCEPTIONS_HPP
