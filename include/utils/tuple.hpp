@@ -13,6 +13,8 @@ namespace utils {
     
     template <typename Tuple, typename Fn, std::size_t N = 0>
     auto runtime_get(const Tuple& tuple, std::size_t index, const Fn& fn) {
+        static_assert(N < std::tuple_size<Tuple>::value);
+        
         if (N == index) {
             return fn(std::get<N>(tuple));
         }

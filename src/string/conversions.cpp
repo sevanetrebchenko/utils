@@ -3,6 +3,7 @@
 #include "utils/string/specifiers.hpp"
 
 #include <string> // std::string
+#include <filesystem> // std::filesystem::path
 
 namespace utils {
     
@@ -54,11 +55,11 @@ namespace utils {
     }
     
     std::string utils::to_string(long value, const Formatting& formatting) {
-        return std::string();
+        return std::to_string(value);
     }
     
     std::string utils::to_string(long long int value, const Formatting& formatting) {
-        return std::string();
+        return std::to_string(value);
     }
     
     std::string utils::to_string(unsigned char value, const Formatting& formatting) {
@@ -70,11 +71,11 @@ namespace utils {
     }
     
     std::string utils::to_string(unsigned int value, const Formatting& formatting) {
-        return std::string();
+        return std::to_string(value);
     }
     
     std::string utils::to_string(unsigned long long int value, const Formatting& formatting) {
-        return std::string();
+        return std::to_string(value);
     }
     
     std::string utils::to_string(float value, const Formatting& formatting) {
@@ -90,21 +91,70 @@ namespace utils {
     }
     
     std::string utils::to_string(const char* value, const Formatting& formatting) {
-        return std::string();
+        return value;
     }
     
     std::string utils::to_string(std::string_view value, const Formatting& formatting) {
-        return std::string();
+        return std::string(value);
     }
     
     std::string utils::to_string(const std::string& value, const Formatting& formatting) {
-        return std::string();
+        return value;
     }
     
     std::string utils::to_string(std::nullptr_t value, const Formatting& formatting) {
         return std::string();
     }
     
+    std::string to_string(const std::source_location& value, const Formatting& formatting) {
+        return to_string(value.file_name(), formatting) + ":" + to_string(value.line(), formatting);
+    }
+    
+//    template <typename T>
+//    auto deconstruct(const T& value) {
+//        const std::string& filepath = value.file_name();
+//
+//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
+//        return tup;
+//
+////        return std::tuple<
+////            NamedArgument<std::string> {  },
+////            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
+////            NamedArgument<unsigned> { "line", value.line() },
+////            NamedArgument<std::string> { "function", value.function_name() }
+////        );
+//    }
+    
+//    template <>
+//    auto deconstruct(const std::source_location& value) {
+//        const std::string& filepath = value.file_name();
+//
+//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
+//        return tup;
+//
+////        return std::tuple<
+////            NamedArgument<std::string> {  },
+////            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
+////            NamedArgument<unsigned> { "line", value.line() },
+////            NamedArgument<std::string> { "function", value.function_name() }
+////        );
+//    }
+
+//    template <>
+//    auto deconstruct(const std::source_location& value) {
+//        const std::string& filepath = value.file_name();
+//
+//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
+//        return tup;
+//
+//        return std::tuple<
+//            NamedArgument<std::string> {  },
+//            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
+//            NamedArgument<unsigned> { "line", value.line() },
+//            NamedArgument<std::string> { "function", value.function_name() }
+//        );
+//    }
+
     template <>
     [[nodiscard]] char from_string<char>(std::string_view value) {
         return '0';
@@ -163,6 +213,16 @@ namespace utils {
     template <>
     [[nodiscard]] double from_string<double>(std::string_view value) {
         return 0;
+    }
+    
+    [[nodiscard]] NamedArgumentList<std::string, std::string, std::uint32_t, std::string> deconstruct(const std::source_location& value) {
+        const std::string& filepath = value.file_name();
+        return {
+            NamedArgument<std::string>("filepath", filepath),
+            NamedArgument<std::string>("filename", std::filesystem::path(filepath).filename().string()),
+            NamedArgument<std::uint32_t>("line", value.line()),
+            NamedArgument<std::string>("function", value.function_name())
+        };
     }
     
 }

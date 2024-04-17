@@ -17,6 +17,7 @@ add_executable("${PROJECT_NAME}"
     "${PROJECT_SOURCE_DIR}/src/string/format.cpp"
     "${PROJECT_SOURCE_DIR}/src/string/specifiers.cpp"
     "${PROJECT_SOURCE_DIR}/src/string/conversions.cpp"
+    "${PROJECT_SOURCE_DIR}/src/string/conversions.cpp"
 )
 
 target_include_directories("${PROJECT_NAME}" PUBLIC "${PROJECT_SOURCE_DIR}/include")

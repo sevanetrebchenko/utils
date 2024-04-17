@@ -16,7 +16,7 @@ namespace utils {
     }
     
     template <>
-    [[nodiscard]] Justification from_string<Justification>(std::string_view str) {
+    [[nodiscard]] Justification from_string(std::string_view str) {
         if (str == "left") {
             return Justification::Left;
         }
@@ -31,7 +31,7 @@ namespace utils {
     }
     
     template <>
-    [[nodiscard]] Sign from_string<Sign>(std::string_view str) {
+    [[nodiscard]] Sign from_string(std::string_view str) {
         if (str == "negative" || str == "negativeonly") {
             return Sign::NegativeOnly;
         }

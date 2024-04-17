@@ -1,6 +1,6 @@
 
-#ifndef DATETIME_DURATION_HPP
-#define DATETIME_DURATION_HPP
+#ifndef UTILS_DURATION_HPP
+#define UTILS_DURATION_HPP
 
 #include <cstdint> // std::uint8_t, std::uint16_t, std::uint32_t
 #include <chrono> // std::duration
@@ -22,4 +22,4 @@ namespace utils {
     
 }
 
-#endif // DATETIME_DURATION_HPP
+#endif // UTILS_DURATION_HPP

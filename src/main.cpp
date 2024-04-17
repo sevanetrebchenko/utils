@@ -6,7 +6,9 @@
 #include <vector>
 #include <chrono>
 #include "utils/logging/logging.hpp"
+#include "utils/string/conversions.hpp"
 #include "utils/logging/adapter.hpp"
+#include <source_location>
 
 struct MyContainer {
     std::vector<int> raw;
@@ -33,6 +35,14 @@ int main() {
     
     std::vector<int> v { 1, 2, 3, 4, 5 };
     int* c = nullptr;
+    
+    if constexpr (detail::is_deconstructible<std::source_location>) {
+        std::cout << "Type is deconstructible." << std::endl;
+    } else {
+        std::cout << "Type is not deconstructible." << std::endl;
+    }
+    
+    utils::override_type_format<std::source_location>("{filepath}");
     
     std::pair<bool, char> pair = std::make_pair(true, 'a');
     std::tuple<std::string, int, float, int> tup = std::make_tuple("test string", 56, 9.8f, 1);

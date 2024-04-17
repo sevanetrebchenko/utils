@@ -7,6 +7,12 @@
 
 namespace utils {
 
+    namespace detail {
+        
+        std::unordered_map<std::type_index, std::string> format_overrides = { };
+        
+    }
+    
     Formatting::Specifier::Specifier(std::string value) : m_raw(std::move(value)) {
     }
     

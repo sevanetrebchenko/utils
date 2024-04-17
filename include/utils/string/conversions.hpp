@@ -4,10 +4,14 @@
 #ifndef UTILS_CONVERSIONS_HPP
 #define UTILS_CONVERSIONS_HPP
 
+#include "utils/string/formatting.hpp"
 #include "utils/string/format.hpp"
 #include "utils/concepts.hpp"
 
 #include <string> // std::string
+#include <source_location> // std::source_location
+#include <tuple> // std::tuple
+#include <filesystem>
 
 namespace utils {
     
@@ -54,6 +58,9 @@ namespace utils {
     [[nodiscard]] std::string to_string(const T* value, const Formatting& formatting = { });
     [[nodiscard]] std::string to_string(std::nullptr_t value, const Formatting& formatting = { });
     
+    // Standard types
+    [[nodiscard]] std::string to_string(const std::source_location& value, const Formatting& formatting = { });
+    
     // User-defined types.
     template <typename T>
     [[nodiscard]] std::string to_string(const NamedArgument<T>& value, const Formatting& formatting = {});
@@ -64,38 +71,40 @@ namespace utils {
     
     // Character types
     template <>
-    [[nodiscard]] char from_string<char>(std::string_view str);
+    [[nodiscard]] char from_string(std::string_view str);
     
     // Integer types
     template <>
-    [[nodiscard]] short from_string<short>(std::string_view str);
+    [[nodiscard]] short from_string(std::string_view str);
     template <>
-    [[nodiscard]] int from_string<int>(std::string_view str);
+    [[nodiscard]] int from_string(std::string_view str);
     template <>
-    [[nodiscard]] long int from_string<long int>(std::string_view str);
+    [[nodiscard]] long int from_string(std::string_view str);
     template <>
-    [[nodiscard]] long long int from_string<long long int>(std::string_view str);
+    [[nodiscard]] long long int from_string(std::string_view str);
     
     template <>
-    [[nodiscard]] unsigned char from_string<unsigned char>(std::string_view str);
+    [[nodiscard]] unsigned char from_string(std::string_view str);
     template <>
-    [[nodiscard]] unsigned short from_string<unsigned short>(std::string_view str);
+    [[nodiscard]] unsigned short from_string(std::string_view str);
     template <>
-    [[nodiscard]] unsigned int from_string<unsigned int>(std::string_view str);
+    [[nodiscard]] unsigned int from_string(std::string_view str);
     template <>
-    [[nodiscard]] unsigned long int from_string<unsigned long int>(std::string_view str);
+    [[nodiscard]] unsigned long int from_string(std::string_view str);
     template <>
-    [[nodiscard]] unsigned long long int from_string<unsigned long long int>(std::string_view str);
+    [[nodiscard]] unsigned long long int from_string(std::string_view str);
     
     // Floating-point types
     template <>
-    [[nodiscard]] float from_string<float>(std::string_view str);
+    [[nodiscard]] float from_string(std::string_view str);
     template <>
-    [[nodiscard]] double from_string<double>(std::string_view str);
+    [[nodiscard]] double from_string(std::string_view str);
     
     // String types
     template <>
     [[nodiscard]] std::string from_string(std::string_view str);
+    
+    [[nodiscard]] NamedArgumentList<std::string, std::string, std::uint32_t, std::string> deconstruct(const std::source_location& value);
     
 }
 

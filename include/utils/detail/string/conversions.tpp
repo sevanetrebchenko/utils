@@ -4,6 +4,8 @@
 #ifndef UTILS_CONVERSIONS_TPP
 #define UTILS_CONVERSIONS_TPP
 
+#include "utils/string/format.hpp"
+
 #include <sstream> // std::stringstream
 
 namespace utils {
@@ -57,7 +59,6 @@ namespace utils {
     std::string to_string(const NamedArgument<T>& value, const Formatting& formatting) {
         return to_string(value.value, formatting);
     }
-    
 
 }
 

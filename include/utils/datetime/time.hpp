@@ -1,6 +1,6 @@
 
-#ifndef DATETIME_TIME_HPP
-#define DATETIME_TIME_HPP
+#ifndef UTILS_TIME_HPP
+#define UTILS_TIME_HPP
 
 #include "utils/datetime/duration.hpp"
 
@@ -33,4 +33,4 @@ namespace utils {
     }
 }
 
-#endif // DATETIME_TIME_HPP
+#endif // UTILS_TIME_HPP

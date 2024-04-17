@@ -1,6 +1,6 @@
 
-#ifndef DATETIME_TIMESTAMP_HPP
-#define DATETIME_TIMESTAMP_HPP
+#ifndef UTILS_TIMESTAMP_HPP
+#define UTILS_TIMESTAMP_HPP
 
 #include "utils/datetime/date.hpp"
 #include "utils/datetime/time.hpp"
@@ -34,4 +34,4 @@ namespace utils {
     }
 }
 
-#endif // DATETIME_TIMESTAMP_HPP
+#endif // UTILS_TIMESTAMP_HPP
