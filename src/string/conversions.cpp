@@ -218,10 +218,10 @@ namespace utils {
     [[nodiscard]] NamedArgumentList<std::string, std::string, std::uint32_t, std::string> deconstruct(const std::source_location& value) {
         const std::string& filepath = value.file_name();
         return {
-            NamedArgument<std::string>("filepath", filepath),
-            NamedArgument<std::string>("filename", std::filesystem::path(filepath).filename().string()),
-            NamedArgument<std::uint32_t>("line", value.line()),
-            NamedArgument<std::string>("function", value.function_name())
+            { "filepath", filepath },
+            { "filename", std::filesystem::path(filepath).filename().string() },
+            { "line", value.line() },
+            { "function", value.function_name() }
         };
     }
     

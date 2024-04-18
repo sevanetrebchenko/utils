@@ -84,7 +84,26 @@ namespace utils {
     };
     
     template <typename ...Ts>
-    using NamedArgumentList = std::tuple<NamedArgument<Ts>...>;
+    class NamedArgumentList {
+        public:
+            NamedArgumentList(NamedArgument<Ts>&&... args);
+            ~NamedArgumentList();
+            
+            [[nodiscard]] const std::tuple<NamedArgument<Ts>...>& to_tuple() const;
+            
+            // Access NamedArguments by name
+            template <typename T>
+            [[nodiscard]] const T& get(std::string_view name) const;
+            
+            template <typename T>
+            [[nodiscard]] T& get(std::string_view name);
+            
+        private:
+            template <typename Fn, std::size_t Index = 0u>
+            void get(std::string_view name, const Fn& fn);
+            
+            std::tuple<NamedArgument<Ts>...> m_tuple;
+    };
     
     template <typename ...Ts>
     [[nodiscard]] std::string format(const FormatString& fmt, const Ts&... args);

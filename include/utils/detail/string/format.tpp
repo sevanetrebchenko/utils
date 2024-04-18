@@ -156,7 +156,7 @@ namespace utils {
                             if (iter != detail::format_overrides.end()) {
                                 return std::apply([&fmt = iter->second](const auto&... args) {
                                     return utils::format(fmt, args...);
-                                }, deconstruct(value));
+                                }, deconstruct(value).to_tuple());
                             }
                         }
                         else {
@@ -220,6 +220,68 @@ namespace utils {
 
     template <typename T>
     NamedArgument<T>::~NamedArgument() = default;
+    
+    template <typename... Ts>
+    NamedArgumentList<Ts...>::NamedArgumentList(NamedArgument<Ts>&&... args) : m_tuple(std::move(args)...) {
+    }
+    
+    template <typename... Ts>
+    NamedArgumentList<Ts...>::~NamedArgumentList() = default;
+    
+    template <typename... Ts>
+    const std::tuple<NamedArgument<Ts>...>& NamedArgumentList<Ts...>::to_tuple() const {
+        return m_tuple;
+    }
+    
+    template <typename... Ts>
+    template <typename T>
+    const T& NamedArgumentList<Ts...>::get(std::string_view name) const {
+        const T* out = nullptr;
+    
+        get(name, [&out]<typename U>(const NamedArgument<U>& value) -> void {
+            if constexpr (std::is_same<typename std::decay<T>::type, typename std::decay<U>::type>::value) {
+                out = &value.value;
+            }
+        });
+        
+        if (!out) {
+            throw FormattedError("");
+        }
+        
+        return *out;
+    }
+    
+    template <typename... Ts>
+    template <typename T>
+    T& NamedArgumentList<Ts...>::get(std::string_view name) {
+        T* out = nullptr;
+    
+        get(name, [&out]<typename U>(NamedArgument<U>& value) -> void {
+            if constexpr (std::is_same<typename std::decay<T>::type, typename std::decay<U>::type>::value) {
+                out = &value.value;
+            }
+        });
+        
+        if (!out) {
+            throw FormattedError("");
+        }
+        
+        return *out;
+    }
+    
+    template <typename... Ts>
+    template <typename Fn, std::size_t Index>
+    void NamedArgumentList<Ts...>::get(std::string_view name, const Fn& fn) {
+        if constexpr (Index < sizeof...(Ts)) {
+            auto current = std::get<Index>(m_tuple);
+            if (current.name == name) {
+                fn(current);
+            }
+            else {
+                get<Fn, Index + 1>(name, fn);
+            }
+        }
+    }
     
     template <typename ...Ts>
     std::string format(const FormatString& fmt, const Ts&... args) {
