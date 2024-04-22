@@ -5,6 +5,7 @@
 #define UTILS_RESULT_HPP
 
 #include <string> // std::string
+#include <string_view> // std::string_view
 #include <optional> // std::optional
 
 namespace utils {
@@ -15,7 +16,10 @@ namespace utils {
     class Response {
         public:
             static Response OK();
-            static Response NOT_OK(const std::string& error);
+            
+            template <typename ...Ts>
+            static Response NOT_OK(std::string_view fmt, const Ts&... args);
+            
             ~Response();
             
             [[nodiscard]] bool ok() const;

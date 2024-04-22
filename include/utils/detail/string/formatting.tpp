@@ -1,6 +1,4 @@
 
-#pragma once
-
 #ifndef UTILS_FORMATTING_TPP
 #define UTILS_FORMATTING_TPP
 
@@ -19,13 +17,7 @@ namespace utils {
     }
     
     template <typename T>
-    [[nodiscard]] T Formatting::Specifier::to() const {
-        using Type = std::decay<T>::type;
-        return static_cast<Type>(*this);
-    }
-    
-    template <typename T>
-    Formatting::Specifier::operator T() const {
+    [[nodiscard]] T Formatting::Specifier::convert_to() const {
         using Type = std::decay<T>::type;
         
         // Conversion from raw type std::string to a string type (std::string, const char*, std::string_view) can be done directly and does not require a from_string function call.
@@ -36,7 +28,7 @@ namespace utils {
             return m_raw.c_str();
         }
         else {
-            return from_string<T>(m_raw);
+            return from_string<Type>(m_raw);
         }
     }
     

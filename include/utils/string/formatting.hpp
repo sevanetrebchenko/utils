@@ -2,8 +2,11 @@
 #ifndef UTILS_FORMATTING_HPP
 #define UTILS_FORMATTING_HPP
 
+#include "utils/result.hpp"
+
 #include <string> // std::string
 #include <unordered_map> // std::unordered_map
+#include <functional> // std::function
 
 namespace utils {
     
@@ -11,23 +14,19 @@ namespace utils {
         public:
             class Specifier {
                 public:
-                    Specifier(std::string value = "");
+                    Specifier(std::string value);
                     ~Specifier();
-                    
-                    [[nodiscard]] bool operator==(const Specifier& other) const;
                     
                     template <typename T>
                     [[nodiscard]] bool operator==(T other) const;
+                    [[nodiscard]] bool operator==(const Specifier& other) const;
                     
                     Specifier& operator=(const std::string& value);
                     
                     // Conversion operators.
                     template <typename T>
-                    [[nodiscard]] T to() const;
+                    [[nodiscard]] T convert_to() const;
                     
-                    template <typename T>
-                    [[nodiscard]] operator T() const;
-    
                 private:
                     std::string m_raw;
             };
@@ -35,14 +34,20 @@ namespace utils {
             Formatting();
             ~Formatting();
             
-            [[nodiscard]] Specifier& operator[](const std::string& key);
-            [[nodiscard]] Specifier operator[](const std::string& key) const;
-            
             [[nodiscard]] bool operator==(const Formatting& other) const;
             
-            [[nodiscard]] Formatting nested() const;
+            Specifier& add_specifier(const std::string& key, std::string value);
+            
+            Specifier& get_specifier(const std::string& key);
+            Specifier& operator[](const std::string& key);
+            const Specifier& get_specifier(const std::string& key) const;
+            const Specifier& operator[](const std::string& key) const;
+            
+            bool has_specifier(const std::string& key) const;
             
         private:
+            void parse();
+            
             std::unordered_map<std::string, Specifier> m_specifiers;
             std::string m_raw;
     };

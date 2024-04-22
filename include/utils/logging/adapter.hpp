@@ -49,6 +49,12 @@ namespace utils {
                 void flush_every(Duration duration);
                 void disable_buffering();
                 
+                template <typename T>
+                void set_format_override(std::string fmt);
+                
+                template <typename T>
+                void clear_format_override();
+                
                 [[nodiscard]] std::string_view name() const;
                 [[nodiscard]] std::string_view format_string() const;
 
@@ -76,6 +82,8 @@ namespace utils {
                 // FormatString m_format;
                 MessageLevel m_level;
                 bool m_enabled;
+                
+                std::unordered_map<std::type_index, std::string> m_format_overrides;
         };
         
         class StandardOutput final : public Adapter {

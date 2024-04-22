@@ -9,9 +9,11 @@
 #include "utils/tuple.hpp"
 #include "utils/constexpr.hpp"
 #include "utils/concepts.hpp"
+#include "utils/result.hpp"
 
 #include <queue> // std::priority_queue
 #include <typeindex> // std::type_index
+#include <stack> // std::stack
 #include <type_traits>
 #include <iostream>
 
@@ -42,17 +44,24 @@ namespace utils {
             is_named_argument_list<decltype(deconstruct(value))>::value;
         };
         
-//        template <typename T>
-//        struct has_deconstruct {
-//            static constexpr auto test(int) -> decltype(std::declval<T>().deconstruct<T>(std::declval<const T&>()), std::true_type{});
-//
-//            static constexpr std::false_type test(...);
-//
-//            // Define a static constant 'value' which is true if 'deconstruct' exists, false otherwise
-//            static constexpr bool value = decltype(test<T>(0))::value;
-//        };
+        // Global format overrides
+        extern std::unordered_map<std::type_index, std::stack<std::string>> format_overrides;
         
-        extern std::unordered_map<std::type_index, std::string> format_overrides;
+        // Empty format overrides are allowed, so there needs to be a different way to distinguish format overrides that don't exist.
+        template <typename T>
+        std::optional<std::string_view> get_format_override() {
+            using Type = std::decay<T>::type;
+            auto iter = format_overrides.find(typeid(Type));
+            
+            if (iter != format_overrides.end()) {
+                std::stack<std::string>& overrides = iter->second;
+                if (!overrides.empty()) {
+                    return overrides.top();
+                }
+            }
+            
+            return { };
+        }
         
     }
     
@@ -151,23 +160,27 @@ namespace utils {
                 for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
                     const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
                     formatted_placeholders.emplace_back(runtime_get(tuple, placeholder.identifier_index, [&placeholder, this] <typename T>(const T& value) -> std::string {
+                        using Type = std::decay<T>::type;
+                        
                         if constexpr (detail::is_deconstructible<T>) {
-                            auto iter = detail::format_overrides.find(typeid(typename std::decay<T>::type));
-                            if (iter != detail::format_overrides.end()) {
-                                return std::apply([&fmt = iter->second](const auto&... args) {
+                            std::optional<std::string_view> fmt = detail::get_format_override<Type>();
+                            if (fmt.has_value()) {
+                                return std::apply([fmt](const auto&... args) {
                                     return utils::format(fmt, args...);
-                                }, deconstruct(value).to_tuple());
+                                }, to_placeholder_list(value).to_tuple());
                             }
+                            
+                            // Types may have custom to_placeholder_list conversion functions defined but no format override
+                            // In this case, we just want to format it normally using to_string
+                        }
+                        
+                        if constexpr (detail::is_formattable<Type>) {
+                            return to_string(value, placeholder.formatting);
                         }
                         else {
-                            if constexpr (detail::is_formattable<T>) {
-                                return to_string(value, placeholder.formatting);
-                            }
-                            else {
-                                // TODO: better warning message
-                                logging::warning("ignoring format specifiers for placeholder {} (originally called from {})", placeholder.identifier_index, m_source);
-                                return to_string(value);
-                            }
+                            // TODO: better warning message
+                            logging::warning("ignoring format specifiers for placeholder {} (originally called from {})", placeholder.identifier_index, m_source);
+                            return to_string(value);
                         }
                     }));
                 }
@@ -289,8 +302,20 @@ namespace utils {
     }
     
     template <typename T>
-    void override_type_format(std::string_view fmt) {
-        detail::format_overrides[typeid(typename std::decay<T>::type)] = fmt;
+    void push_format_override(std::string fmt) {
+        using Type = std::decay<T>::type;
+        detail::format_overrides[typeid(Type)].push(std::move(fmt));
+    }
+    
+    template <typename T>
+    void pop_format_override() {
+        using Type = std::decay<T>::type;
+        
+        auto iter = detail::format_overrides.find(typeid(Type));
+        if (iter != detail::format_overrides.end()) {
+            std::stack<std::string>& overrides = iter->second;
+            overrides.pop();
+        }
     }
     
 }

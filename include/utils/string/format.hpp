@@ -1,6 +1,4 @@
 
-#pragma once
-
 #ifndef UTILS_FORMAT_HPP
 #define UTILS_FORMAT_HPP
 
@@ -65,6 +63,7 @@ namespace utils {
             };
             
             void parse();
+            void validate_formatting(const Formatting& formatting) const;
             void register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position);
 
             std::string m_format;
@@ -111,7 +110,10 @@ namespace utils {
     // Well-defined custom types that use this library should expose a set of named arguments that correspond to data of the class
     // These named arguments can be used in custom type format strings that override the default to_string implementation.
     template <typename T>
-    void override_type_format(std::string_view fmt);
+    void push_format_override(std::string fmt);
+    
+    template <typename T>
+    void pop_format_override();
     
 }
 

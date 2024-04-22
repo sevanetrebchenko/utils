@@ -30,8 +30,13 @@ namespace utils {
     };
     
     template <typename Fn, typename T>
-    concept returns_type = requires(Fn predicate) {
+    concept returns_type = requires(const Fn& predicate) {
         { predicate() } -> std::same_as<T>;
+    };
+    
+    template <typename Fn, typename T>
+    concept accepts_type = requires(const Fn& predicate) {
+        { predicate(std::declval<T>()) };
     };
     
 }

@@ -17,10 +17,6 @@ namespace utils {
         return { };
     }
     
-    Response Response::NOT_OK(const std::string& error) {
-        return Response(error);
-    }
-    
     bool Response::ok() const {
         return m_error.empty();
     }

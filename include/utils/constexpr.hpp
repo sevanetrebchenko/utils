@@ -189,16 +189,18 @@ namespace utils {
     
     template <typename T>
     struct is_integer_type {
-        static constexpr bool value = std::is_same<T, unsigned char>::value ||
-                                      std::is_same<T, short>::value || std::is_same<T, unsigned short>::value ||
-                                      std::is_same<T, int>::value || std::is_same<T, unsigned int>::value ||
-                                      std::is_same<T, long>::value || std::is_same<T, unsigned long>::value ||
-                                      std::is_same<T, long long>::value || std::is_same<T, unsigned long long>::value;
+        using Type = std::decay<T>::type;
+        static constexpr bool value = std::is_same<Type, unsigned char>::value ||
+                                      std::is_same<Type, short>::value || std::is_same<Type, unsigned short>::value ||
+                                      std::is_same<Type, int>::value || std::is_same<Type, unsigned int>::value ||
+                                      std::is_same<Type, long>::value || std::is_same<Type, unsigned long>::value ||
+                                      std::is_same<Type, long long>::value || std::is_same<Type, unsigned long long>::value;
     };
     
     template <typename T>
     struct is_floating_point_type {
-        static constexpr bool value = std::is_same<T, float>::value || std::is_same<T, double>::value || std::is_same<T, long double>::value;
+        using Type = std::decay<T>::type;
+        static constexpr bool value = std::is_same<Type, float>::value || std::is_same<Type, double>::value || std::is_same<Type, long double>::value;
     };
     
 }

@@ -1,14 +1,21 @@
 
+#pragma once
+
 #ifndef UTILS_RESULT_TPP
 #define UTILS_RESULT_TPP
 
-#include "utils/string.hpp"
+// #include "utils/string/format.hpp"
 
 #include <stdexcept> // std::runtime_error
 #include <utility> // std::move
 
 namespace utils {
 
+    template <typename ...Ts>
+    Response Response::NOT_OK(std::string_view fmt, const Ts& ...args) {
+        return Response("asdf"); // format(fmt, args...));
+    }
+    
     template <typename T, typename E>
     Result<T, E>::Result() = default;
     

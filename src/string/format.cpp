@@ -2,6 +2,8 @@
 #include "utils/string/format.hpp"
 #include "utils/exceptions.hpp"
 #include "utils/assert.hpp"
+#include "utils/string/formatting.hpp"
+
 
 #include <charconv> // std::from_chars
 
@@ -9,44 +11,8 @@ namespace utils {
 
     namespace detail {
         
-        std::unordered_map<std::type_index, std::string> format_overrides = { };
+        std::unordered_map<std::type_index, std::stack<std::string>> format_overrides = { };
         
-    }
-    
-    Formatting::Specifier::Specifier(std::string value) : m_raw(std::move(value)) {
-    }
-    
-    Formatting::Specifier::~Specifier() = default;
-    
-    bool Formatting::Specifier::operator==(const Formatting::Specifier& other) const {
-        return m_raw == other.m_raw;
-    }
-    
-    Formatting::Specifier& Formatting::Specifier::operator=(const std::string& value) {
-        m_raw = value;
-        return *this;
-    }
-    
-    // Formatting implementation
-
-    Formatting::Formatting() = default;
-    
-    Formatting::~Formatting() = default;
-    
-    Formatting::Specifier& Formatting::operator[](const std::string& key) {
-        return m_specifiers[key];
-    }
-    
-    Formatting::Specifier Formatting::operator[](const std::string& key) const {
-        auto iter = m_specifiers.find(key);
-        if (iter != m_specifiers.end()) {
-            return iter->second;
-        }
-        return { };
-    }
-    
-    bool Formatting::operator==(const Formatting& other) const {
-        return m_specifiers == other.m_specifiers;
     }
     
     // FormatString implementation
@@ -165,6 +131,23 @@ namespace utils {
                         // Identifiers for auto-numbered placeholders are default-initialized
                         if (fmt[i] != '|' && fmt[i] != '}') {
                             throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                        }
+                    }
+                    
+                    bool processing_specifier_value = false;
+                    while (fmt[i] != '}' || processing_specifier_value) {
+                        // Skip formatting separator '|' or comma separator ','
+                        ++i;
+                        
+                        if (processing_specifier_value) {
+                            if (fmt[i] == ']') {
+                                processing_specifier_value = false;
+                            }
+                        }
+                        else {
+                            if (fmt[i] == '[') {
+                                processing_specifier_value = true;
+                            }
                         }
                     }
                     

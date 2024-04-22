@@ -11,10 +11,10 @@ namespace utils {
     namespace logging {
         
         template <typename ...Ts>
-        void info(const FormatString& fmt, const Ts&... args);
+        void debug(const FormatString& fmt, const Ts&... args);
         
         template <typename ...Ts>
-        void debug(const FormatString& fmt, const Ts&... args);
+        void info(const FormatString& fmt, const Ts&... args);
         
         template <typename ...Ts>
         void warning(const FormatString& fmt, const Ts&... args);
@@ -24,6 +24,9 @@ namespace utils {
         
         template <typename ...Ts>
         void fatal(const FormatString& fmt, const Ts&... args);
+        
+        void set_format(const FormatString& fmt);
+        void clear_format();
         
     }
 }

@@ -18,14 +18,14 @@ namespace utils {
     [[nodiscard]] std::vector<std::string> split(const std::string& in, const std::string& delimiter);
     
     // Returns a string of 'components' joined by 'glue'.
-    template <typename C>
-    [[nodiscard]] std::string join(const C& container, const std::string& glue) requires is_const_iterable<C>;
+    template <typename T>
+    [[nodiscard]] std::string join(const T& container, const std::string& glue) requires is_const_iterable<T>;
     
     // Template specializations for type deductions.
     [[nodiscard]] std::string join(const std::initializer_list<std::string_view>& components, const std::string& glue);
     
     // Trim off all whitespace characters on either side of 'in'.
-    [[nodiscard]] std::string trim(std::string_view in);
+    [[nodiscard]] std::string_view trim(std::string_view in);
     
 }
 

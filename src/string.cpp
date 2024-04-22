@@ -22,9 +22,22 @@ namespace utils {
          return ""; // return join<std::initializer_list<std::string>>(components, glue);
     }
     
-    [[nodiscard]] std::string trim(std::string_view in) {
-        static const char* ws = " \t\n\r";
-        return std::string(in.substr(in.find_first_not_of(ws), in.length() - (in.find_last_not_of(ws) + 1)));
+    [[nodiscard]] std::string_view trim(std::string_view in) {
+        if (in.empty()) {
+            return "";
+        }
+        
+        std::size_t start = 0u;
+        while (std::isspace(in[start])) {
+            ++start;
+        }
+        
+        std::size_t end = in.length() - 1u;
+        while (end != start && std::isspace(in[end])) {
+            --end;
+        }
+        
+        return in.substr(start, end + 1);
     }
     
 }
