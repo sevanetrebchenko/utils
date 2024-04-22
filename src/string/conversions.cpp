@@ -339,7 +339,7 @@ namespace utils {
         return justify(std::string(value), formatting);
     }
     
-    std::string to_string(std::nullptr_t value, const Formatting& formatting) {
+    std::string to_string(std::nullptr_t, const Formatting& formatting) {
         return justify("nullptr", formatting);
     }
     

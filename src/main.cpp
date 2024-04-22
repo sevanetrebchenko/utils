@@ -85,7 +85,7 @@ int main() {
     using namespace detail;
     
     Formatting f { };
-    f["representation"] = "scientific";
+    f["representation"] = "hexadecimal";
     f["sign"] = "aligned";
     f["group_size"] = "4";
     f["use_base_prefix"] = "true";
@@ -95,7 +95,7 @@ int main() {
     f["precision"] = "30";
     
     auto start = std::chrono::high_resolution_clock::now();
-        std::string r = to_string(3.12345678f, f);
+        std::string r = to_string(nullptr, f);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
     

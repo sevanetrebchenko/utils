@@ -5,10 +5,17 @@
 #define UTILS_CONVERSIONS_TPP
 
 #include "utils/string/format.hpp"
+#include "utils/constexpr.hpp"
 
-#include <sstream> // std::stringstream
+#include <charconv> // std:to_chars
 
 namespace utils {
+    
+    namespace detail {
+        
+        std::string justify(const std::string& value, const Formatting& formatting);
+        
+    }
 
     template <typename T, typename S>
     std::string to_string(const std::pair<T, S>& value, const Formatting& formatting) {
@@ -33,26 +40,28 @@ namespace utils {
     
     template <typename T>
     std::string to_string(const T& value, const Formatting& formatting) requires is_const_iterable<T> {
-        std::stringstream builder { };
-        
-        builder << "[ ";
-        
-        auto iter = value.begin();
-        builder << to_string(*iter, formatting);
-        
-        for (++iter; iter != value.end(); ++iter) {
-            builder << ", ";
-            builder << to_string(*iter, formatting);
-        }
+//        std::stringstream builder { };
+//
+//        builder << "[ ";
+//
+//        auto iter = value.begin();
+//        builder << to_string(*iter, formatting);
+//
+//        for (++iter; iter != value.end(); ++iter) {
+//            builder << ", ";
+//            builder << to_string(*iter, formatting);
+//        }
+//
+//        builder << " ]";
+//
+//        return std::move(builder.str());
 
-        builder << " ]";
-        
-        return std::move(builder.str());
+        return "";
     }
     
     template <typename T>
     std::string to_string(const T* value, const Formatting& formatting) {
-        return std::string();
+        return value ? to_string((std::uintptr_t)(value), formatting) : to_string(nullptr, formatting);
     }
     
     template <typename T>
