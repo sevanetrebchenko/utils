@@ -50,114 +50,6 @@ namespace utils {
 
         return std::move(result);
     }
-//
-//    template <typename T>
-//    [[nodiscard]] std::string to_binary(T value, const Formatting& formatting) {
-//        static_assert(is_integer_type<T>::value, "value must be an integer type");
-//
-//        std::string result;
-//
-//        unsigned group_size = 0u;
-//        if (formatting.has_specifier("group_size")) {
-//            group_size = formatting["group_size"].convert_to<unsigned>();
-//        }
-//
-//        char separator = ' ';
-//        if (formatting.has_specifier("separator")) {
-//            separator = formatting["separator"].convert_to<char>();
-//        }
-//
-//        if (group_size) {
-//            unsigned count = 0u;
-//
-//            while (value > 0) {
-//                ++count;
-//                result += static_cast<char>((value % 2) + '0');
-//                value /= 2;
-//
-//                if (count % group_size == 0u) {
-//                    result += separator;
-//                }
-//            }
-//
-//            // Make sure all groups contain the same number of characters.
-//            while (count % group_size != 0u) {
-//                result += '0';
-//                ++count;
-//            }
-//        }
-//        else {
-//            while (value > 0) {
-//                result += static_cast<char>((value % 2) + '0');
-//                value /= 2;
-//            }
-//        }
-//
-//        std::reverse(result.begin(), result.end());
-//        return std::move(result);
-//    }
-//
-//
-//    template <typename T>
-//    [[nodiscard]] std::string to_hexadecimal(T value, const Formatting& formatting) {
-//        static_assert(is_integer_type<T>::value, "value must be an integer type");
-//
-//        std::string result;
-//
-//        unsigned group_size = 0u;
-//        if (formatting.has_specifier("group_size")) {
-//            group_size = formatting["group_size"].convert_to<unsigned>();
-//        }
-//
-//        char separator = ' ';
-//        if (formatting.has_specifier("separator")) {
-//            separator = formatting["separator"].convert_to<char>();
-//        }
-//
-//        if (group_size) {
-//            unsigned count = 0u;
-//
-//            while (value > 0) {
-//                ++count;
-//
-//                unsigned remainder = value % 16;
-//                if (remainder < 10) {
-//                    result += static_cast<char>(value + '0');
-//                }
-//                else {
-//                    remainder -= 10;
-//                    result += static_cast<char>(value + 'A');
-//                }
-//                value /= 16;
-//
-//                if (count % group_size == 0u) {
-//                    result += separator;
-//                }
-//            }
-//
-//            // Make sure all groups contain the same number of characters.
-//            while (count % group_size != 0u) {
-//                result += '0';
-//                ++count;
-//            }
-//        }
-//        else {
-//            while (value > 0) {
-//                unsigned remainder = value % 16;
-//                if (remainder < 10) {
-//                    result += static_cast<char>(value + '0');
-//                }
-//                else {
-//                    remainder -= 10;
-//                    result += static_cast<char>(value + 'A');
-//                }
-//                value /= 16;
-//            }
-//        }
-//
-//        std::reverse(result.begin(), result.end());
-//        return std::move(result);
-//    }
     
     template <typename T>
     std::string integer_to_string(T value, const Formatting& formatting) {
@@ -230,7 +122,6 @@ namespace utils {
             use_separator = true;
         }
         
-        // Maximum number of bits required to store std::numeric_limits<unsigned long long>::max() on 64-bit architecture
         char buffer[64];
         char* start = buffer;
         char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
@@ -280,12 +171,112 @@ namespace utils {
             }
         }
         
-        return to_string(result, formatting);
+        return justify(result, formatting);
+    }
+    
+    // Returns the number of digits required to store the given value
+    template <typename T>
+    constexpr int count_digits(T num) {
+        return (num < 10) ? 1 : 1 + count_digits(num / 10);
     }
     
     template <typename T>
     std::string floating_point_to_string(T value, const Formatting& formatting) {
-    
+        static_assert(is_floating_point_type<T>::value, "value must be of a floating point type");
+        
+        std::string result;
+        
+        if (value < 0) {
+            value = -value;
+            result.push_back('-');
+        }
+        else {
+            if (formatting.has_specifier("sign")) {
+                std::string_view sign = formatting.get_specifier("sign");
+                if (sign == "aligned") {
+                    result.push_back(' ');
+                }
+                else if (sign == "both") {
+                    result.push_back('+');
+                }
+            }
+        }
+
+        int precision = 6;
+        if (formatting.has_specifier("precision")) {
+            precision = from_string<int>(formatting.get_specifier("precision"));
+        }
+        
+        std::chars_format format_flags = std::chars_format::fixed;
+        if (formatting.has_specifier("representation")) {
+            std::string_view representation = formatting.get_specifier("representation");
+            
+            if (representation == "scientific") {
+                format_flags = std::chars_format::scientific;
+            }
+        }
+        
+        bool use_separator = false;
+        char separator = ',';
+        if (formatting.has_specifier("separator")) {
+            separator = from_string<char>(formatting.get_specifier("separator"));
+            use_separator = true;
+        }
+        else if (formatting.has_specifier("use_separator")) {
+            use_separator = true;
+        }
+        
+        // Buffer must be large enough to store:
+        //  - the number of digits in the largest representable number (max_exponent10)
+        //  - decimal point
+        //  - highest supported precision for the given type (max_digits10)
+        char buffer[std::numeric_limits<T>::max_exponent10 + 1 + std::numeric_limits<T>::max_digits10];
+        char* start = buffer;
+        char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
+        
+        // std::numeric_limits<T>::digits10 represents the number of decimal places that are guaranteed to be preserved when converted to text
+        // Note: last decimal place will be rounded
+        int conversion_precision = std::clamp(precision, 0, std::numeric_limits<T>::digits10);
+        const auto& [ptr, error_code] = std::to_chars(start, end, value, format_flags, conversion_precision);
+        
+        if (error_code == std::errc::value_too_large) {
+            return "";
+        }
+        
+        std::size_t num_written = std::distance(start, ptr);
+        
+        if (use_separator) {
+            char* decimal = std::find(buffer, ptr, '.');
+            std::size_t decimal_position = std::distance(start, decimal);
+            
+            // Separators get inserted every 3 characters up until the position of the decimal point
+            std::size_t group_size = 3;
+            std::size_t counter = (group_size - (decimal_position % group_size));
+            
+            // Write the number portion, up until the decimal point (with separators)
+            for (std::size_t i = 0u; i < decimal_position; ++i, ++counter) {
+                if (i != 0u && counter % group_size == 0u) {
+                    result.push_back(separator);
+                }
+                
+                result.push_back(buffer[i]);
+            }
+            
+            // Write fractional portion
+            for (std::size_t i = decimal_position; i < num_written; ++i) {
+                result.push_back(buffer[i]);
+            }
+        }
+        else {
+            result.append(buffer, num_written);
+        }
+        
+        // Fake higher precision values by appending the remaining decimal places as 0
+        for (std::size_t i = conversion_precision; i < precision; ++i) {
+            result.push_back('0');
+        }
+        
+        return justify(result, formatting);
     }
     
     std::string to_string(char value, const Formatting& formatting) {

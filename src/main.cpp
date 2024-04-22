@@ -85,19 +85,21 @@ int main() {
     using namespace detail;
     
     Formatting f { };
-    f["representation"] = "binary";
+    f["representation"] = "scientific";
     f["sign"] = "aligned";
     f["group_size"] = "4";
     f["use_base_prefix"] = "true";
-    f["width"] = "100";
+    f["width"] = "20";
     f["justification"] = "center";
+    f["use_separator"] = "true";
+    f["precision"] = "30";
     
     auto start = std::chrono::high_resolution_clock::now();
-        std::string r = to_string(327492384792, f);
+        std::string r = to_string(3.12345678f, f);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
     
-    std::cout << r << std::endl;
+    std::cout << "'" << r << "'" << std::endl;
     
 //
 //    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");
