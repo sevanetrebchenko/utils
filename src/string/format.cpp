@@ -4,17 +4,10 @@
 #include "utils/assert.hpp"
 #include "utils/string/formatting.hpp"
 
-
 #include <charconv> // std::from_chars
 
 namespace utils {
 
-    namespace detail {
-        
-        std::unordered_map<std::type_index, std::stack<std::string>> format_overrides = { };
-        
-    }
-    
     // FormatString implementation
     
     FormatString::FormatString(std::string_view fmt, std::source_location source) : m_format(fmt),
@@ -27,7 +20,7 @@ namespace utils {
         parse();
     }
     
-    FormatString::FormatString(std::string fmt, std::source_location source) : m_format(fmt),
+    FormatString::FormatString(std::string fmt, std::source_location source) : m_format(std::move(fmt)),
                                                                                m_source(source) {
         parse();
     }
@@ -78,7 +71,7 @@ namespace utils {
         for (std::size_t i = 0u; i < length; ++i) {
             if (fmt[i] == '{') {
                 if (i + 1u == length) {
-                    throw FormattedError("unterminated '{' at index {}", i);
+                    // throw FormattedError("unterminated '{' at index {}", i);
                 }
                 else if (fmt[i + 1u] == '{') {
                     // Escaped opening brace '{'
@@ -103,13 +96,13 @@ namespace utils {
                         }
                         
                         if (fmt[i] != '|' && fmt[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
                         }
                         
                         std::size_t position;
                         std::string_view str = fmt.substr(identifier_start, i - identifier_start);
                         std::from_chars_result result = std::from_chars(str.data(), str.data() + str.length(), position);
-                        ASSERT(result.ec == std::errc(), "error while converting positional placeholder '{}': {}", str, make_error_code(result.ec).message());
+                        // ASSERT(result.ec == std::errc(), "error while converting positional placeholder '{}': {}", str, make_error_code(result.ec).message());
 
                         identifier = Identifier(position);
                     }
@@ -122,7 +115,7 @@ namespace utils {
                         }
                         
                         if (fmt[i] != '|' && fmt[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
                         }
                         
                         identifier = Identifier(std::string(fmt.substr(identifier_start, i - identifier_start)));
@@ -130,7 +123,7 @@ namespace utils {
                     else {
                         // Identifiers for auto-numbered placeholders are default-initialized
                         if (fmt[i] != '|' && fmt[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
                         }
                     }
                     
@@ -152,6 +145,7 @@ namespace utils {
                     }
                     
                     // Parse custom formatting
+                    // TODO: support for nested formatting
                     Formatting formatting { };
                     while (fmt[i] != '}') {
                         // Skip formatting separator '|' or comma separator ','
@@ -164,7 +158,7 @@ namespace utils {
                             ++i;
                         }
                         if (fmt[i] != ':' && fmt[i] != '=') {
-                            throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be ':' or '='", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be ':' or '='", fmt[i], i);
                         }
 
                         std::string_view specifier = fmt.substr(specifier_start, i - specifier_start);
@@ -174,7 +168,7 @@ namespace utils {
                         
                         // Format specifier values must be contained within square braces
                         if (fmt[i] != '[') {
-                            throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", fmt[i], i);
                         }
                         
                         std::size_t specifier_value_start = i;
@@ -194,7 +188,7 @@ namespace utils {
                                     ++i;
                                 }
                                 else {
-                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
+                                    // throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
                                 }
                             }
                             else if (fmt[i] == ']') {
@@ -213,7 +207,7 @@ namespace utils {
                         
                         if (fmt[i] != ']') {
                             // This is only true when we reach the end of the string before finding a closing format specifier brace in the while loop above
-                            throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
+                            // throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
                         }
                         
                         formatting[std::string(specifier)] = value;
@@ -222,7 +216,7 @@ namespace utils {
                         ++i;
                         
                         if (fmt[i] != ',' && fmt[i] != '}') {
-                            throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", fmt[i], i);
+                            // throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", fmt[i], i);
                         }
                     }
                     
@@ -236,7 +230,7 @@ namespace utils {
                     ++i;
                 }
                 else {
-                    throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped to '}}' inside format strings", i);
+                    // throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped to '}}' inside format strings", i);
                 }
             }
             else {
@@ -269,7 +263,7 @@ namespace utils {
                 placeholder_type = "named";
             }
             
-            throw FormattedError("format string placeholders must be homogeneous - {} format string has {} placeholder at index {}", format_string_type, placeholder_type, position);
+            // throw FormattedError("format string placeholders must be homogeneous - {} format string has {} placeholder at index {}", format_string_type, placeholder_type, position);
         }
         
         std::size_t placeholder_index = m_placeholder_identifiers.size(); // invalid index

@@ -32,37 +32,6 @@ namespace utils {
             { to_string(value, f) } -> std::same_as<std::string>;
         };
         
-        template <typename T>
-        struct is_named_argument_list : std::false_type { };
-        
-        template <typename ...Ts>
-        struct is_named_argument_list<NamedArgumentList<Ts...>> : std::true_type { };
-        
-        template <typename T>
-        concept is_deconstructible = requires(const T& value) {
-            { deconstruct(value) };
-            is_named_argument_list<decltype(deconstruct(value))>::value;
-        };
-        
-        // Global format overrides
-        extern std::unordered_map<std::type_index, std::stack<std::string>> format_overrides;
-        
-        // Empty format overrides are allowed, so there needs to be a different way to distinguish format overrides that don't exist.
-        template <typename T>
-        std::optional<std::string_view> get_format_override() {
-            using Type = std::decay<T>::type;
-            auto iter = format_overrides.find(typeid(Type));
-            
-            if (iter != format_overrides.end()) {
-                std::stack<std::string>& overrides = iter->second;
-                if (!overrides.empty()) {
-                    return overrides.top();
-                }
-            }
-            
-            return { };
-        }
-        
     }
     
     template <typename ...Ts>
@@ -160,20 +129,8 @@ namespace utils {
                 for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
                     const FormattedPlaceholder& placeholder = m_formatted_placeholders[i];
                     formatted_placeholders.emplace_back(runtime_get(tuple, placeholder.identifier_index, [&placeholder, this] <typename T>(const T& value) -> std::string {
+                        // TODO: deconstructing types into named placeholders for custom type formatters (git:feature-customization branch)
                         using Type = std::decay<T>::type;
-                        
-                        if constexpr (detail::is_deconstructible<T>) {
-                            std::optional<std::string_view> fmt = detail::get_format_override<Type>();
-                            if (fmt.has_value()) {
-                                return std::apply([fmt](const auto&... args) {
-                                    return utils::format(fmt, args...);
-                                }, to_placeholder_list(value).to_tuple());
-                            }
-                            
-                            // Types may have custom to_placeholder_list conversion functions defined but no format override
-                            // In this case, we just want to format it normally using to_string
-                        }
-                        
                         if constexpr (detail::is_formattable<Type>) {
                             return to_string(value, placeholder.formatting);
                         }
@@ -233,90 +190,6 @@ namespace utils {
 
     template <typename T>
     NamedArgument<T>::~NamedArgument() = default;
-    
-    template <typename... Ts>
-    NamedArgumentList<Ts...>::NamedArgumentList(NamedArgument<Ts>&&... args) : m_tuple(std::move(args)...) {
-    }
-    
-    template <typename... Ts>
-    NamedArgumentList<Ts...>::~NamedArgumentList() = default;
-    
-    template <typename... Ts>
-    const std::tuple<NamedArgument<Ts>...>& NamedArgumentList<Ts...>::to_tuple() const {
-        return m_tuple;
-    }
-    
-    template <typename... Ts>
-    template <typename T>
-    const T& NamedArgumentList<Ts...>::get(std::string_view name) const {
-        const T* out = nullptr;
-    
-        get(name, [&out]<typename U>(const NamedArgument<U>& value) -> void {
-            if constexpr (std::is_same<typename std::decay<T>::type, typename std::decay<U>::type>::value) {
-                out = &value.value;
-            }
-        });
-        
-        if (!out) {
-            throw FormattedError("");
-        }
-        
-        return *out;
-    }
-    
-    template <typename... Ts>
-    template <typename T>
-    T& NamedArgumentList<Ts...>::get(std::string_view name) {
-        T* out = nullptr;
-    
-        get(name, [&out]<typename U>(NamedArgument<U>& value) -> void {
-            if constexpr (std::is_same<typename std::decay<T>::type, typename std::decay<U>::type>::value) {
-                out = &value.value;
-            }
-        });
-        
-        if (!out) {
-            throw FormattedError("");
-        }
-        
-        return *out;
-    }
-    
-    template <typename... Ts>
-    template <typename Fn, std::size_t Index>
-    void NamedArgumentList<Ts...>::get(std::string_view name, const Fn& fn) {
-        if constexpr (Index < sizeof...(Ts)) {
-            auto current = std::get<Index>(m_tuple);
-            if (current.name == name) {
-                fn(current);
-            }
-            else {
-                get<Fn, Index + 1>(name, fn);
-            }
-        }
-    }
-    
-    template <typename ...Ts>
-    std::string format(const FormatString& fmt, const Ts&... args) {
-        return fmt.format(args...);
-    }
-    
-    template <typename T>
-    void push_format_override(std::string fmt) {
-        using Type = std::decay<T>::type;
-        detail::format_overrides[typeid(Type)].push(std::move(fmt));
-    }
-    
-    template <typename T>
-    void pop_format_override() {
-        using Type = std::decay<T>::type;
-        
-        auto iter = detail::format_overrides.find(typeid(Type));
-        if (iter != detail::format_overrides.end()) {
-            std::stack<std::string>& overrides = iter->second;
-            overrides.pop();
-        }
-    }
     
 }
 

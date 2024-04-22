@@ -31,10 +31,10 @@ namespace utils {
         
         if constexpr (std::is_same<ResultType, std::string>::value && sizeof...(args) > 1u) {
             // Treat first argument as format string and the rest as positional argument values.
-            result.m_result.emplace(format(args...));
+            // result.m_result.emplace(format(args...));
         }
         else {
-            result.m_result.emplace(args...);
+            // result.m_result.emplace(args...);
         }
         
         return std::move(result);

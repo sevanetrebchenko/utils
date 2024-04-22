@@ -8,8 +8,8 @@ namespace utils {
         // Assert implementation.
         void cppassert(const std::string& expression, std::source_location source, const std::string& message) {
             // TODO: hook up with logging functionality
-            std::string error = utils::format("ERROR: assertion {} failed in {}, {}:{}: {}", expression, source.file_name(), source.line(), message);
-            std::cerr << error << std::endl;
+//            std::string error = format("ERROR: assertion {} failed in {}, {}:{}: {}", expression, source.file_name(), source.line(), message);
+//            std::cerr << error << std::endl;
             std::abort();
         }
         

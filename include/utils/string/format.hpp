@@ -1,4 +1,6 @@
 
+#pragma once
+
 #ifndef UTILS_FORMAT_HPP
 #define UTILS_FORMAT_HPP
 
@@ -63,7 +65,6 @@ namespace utils {
             };
             
             void parse();
-            void validate_formatting(const Formatting& formatting) const;
             void register_placeholder(const Identifier& identifier, const Formatting& formatting, std::size_t position);
 
             std::string m_format;
@@ -83,37 +84,7 @@ namespace utils {
     };
     
     template <typename ...Ts>
-    class NamedArgumentList {
-        public:
-            NamedArgumentList(NamedArgument<Ts>&&... args);
-            ~NamedArgumentList();
-            
-            [[nodiscard]] const std::tuple<NamedArgument<Ts>...>& to_tuple() const;
-            
-            // Access NamedArguments by name
-            template <typename T>
-            [[nodiscard]] const T& get(std::string_view name) const;
-            
-            template <typename T>
-            [[nodiscard]] T& get(std::string_view name);
-            
-        private:
-            template <typename Fn, std::size_t Index = 0u>
-            void get(std::string_view name, const Fn& fn);
-            
-            std::tuple<NamedArgument<Ts>...> m_tuple;
-    };
-    
-    template <typename ...Ts>
     [[nodiscard]] std::string format(const FormatString& fmt, const Ts&... args);
-    
-    // Well-defined custom types that use this library should expose a set of named arguments that correspond to data of the class
-    // These named arguments can be used in custom type format strings that override the default to_string implementation.
-    template <typename T>
-    void push_format_override(std::string fmt);
-    
-    template <typename T>
-    void pop_format_override();
     
 }
 

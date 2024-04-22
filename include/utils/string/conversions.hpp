@@ -13,23 +13,6 @@
 
 namespace utils {
     
-    // Supported by any type
-    // width, fill, justification
-    
-    // Supported format specifiers for character types:
-    
-    // Supported format specifiers for integer types
-    // representation (binary, hexadecimal),
-    //      when binary / hexadecimal: group_size, use_base_prefix
-    // sign
-    // separator
-    
-    // supported format specifiers for floating point types
-    // precision
-    // representation (scientific, fixed)
-    // sign
-    // separator
-    
     // Character types
     std::string to_string(char value, const Formatting& formatting = { });
     
@@ -97,41 +80,6 @@ namespace utils {
     
     template <typename T, typename U>
     std::pair<T, U> from_string(std::string_view str);
-    
-    // Character types
-    NamedArgumentList<std::string> to_placeholder_list(char value);
-    
-    // Integer types
-    NamedArgumentList<std::string> to_placeholder_list(unsigned char value);
-    NamedArgumentList<std::string> to_placeholder_list(short value);
-    NamedArgumentList<std::string> to_placeholder_list(unsigned short value);
-    NamedArgumentList<std::string> to_placeholder_list(int value);
-    NamedArgumentList<std::string> to_placeholder_list(unsigned value);
-    NamedArgumentList<std::string> to_placeholder_list(long value);
-    NamedArgumentList<std::string> to_placeholder_list(unsigned long value);
-    NamedArgumentList<std::string> to_placeholder_list(long long value);
-    NamedArgumentList<std::string> to_placeholder_list(unsigned long long value);
-    
-    // Floating-point types
-    NamedArgumentList<std::string> to_placeholder_list(float value);
-    NamedArgumentList<std::string> to_placeholder_list(double value);
-    NamedArgumentList<std::string> to_placeholder_list(long double value);
-    
-    // Standard types
-    template <typename T>
-    NamedArgumentList<std::string> to_placeholder_list(const T* value);
-    NamedArgumentList<std::string> to_placeholder_list(std::nullptr_t value);
-    
-    template <typename T, typename U>
-    NamedArgumentList<std::string> to_placeholder_list(const std::pair<T, U>& value);
-    template <typename ...Ts>
-    NamedArgumentList<Ts...> to_placeholder_list(const std::tuple<Ts...>& value);
-    
-    NamedArgumentList<std::string, std::string, std::uint32_t> to_placeholder_list(const std::source_location& value);
-    
-    // Standard containers
-    
-    // User-defined types
     
 }
 
