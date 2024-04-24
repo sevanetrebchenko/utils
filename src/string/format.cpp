@@ -100,10 +100,8 @@ namespace utils {
                         }
                         
                         std::size_t position;
-                        std::string_view str = fmt.substr(identifier_start, i - identifier_start);
-                        std::from_chars_result result = std::from_chars(str.data(), str.data() + str.length(), position);
-                        // ASSERT(result.ec == std::errc(), "error while converting positional placeholder '{}': {}", str, make_error_code(result.ec).message());
-
+                        from_string(fmt.substr(identifier_start, i - identifier_start), position);
+                        
                         identifier = Identifier(position);
                     }
                     else if (std::isalpha(fmt[i]) || (fmt[i] == '_')) {
@@ -114,41 +112,26 @@ namespace utils {
                             ++i;
                         }
                         
-                        if (fmt[i] != '|' && fmt[i] != '}') {
-                            // throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
+                        if (fmt[i] != ':' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator ':' or placeholder terminator '}'", fmt[i], i);
                         }
                         
                         identifier = Identifier(std::string(fmt.substr(identifier_start, i - identifier_start)));
                     }
                     else {
                         // Identifiers for auto-numbered placeholders are default-initialized
-                        if (fmt[i] != '|' && fmt[i] != '}') {
-                            // throw FormattedError("invalid character '{}' at index {} - expecting formatting separator '|' or placeholder terminator '}'", fmt[i], i);
-                        }
-                    }
-                    
-                    bool processing_specifier_value = false;
-                    while (fmt[i] != '}' || processing_specifier_value) {
-                        // Skip formatting separator '|' or comma separator ','
-                        ++i;
-                        
-                        if (processing_specifier_value) {
-                            if (fmt[i] == ']') {
-                                processing_specifier_value = false;
-                            }
-                        }
-                        else {
-                            if (fmt[i] == '[') {
-                                processing_specifier_value = true;
-                            }
+                        if (fmt[i] != ':' && fmt[i] != '}') {
+                            throw FormattedError("invalid character '{}' at index {} - expecting formatting separator ':' or placeholder terminator '}'", fmt[i], i);
                         }
                     }
                     
                     // Parse custom formatting
                     // TODO: support for nested formatting
                     Formatting formatting { };
+                    Formatting* nested = nullptr;
+                    
                     while (fmt[i] != '}') {
-                        // Skip formatting separator '|' or comma separator ','
+                        // Skip formatting separator ':' or comma separator ','
                         ++i;
                         
                         std::size_t specifier_start = i;
@@ -157,18 +140,18 @@ namespace utils {
                         while (std::isalpha(fmt[i]) || (fmt[i] == '_') || (i != specifier_start && std::isdigit(fmt[i]))) {
                             ++i;
                         }
-                        if (fmt[i] != ':' && fmt[i] != '=') {
-                            // throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be ':' or '='", fmt[i], i);
+                        if (fmt[i] != '=') {
+                            throw FormattedError("invalid character '{}' at index {} - formatting specifier separator must be '='", fmt[i], i);
                         }
 
                         std::string_view specifier = fmt.substr(specifier_start, i - specifier_start);
                         
-                        // Skip separator ':' or '='
+                        // Skip separator '='
                         ++i;
                         
                         // Format specifier values must be contained within square braces
                         if (fmt[i] != '[') {
-                            // throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", fmt[i], i);
+                            throw FormattedError("invalid character '{}' at index {} - formatting specifier value must be contained within square braces: [ ... ]", fmt[i], i);
                         }
                         
                         std::size_t specifier_value_start = i;
@@ -188,7 +171,7 @@ namespace utils {
                                     ++i;
                                 }
                                 else {
-                                    // throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
+                                    throw FormattedError("unescaped '[' at index {} - opening formatting brace literals must be escaped to '[[' inside specifier values", i);
                                 }
                             }
                             else if (fmt[i] == ']') {
@@ -207,16 +190,60 @@ namespace utils {
                         
                         if (fmt[i] != ']') {
                             // This is only true when we reach the end of the string before finding a closing format specifier brace in the while loop above
-                            // throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
+                            throw FormattedError("unterminated formatting specifier value at index {}", specifier_value_start);
                         }
                         
-                        formatting[std::string(specifier)] = value;
+                        if (specifier == "justification" || specifier == "justify" || specifier == "alignment" || specifier == "align") {
+                            if (value == "left") {
+                                formatting.justification = Formatting::Justification::Left;
+                            }
+                            else if (value == "right") {
+                                formatting.justification = Formatting::Justification::Right;
+                            }
+                            else if (value == "center") {
+                                formatting.justification = Formatting::Justification::Center;
+                            }
+                            else {
+                                // Unknown
+                            }
+                        }
+                        else if (specifier == "sign") {
+                            if (value == "negative" || value == "negativeonly") {
+                                formatting.sign = Formatting::Sign::NegativeOnly;
+                            }
+                            else if (value == "align" || value == "aligned") {
+                                formatting.sign = Formatting::Sign::Aligned;
+                            }
+                            else if (value == "both") {
+                                formatting.sign = Formatting::Sign::Both;
+                            }
+                        }
+                        else if (specifier == "representation") {
+                        }
+                        else if (specifier == "precision") {
+                        }
+                        else if (specifier == "width") {
+                        }
+                        else if (specifier == "fill") {
+                        }
+                        else if (specifier == "separator") {
+                        }
+                        else if (specifier == "use_base_prefix") {
+                        }
+                        else if (specifier == "spacing" || specifier == "group_size") {
+                        }
+                        else {
+                            // Unknown
+                        }
                         
                         // Skip closing value brace ']'
                         ++i;
-                        
+
                         if (fmt[i] != ',' && fmt[i] != '}') {
-                            // throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", fmt[i], i);
+                            throw FormattedError("invalid character '{}' at index {} - expecting format specifier separator ',' or placeholder terminator '}'", fmt[i], i);
+                        }
+                        else if (fmt[i] == ':') {
+                        
                         }
                     }
                     

@@ -33,7 +33,7 @@ namespace mynamespace {
 int main() {
     using namespace utils;
     
-//    std::vector<int> v { 1, 2, 3, 4, 5 };
+    std::vector<int> v { 1, 2, 3, 4, 5 };
 //    int* c = nullptr;
 //
 //    if constexpr (detail::is_deconstructible<std::source_location>) {
@@ -85,21 +85,21 @@ int main() {
     using namespace detail;
     
     Formatting f { };
-    f["representation"] = "hexadecimal";
+    f["representation"] = "fixed";
     f["sign"] = "aligned";
-    f["group_size"] = "4";
+    f["group_size"] = "6";
     f["use_base_prefix"] = "true";
     f["width"] = "20";
     f["justification"] = "center";
     f["use_separator"] = "true";
-    f["precision"] = "30";
+    // f["precision"] = "30";
     
     auto start = std::chrono::high_resolution_clock::now();
-        std::string r = to_string(nullptr, f);
+        std::string r = utils::format("this is a test format string containing a vector: {:representation=[hexadecimal],use_base_prefix=[true]}, called from: {}", v, std::source_location::current());
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
     
-    std::cout << "'" << r << "'" << std::endl;
+    std::cout << r << std::endl;
     
 //
 //    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");

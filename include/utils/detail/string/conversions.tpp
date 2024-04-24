@@ -40,23 +40,20 @@ namespace utils {
     
     template <typename T>
     std::string to_string(const T& value, const Formatting& formatting) requires is_const_iterable<T> {
-//        std::stringstream builder { };
-//
-//        builder << "[ ";
-//
-//        auto iter = value.begin();
-//        builder << to_string(*iter, formatting);
-//
-//        for (++iter; iter != value.end(); ++iter) {
-//            builder << ", ";
-//            builder << to_string(*iter, formatting);
-//        }
-//
-//        builder << " ]";
-//
-//        return std::move(builder.str());
+        std::string result;
+        
+        result.append("[ ");
 
-        return "";
+        auto iter = value.begin();
+        result.append(to_string(*iter, formatting));
+
+        for (++iter; iter != value.end(); ++iter) {
+            result.append(", ");
+            result.append(to_string(*iter, formatting));
+        }
+
+        result.append(" ]");
+        return std::move(result);
     }
     
     template <typename T>

@@ -12,29 +12,50 @@
 
 namespace utils {
     
-    class Formatting {
-        public:
-            Formatting();
-            ~Formatting();
+    struct Formatting {
+        Formatting();
+        
+        enum class Justification : std::uint8_t {
+            Left,
+            Right,
+            Center
+        } justification;
+        
+        enum class Sign : std::uint8_t {
+            NegativeOnly,
+            None,
+            Aligned,
+            Both
+        } sign;
+        
+        enum class Representation : std::uint8_t {
+            Decimal,
             
-            [[nodiscard]] bool operator==(const Formatting& other) const;
+            // Integer type representations
+            Binary,
+            Hexadecimal,
             
-            std::string& add_specifier(const std::string& key, std::string value);
-            
-            std::string& get_specifier(const std::string& key);
-            std::string& operator[](const std::string& key);
-            std::string_view get_specifier(const std::string& key) const;
-            std::string_view operator[](const std::string& key) const;
-            
-            bool has_specifier(const std::string& key) const;
-            
-        private:
-            std::unordered_map<std::string, std::string> m_specifiers;
+            // Floating point type representations
+            Fixed,
+            Scientific
+        } representation;
+        
+        std::uint8_t precision;
+        std::uint32_t width;
+        
+        char fill;
+        char padding;
+        
+        char separator;
+        
+        // Optional specifiers for alternate representations
+        bool use_base_prefix;
+        std::uint8_t group_size;
+        
+        // Nested formatting
+        Formatting* next;
     };
     
 }
-
-// Template definitions.
-#include "utils/detail/string/formatting.tpp"
 
 #endif // UTILS_FORMATTING_HPP

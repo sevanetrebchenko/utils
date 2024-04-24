@@ -8,224 +8,269 @@
 
 namespace utils {
     
-    std::string justify(const std::string& value, const Formatting& formatting) {
-        std::size_t length = value.length();
-
-        // By default, values are left justified.
-        std::string_view justification = "left";
-        if (formatting.has_specifier("justification")) {
-            justification = formatting.get_specifier("justification");
-        }
-        
-        // 'width' represents the minimum width that the output string should be
-        unsigned width = 0u;
-        if (formatting.has_specifier("width")) {
-            width = from_string<unsigned>(formatting.get_specifier("width"));
-        }
-        
-        if (length >= width) {
-            // Minimum width is less than the current width, justification is a noop
+    int round_up_to_multiple(int value, int multiple) {
+        if (multiple == 0)
+            return value;
+    
+        int remainder = value % multiple;
+        if (remainder == 0) {
             return value;
         }
-        
-        char fill = ' ';
-        if (formatting.has_specifier("fill")) {
-            fill = from_string<char>(formatting.get_specifier("fill"));
-        }
-        
-        std::string result;
-        result.resize(width, fill);
-        
-        std::size_t offset = 0u;
-        if (justification == "right") {
-            offset = width - length;
-        }
-        else if (justification == "center") {
-            offset = (width - length) / 2;
-        }
-        
-        for (std::size_t i = 0u; i < length; ++i) {
-            result[i + offset] = value[i];
-        }
-
-        return std::move(result);
+    
+        return value + multiple - remainder;
     }
     
-    template <typename T>
-    std::string integer_to_string(T value, const Formatting& formatting) {
-        static_assert(is_integer_type<T>::value, "value must be of an integer type");
-        
-        // TODO: precompute final string capacity
-        
-        std::string result;
-        
-        if (value < 0) {
-            result.push_back('-');
-            
-            if constexpr (std::is_signed<T>::value) {
-                // Prevent warning from being emitted, since this is called for both signed and unsigned integer types.
-                value = -value;
-            }
-        }
-        else {
-            if (formatting.has_specifier("sign")) {
-                std::string_view sign = formatting.get_specifier("sign");
-                if (sign == "aligned") {
-                    result.push_back(' ');
-                }
-                else if (sign == "both") {
-                    result.push_back('+');
-                }
-            }
-        }
-        
-        int base = 10;
-        std::size_t group_size = 0u;
-        char separator;
-        
-        if (formatting.has_specifier("representation")) {
-            std::string_view representation = formatting.get_specifier("representation");
-            
-            bool use_base_prefix = formatting.has_specifier("use_base_prefix");
-            
-            if (representation == "binary") {
-                base = 2;
-                if (use_base_prefix) {
-                    result.append("0b");
-                }
-            }
-            else if (representation == "hexadecimal") {
-                base = 16;
-                if (use_base_prefix) {
-                    result.append("0x");
-                }
-            }
-            
-            if (formatting.has_specifier("group_size")) {
-                group_size = from_string<std::size_t>(formatting.get_specifier("group_size"));
-            }
-            
-            // By default, custom representations use a whitespace separator character
-            separator = ' ';
-        }
-        else {
-            // Default integer representations use a comma as a separator character
-            separator = ',';
-        }
-    
-        bool use_separator;
-        if (formatting.has_specifier("separator")) {
-            separator = from_string<char>(formatting.get_specifier("separator"));
-            use_separator = true;
-        }
-        else if (formatting.has_specifier("use_separator")) {
-            use_separator = true;
-        }
-        
-        char buffer[64];
-        char* start = buffer;
-        char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
-        
-        const auto& [ptr, error_code] = std::to_chars(start, end, value, base);
-        
-        if (error_code == std::errc::value_too_large) {
-            // Out of range error
-            return "";
-        }
-        
-        std::size_t num_written = std::distance(start, ptr);
-        std::size_t counter = 0u;
-        
-        if (group_size) {
-            result.push_back(separator);
-            
-            // Extra padding for the left-most group
-            for (std::size_t i = 0u; i < (group_size - (num_written % group_size)); ++i, ++counter) {
-                result.push_back('0');
-            }
-            
-            for (std::size_t i = 0u; i < num_written; ++i, ++counter) {
-                if (counter % group_size == 0u) {
-                    result.push_back(separator);
-                }
-                
-                result.push_back(buffer[i]);
-            }
-        }
-        else {
-            if (use_separator) {
-                // Separators get inserted every 3 characters
-                group_size = 3;
-                counter = (group_size - (num_written % group_size));
-                
-                for (std::size_t i = 0u; i < num_written; ++i, ++counter) {
-                    if (i != 0u && counter % group_size == 0u) {
-                        result.push_back(separator);
-                    }
-                    
-                    result.push_back(buffer[i]);
-                }
-            }
-            else {
-                result.append(buffer, num_written);
-            }
-        }
-        
-        return justify(result, formatting);
-    }
-    
-    // Returns the number of digits required to store the given value
     template <typename T>
     constexpr int count_digits(T num) {
         return (num < 10) ? 1 : 1 + count_digits(num / 10);
     }
     
     template <typename T>
-    std::string floating_point_to_string(T value, const Formatting& formatting) {
-        static_assert(is_floating_point_type<T>::value, "value must be of a floating point type");
+    std::string integer_to_base(T value, int base, const Formatting& formatting) {
+        static_assert(is_integer_type<T>::value, "value must be of an integer type");
+        
+        std::size_t capacity = 0u;
+        std::size_t read_offset = 0u;
+        std::size_t write_offset = 0u;
         
         std::string result;
         
+        const char* sign = nullptr;
         if (value < 0) {
-            value = -value;
-            result.push_back('-');
+            read_offset = 1u; // Do not read negative sign in resulting buffer
+            
+            if (formatting.sign != Formatting::Sign::None) {
+                sign = "-";
+                ++capacity;
+            }
         }
         else {
-            if (formatting.has_specifier("sign")) {
-                std::string_view sign = formatting.get_specifier("sign");
-                if (sign == "aligned") {
-                    result.push_back(' ');
+            switch (formatting.sign) {
+                case Formatting::Sign::Aligned:
+                    sign = " ";
+                    ++capacity;
+                    break;
+                case Formatting::Sign::Both:
+                    sign = "+";
+                    ++capacity;
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        char buffer[sizeof(unsigned long long) * 8 + 1];
+        char* start = buffer;
+        char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
+        
+        const auto& [ptr, error_code] = std::to_chars(start, end, value, base);
+        if (error_code == std::errc::value_too_large) {
+            return "too large";
+        }
+        
+        std::size_t num_characters_written = ptr - (start + read_offset);
+        capacity += num_characters_written;
+        
+        char fill_character = ' ';
+        if (formatting.fill) {
+            fill_character = formatting.fill;
+        }
+        
+        if (base == 10) {
+            std::size_t group_size = 3u;
+            if (formatting.separator) {
+                capacity += num_characters_written / group_size - bool(num_characters_written % group_size == 0);
+            }
+            
+            // Simplified case for decimal representations, since this does not support many of the formatting specifiers.
+            if (capacity < formatting.width) {
+                switch (formatting.justification) {
+                    case Formatting::Justification::Right:
+                        write_offset = formatting.width - capacity;
+                        break;
+                    case Formatting::Justification::Center:
+                        write_offset = (formatting.width - capacity) / 2;
+                        break;
+                    default:
+                        break;
                 }
-                else if (sign == "both") {
-                    result.push_back('+');
+                
+                capacity = formatting.width;
+            }
+            
+            result.resize(capacity, fill_character);
+            
+            if (sign) {
+                result[write_offset++] = sign[0];
+            }
+            
+            if (formatting.separator) {
+                std::size_t current = group_size - (num_characters_written % group_size);
+                for (std::size_t i = 0u; i < num_characters_written; ++i, ++current) {
+                    if (i && (current % group_size) == 0u) {
+                        result[write_offset++] = formatting.separator;
+                    }
+                    
+                    result[write_offset++] = *(buffer + read_offset + i);
+                }
+            }
+            else {
+                for (start = buffer + read_offset; start != ptr; ++start) {
+                    result[write_offset++] = *start;
                 }
             }
         }
-
+        else {
+            std::size_t num_padding_characters = 0u;
+            if (formatting.group_size) {
+                // The final group may not be the same size as the ones that come before it
+                std::size_t remainder = (num_characters_written % formatting.group_size);
+                if (remainder) {
+                    num_padding_characters += formatting.group_size - (num_characters_written % formatting.group_size);
+                }
+                
+                std::size_t precision = round_up_to_multiple(formatting.precision, formatting.group_size);
+                
+                // Add an arbitrary number of formatting.padding characters to reach the value of formatting.precision
+                if (num_characters_written + num_padding_characters < precision) {
+                    num_padding_characters += precision - (num_characters_written + num_padding_characters);
+                }
+                
+                // The formatting.separator character is inserted before every group and must be accounted for
+                // All except the first group
+                capacity += (num_characters_written + num_padding_characters) / formatting.group_size - 1;
+            }
+            else {
+                if (num_characters_written < formatting.precision) {
+                    num_padding_characters = formatting.precision - num_characters_written;
+                }
+            }
+            
+            capacity += num_padding_characters;
+            
+            if (formatting.use_base_prefix) {
+                // +2 characters for base prefix '0b'
+                capacity += 2;
+                
+                if (formatting.group_size) {
+                    // +1 character for a formatting.separator between the groups and the base prefix
+                    capacity += 1;
+                }
+            }
+            
+            if (capacity < formatting.width) {
+                switch (formatting.justification) {
+                    case Formatting::Justification::Right:
+                        write_offset = formatting.width - capacity;
+                        break;
+                    case Formatting::Justification::Center:
+                        write_offset = (formatting.width - capacity) / 2;
+                        break;
+                    default:
+                        break;
+                }
+                
+                capacity = formatting.width;
+            }
+            
+            result.resize(capacity, fill_character);
+            
+            char padding_character = '.';
+            if (formatting.padding) {
+                padding_character = formatting.padding;
+            }
+            
+            char separator_character = ' ';
+            if (formatting.separator) {
+                separator_character = formatting.separator;
+            }
+            
+            if (sign) {
+                result[write_offset++] = sign[0];
+            }
+            
+            if (formatting.use_base_prefix) {
+                result[write_offset++] = '0';
+                result[write_offset++] = 'b';
+                
+                if (formatting.group_size) {
+                    result[write_offset++] = separator_character;
+                }
+            }
+            
+            if (formatting.group_size) {
+                std::size_t current = 0u;
+                
+                for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
+                    if (current && current % formatting.group_size == 0u) {
+                        result[write_offset++] = separator_character;
+                    }
+                    result[write_offset++] = padding_character;
+                }
+                
+                for (start = buffer + read_offset; start != ptr; ++start, ++current) {
+                    if (current && current % formatting.group_size == 0u) {
+                        result[write_offset++] = separator_character;
+                    }
+                    
+                    result[write_offset++] = *start;
+                }
+            }
+            else {
+                for (std::size_t i = 0u; i < num_padding_characters; ++i) {
+                    result[write_offset++] = padding_character;
+                }
+                
+                for (start = buffer + read_offset; start != ptr; ++start) {
+                    result[write_offset++] = *start;
+                }
+            }
+        }
+        
+        return std::move(result);
+    }
+    
+    template <typename T>
+    std::string floating_point_to_string(T value, const Formatting& formatting) {
+        static_assert(is_floating_point_type<T>::value, "value must be of a floating point type");
+        
+        std::size_t capacity = 0u;
+        std::size_t read_offset = 0u;
+        
+        const char* sign = nullptr;
+        if (value < 0) {
+            read_offset = 1u; // Do not read negative sign in resulting buffer
+            
+            if (formatting.sign != Formatting::Sign::None) {
+                sign = "-";
+                ++capacity;
+            }
+        }
+        else {
+            switch (formatting.sign) {
+                case Formatting::Sign::Aligned:
+                    sign = " ";
+                    ++capacity;
+                    break;
+                case Formatting::Sign::Both:
+                    sign = "+";
+                    ++capacity;
+                    break;
+                default:
+                    break;
+            }
+        }
+    
         int precision = 6;
-        if (formatting.has_specifier("precision")) {
-            precision = from_string<int>(formatting.get_specifier("precision"));
+        if (formatting.precision) {
+            precision = formatting.precision;
         }
         
         std::chars_format format_flags = std::chars_format::fixed;
-        if (formatting.has_specifier("representation")) {
-            std::string_view representation = formatting.get_specifier("representation");
-            
-            if (representation == "scientific") {
-                format_flags = std::chars_format::scientific;
-            }
+        if (formatting.representation == Formatting::Representation::Scientific) {
+            format_flags = std::chars_format::scientific;
         }
-        
-        bool use_separator = false;
-        char separator = ',';
-        if (formatting.has_specifier("separator")) {
-            separator = from_string<char>(formatting.get_specifier("separator"));
-            use_separator = true;
-        }
-        else if (formatting.has_specifier("use_separator")) {
-            use_separator = true;
-        }
-        
+    
         // Buffer must be large enough to store:
         //  - the number of digits in the largest representable number (max_exponent10)
         //  - decimal point
@@ -233,165 +278,196 @@ namespace utils {
         char buffer[std::numeric_limits<T>::max_exponent10 + 1 + std::numeric_limits<T>::max_digits10];
         char* start = buffer;
         char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
-        
+    
         // std::numeric_limits<T>::digits10 represents the number of decimal places that are guaranteed to be preserved when converted to text
         // Note: last decimal place will be rounded
         int conversion_precision = std::clamp(precision, 0, std::numeric_limits<T>::digits10);
         const auto& [ptr, error_code] = std::to_chars(start, end, value, format_flags, conversion_precision);
-        
+    
         if (error_code == std::errc::value_too_large) {
-            return "";
+            return "too large";
         }
+    
+        std::size_t num_characters_written = ptr - (start + read_offset);
+        capacity += num_characters_written;
         
-        std::size_t num_written = std::distance(start, ptr);
+        // Additional precision
+        capacity += std::max(0, precision - conversion_precision);
         
-        if (use_separator) {
-            char* decimal = std::find(buffer, ptr, '.');
-            std::size_t decimal_position = std::distance(start, decimal);
+        std::size_t decimal_position = num_characters_written;
+        if (formatting.separator) {
+            char* decimal = std::find(start + read_offset, ptr, '.');
+            decimal_position = decimal - (start + read_offset);
             
             // Separators get inserted every 3 characters up until the position of the decimal point
-            std::size_t group_size = 3;
-            std::size_t counter = (group_size - (decimal_position % group_size));
-            
-            // Write the number portion, up until the decimal point (with separators)
-            for (std::size_t i = 0u; i < decimal_position; ++i, ++counter) {
-                if (i != 0u && counter % group_size == 0u) {
-                    result.push_back(separator);
-                }
-                
-                result.push_back(buffer[i]);
+            capacity += (decimal_position - 1) / 3;
+        }
+        
+        char fill_character = ' ';
+        if (formatting.fill) {
+            fill_character = formatting.fill;
+        }
+    
+        std::size_t write_offset = 0u;
+        if (capacity < formatting.width) {
+            switch (formatting.justification) {
+                case Formatting::Justification::Right:
+                    write_offset = formatting.width - capacity;
+                    break;
+                case Formatting::Justification::Center:
+                    write_offset = (formatting.width - capacity) / 2;
+                    break;
+                default:
+                    break;
             }
             
-            // Write fractional portion
-            for (std::size_t i = decimal_position; i < num_written; ++i) {
-                result.push_back(buffer[i]);
+            capacity = formatting.width;
+        }
+        
+        std::string result;
+        result.resize(capacity, fill_character);
+        
+        if (sign) {
+            result[write_offset++] = sign[0];
+        }
+        
+        if (formatting.representation == Formatting::Representation::Scientific) {
+            char* e = std::find(buffer, ptr, 'e');
+            std::size_t e_position = e - (start + read_offset);
+            
+            for (std::size_t i = 0u; i < e_position; ++i) {
+                result[write_offset++] = *(buffer + read_offset + i);
+            }
+            
+            // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
+            for (std::size_t i = conversion_precision; i < precision; ++i) {
+                result[write_offset++] = '0';
+            }
+            
+            for (start = buffer + read_offset + e_position; start != ptr; ++start) {
+                result[write_offset++] = *start;
             }
         }
         else {
-            result.append(buffer, num_written);
+            // Separation only makes sense for fixed floating point values
+            char separator_character = ' ';
+            if (formatting.separator) {
+                separator_character = formatting.separator;
+                
+                // Separators get inserted every 3 characters up until the position of the decimal point
+                std::size_t group_size = 3;
+                std::size_t counter = group_size - (decimal_position % group_size);
+        
+                // Write the number portion, up until the decimal point (with separators)
+                for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
+                    if (i && counter % group_size == 0u) {
+                        result[write_offset++] = separator_character;
+                    }
+        
+                    result[write_offset++] = *(buffer + read_offset + i);
+                }
+                
+                // Write decimal portion
+                for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
+                    result[write_offset++] = *start;
+                }
+            }
+            
+            // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
+            for (std::size_t i = conversion_precision; i < precision; ++i) {
+                result[write_offset++] = '0';
+            }
+        }
+    
+        return std::move(result);
+    }
+    
+    template <typename T>
+    inline std::string integer_to_string(T value, const Formatting& formatting) {
+        int base;
+        switch (formatting.representation) {
+            case Formatting::Representation::Fixed:
+            case Formatting::Representation::Scientific:
+            case Formatting::Representation::Decimal:
+                base = 10;
+                break;
+            case Formatting::Representation::Binary:
+                base = 2;
+                break;
+            case Formatting::Representation::Hexadecimal:
+                base = 16;
+                break;
         }
         
-        // Fake higher precision values by appending the remaining decimal places as 0
-        for (std::size_t i = conversion_precision; i < precision; ++i) {
-            result.push_back('0');
-        }
-        
-        return justify(result, formatting);
+        return integer_to_base(value, base, formatting);
     }
     
-    std::string to_string(char value, const Formatting& formatting) {
-        return justify(std::string(1, value), formatting);
-    }
-    
-    std::string to_string(short value, const Formatting& formatting) {
+    std::string to_string(unsigned char value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(int value, const Formatting& formatting) {
+    std::string to_string(short value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(long value, const Formatting& formatting) {
+    std::string to_string(unsigned short value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(long long value, const Formatting& formatting) {
+    std::string to_string(int value, Formatting formatting) {
+        return integer_to_string(value, formatting);
+    }
+    std::string to_string(unsigned value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(unsigned char value, const Formatting& formatting) {
+    std::string to_string(long value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(unsigned short value, const Formatting& formatting) {
+    std::string to_string(unsigned long value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(unsigned value, const Formatting& formatting) {
+    std::string to_string(long long value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(unsigned long long value, const Formatting& formatting) {
+    std::string to_string(unsigned long long value, Formatting formatting) {
         return integer_to_string(value, formatting);
     }
     
-    std::string to_string(float value, const Formatting& formatting) {
+    std::string to_string(float value, Formatting formatting) {
         return floating_point_to_string(value, formatting);
     }
     
-    std::string to_string(double value, const Formatting& formatting) {
+    std::string to_string(double value, Formatting formatting) {
         return floating_point_to_string(value, formatting);
     }
     
-    std::string to_string(long double value, const Formatting& formatting) {
+    std::string to_string(long double value, Formatting formatting) {
         return floating_point_to_string(value, formatting);
     }
     
     std::string to_string(const char* value, const Formatting& formatting) {
-        return justify(std::string(value), formatting);
     }
     
     std::string to_string(std::string_view value, const Formatting& formatting) {
-        return justify(std::string(value), formatting);
     }
     
     std::string to_string(const std::string& value, const Formatting& formatting) {
-        return justify(std::string(value), formatting);
     }
     
     std::string to_string(std::nullptr_t, const Formatting& formatting) {
-        return justify("nullptr", formatting);
     }
     
     std::string to_string(const std::source_location& value, const Formatting& formatting) {
-        return to_string(value.file_name(), formatting) + ":" + to_string(value.line(), formatting);
+//        const std::string& filepath = value.file_name();
+//        const std::string& filename = std::filesystem::path(filepath).filename().string();
+//
+//        return to_string(filename, formatting) + ":" + to_string(value.line(), formatting);
     }
     
-//    template <typename T>
-//    auto deconstruct(const T& value) {
-//        const std::string& filepath = value.file_name();
-//
-//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
-//        return tup;
-//
-////        return std::tuple<
-////            NamedArgument<std::string> {  },
-////            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
-////            NamedArgument<unsigned> { "line", value.line() },
-////            NamedArgument<std::string> { "function", value.function_name() }
-////        );
-//    }
-    
-//    template <>
-//    auto deconstruct(const std::source_location& value) {
-//        const std::string& filepath = value.file_name();
-//
-//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
-//        return tup;
-//
-////        return std::tuple<
-////            NamedArgument<std::string> {  },
-////            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
-////            NamedArgument<unsigned> { "line", value.line() },
-////            NamedArgument<std::string> { "function", value.function_name() }
-////        );
-//    }
-
-//    template <>
-//    auto deconstruct(const std::source_location& value) {
-//        const std::string& filepath = value.file_name();
-//
-//        auto tup = std::make_tuple(NamedArgument<std::string>("filepath", filepath));
-//        return tup;
-//
-//        return std::tuple<
-//            NamedArgument<std::string> {  },
-//            NamedArgument<std::string> { "filename", std::filesystem::path(filepath).filename().string() },
-//            NamedArgument<unsigned> { "line", value.line() },
-//            NamedArgument<std::string> { "function", value.function_name() }
-//        );
-//    }
-
     template <typename T>
     T fundamental_from_string(std::string_view in) {
         // Leading whitespace is not ignored
@@ -408,25 +484,24 @@ namespace utils {
         
         // Leading base prefixes are not recognized
         int base = 10;
+        bool has_base = false;
         
         if (str.length() > 1) {
             if (str[0] == '0') {
                 if (str[1] == 'x' || str[1] == 'X') {
                     // Hexadecimal
                     base = 16;
+                    has_base = true;
                 }
                 else if (str[1] == 'b' || str[1] == 'B') {
                     // Binary
                     base = 2;
-                }
-                else if (str[1] == 'o' || str[1] == 'O') {
-                    // Octal
-                    base = 8;
+                    has_base = true;
                 }
             }
         }
 
-        if (base != 10) {
+        if (has_base) {
             str = str.substr(2);
         }
         
@@ -466,64 +541,4 @@ namespace utils {
         return value;
     }
 
-    template <>
-    [[nodiscard]] char from_string(std::string_view str) {
-        if (str.empty()) {
-            throw FormattedError("");
-        }
-        
-        if (str.length() > 1) {
-        }
-
-        return str[0];
-    }
-    
-    template <> unsigned char from_string(std::string_view str) {
-        return fundamental_from_string<unsigned char>(str);
-    }
-    
-    template <> short from_string(std::string_view str) {
-        return fundamental_from_string<short>(str);
-    }
-    
-    template <> unsigned short from_string(std::string_view str) {
-        return fundamental_from_string<unsigned short>(str);
-    }
-    
-    template <> int from_string(std::string_view str) {
-        return fundamental_from_string<int>(str);
-    }
-    
-    template <> unsigned from_string(std::string_view str) {
-        return fundamental_from_string<unsigned>(str);
-    }
-    
-    template <> long from_string(std::string_view str) {
-        return fundamental_from_string<long>(str);
-    }
-    
-    template <> unsigned long from_string(std::string_view str) {
-        return fundamental_from_string<unsigned long>(str);
-    }
-    
-    template <> long long from_string(std::string_view str) {
-        return fundamental_from_string<long long>(str);
-    }
-    
-    template <> unsigned long long from_string(std::string_view str) {
-        return fundamental_from_string<unsigned long long>(str);
-    }
-    
-    template <> float from_string(std::string_view str) {
-        return fundamental_from_string<float>(str);
-    }
-    
-    template <> double from_string(std::string_view str) {
-        return fundamental_from_string<double>(str);
-    }
-    
-    template <> long double from_string(std::string_view str) {
-        return fundamental_from_string<long double>(str);
-    }
-    
 }

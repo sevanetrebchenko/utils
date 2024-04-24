@@ -191,6 +191,11 @@ namespace utils {
     template <typename T>
     NamedArgument<T>::~NamedArgument() = default;
     
+    template <typename ...Ts>
+    std::string format(const FormatString& fmt, const Ts&... args) {
+        return fmt.format(args...);
+    }
+    
 }
 
 #endif // UTILS_FORMAT_TPP
