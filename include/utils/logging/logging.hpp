@@ -1,8 +1,8 @@
 
 #pragma once
 
-#ifndef UTILS_LOGGING_HPP
-#define UTILS_LOGGING_HPP
+#ifndef LOGGING_HPP
+#define LOGGING_HPP
 
 namespace utils {
     
@@ -31,7 +31,8 @@ namespace utils {
     }
 }
 
+#endif // LOGGING_HPP
+
 // Template definitions.
 #include "utils/detail/logging.tpp"
 
-#endif // UTILS_LOGGING_HPP

@@ -1,8 +1,7 @@
 
-#ifndef UTILS_ASSERT_TPP
-#define UTILS_ASSERT_TPP
+#pragma once
 
-#include "utils/string.hpp"
+#include "utils/format.hpp"
 
 namespace utils {
     namespace internal {
@@ -19,5 +18,3 @@ namespace utils {
     }
     
 }
-
-#endif // UTILS_ASSERT_TPP

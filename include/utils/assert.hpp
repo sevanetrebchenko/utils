@@ -1,6 +1,5 @@
 
-#ifndef UTILS_ASSERT_HPP
-#define UTILS_ASSERT_HPP
+#pragma once
 
 #include <string> // std::string
 #include <source_location> // std::source_location
@@ -25,5 +24,3 @@ namespace utils {
 
 // Template definitions.
 #include "utils/detail/assert.tpp"
-
-#endif // UTILS_ASSERT_HPP

@@ -5,12 +5,13 @@
 #include "utils/logging/level.hpp"
 #include "utils/logging/log.hpp"
 #include "utils/datetime/duration.hpp"
-#include "utils/string.hpp"
+#include "utils/format.hpp"
 
 #include <memory> // std::shared_ptr
 #include <string> // std::string
 #include <fstream> // std::ofstream
 #include <functional> // std::function
+#include <typeindex> // std::type_index
 
 namespace utils {
     namespace logging {

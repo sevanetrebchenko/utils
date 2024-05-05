@@ -203,6 +203,11 @@ namespace utils {
         static constexpr bool value = std::is_same<Type, float>::value || std::is_same<Type, double>::value || std::is_same<Type, long double>::value;
     };
     
+    template <typename T>
+    struct is_string_type {
+        using Type = std::decay<T>::type;
+        static constexpr bool value = std::is_same<Type, char*>::value || std::is_same<Type, std::string_view>::value || std::is_same<Type, std::string>::value;
+    };
 }
 
 

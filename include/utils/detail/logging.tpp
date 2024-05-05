@@ -1,9 +1,8 @@
 
-#ifndef UTILS_LOGGING_TPP
-#define UTILS_LOGGING_TPP
+#pragma once
 
 #include "utils/logging/level.hpp"
-#include "utils/exceptions.hpp"
+#include "utils/format.hpp"
 
 #include <source_location> // std::source_location
 
@@ -40,5 +39,3 @@ namespace utils::logging {
         detail::log(MessageLevel::Fatal, fmt.format(args...), fmt.source());
     }
 }
-
-#endif // UTILS_LOGGING_TPP

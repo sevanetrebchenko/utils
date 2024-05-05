@@ -15,7 +15,7 @@ namespace utils {
     };
     
     template <typename C>
-    concept is_const_iterable = requires(const C container) {
+    concept Container = requires(const C container) {
         // Check container iterator
         requires std::is_pointer_v<decltype(std::begin(container).operator->())>;
         // 1. must have valid begin / end function definitions

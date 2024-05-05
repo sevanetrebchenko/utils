@@ -31,25 +31,6 @@
 
 namespace utils {
     
-    template <typename C>
-    [[nodiscard]] bool any(const C& iterable) requires is_const_iterable<C> {
-        bool result = false;
-        for (const auto& value : iterable) {
-            result |= value;
-        }
-        return result;
-    }
-    
-    template <typename C, typename Fn>
-    [[nodiscard]] bool any(const C& iterable, Fn predicate) requires is_const_iterable<C> && returns_type<Fn, bool> {
-        bool result = false;
-        for (const auto& value : iterable) {
-            result |= predicate(value);
-        }
-        return result;
-    }
-    
-    
     namespace internal {
 
 //        template <typename T>
@@ -638,8 +619,8 @@ namespace utils {
     }
 
 
-    template <typename C>
-    [[nodiscard]] std::string join(const C& container, std::string_view glue) requires is_const_iterable<C> {
+    template <Container C>
+    [[nodiscard]] std::string join(const C& container, std::string_view glue) {
         std::stringstream builder { };
         auto iter = container.begin();
 
