@@ -6,7 +6,6 @@
 #include <vector>
 #include <chrono>
 #include "utils/logging/logging.hpp"
-#include "utils/string/conversions.hpp"
 #include "utils/logging/adapter.hpp"
 #include <source_location>
 
@@ -94,12 +93,16 @@ int main() {
 //    f["use_separator"] = "true";
 //    // f["precision"] = "30";
 //
-//    auto start = std::chrono::high_resolution_clock::now();
-//        std::string r = utils::format("this is a test format string containing a vector: {:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
-//    auto end = std::chrono::high_resolution_clock::now();
-//    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
-//
-//    std::cout << r << std::endl;
+
+    std::cout << detail::is_formattable_to<std::source_location> << std::endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
+//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
+        std::string r = utils::format("{{ {{ asdf {} hehe {}", v, std::source_location::current());
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
+
+    std::cout << r << std::endl;
     
 //
 //    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");

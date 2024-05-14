@@ -16,6 +16,8 @@ namespace utils {
     // Trim off all whitespace characters on either side of 'in'.
     [[nodiscard]] std::string_view trim(std::string_view in);
     
+    [[nodiscard]] bool casecmp(std::string_view first, std::string_view second);
+    
     // from_string for fundamental types (wrapper around std::from_chars)
     // Returns the number of characters processed, throws on invalid argument
     

@@ -2,6 +2,8 @@
 #ifndef UTILS_CONCEPTS_HPP
 #define UTILS_CONCEPTS_HPP
 
+#include "utils/constexpr.hpp"
+
 #include <string> // std::string
 #include <type_traits>
 #include <iterator>
@@ -27,6 +29,11 @@ namespace utils {
         // 4. must support comparison operators
         { std::begin(container) == std::begin(container) } -> std::same_as<bool>;
         { std::begin(container) != std::begin(container) } -> std::same_as<bool>;
+    };
+    
+    template <typename T>
+    concept String = requires(const T str) {
+        { is_string_type<T>::value };
     };
     
     template <typename Fn, typename T>

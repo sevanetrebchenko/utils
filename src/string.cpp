@@ -2,6 +2,8 @@
 #include "utils/string.hpp"
 #include "utils/format.hpp"
 
+#include <limits> // std::numeric_limits
+
 namespace utils {
     
     [[nodiscard]] std::vector<std::string> split(std::string_view in, std::string_view delimiter) {
@@ -34,6 +36,21 @@ namespace utils {
         }
         
         return in.substr(start, end + 1);
+    }
+    
+    bool casecmp(std::string_view first, std::string_view second) {
+        std::size_t length = first.length();
+        
+        if (length != second.length()) {
+            return false;
+        }
+        
+        for (std::size_t i = 0u; i < length; ++i) {
+            if (std::tolower(first[i]) != std::tolower(second[i])) {
+                return false;
+            }
+        }
+        return true;
     }
     
     template <typename T>
@@ -107,47 +124,47 @@ namespace utils {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, short& out) {
+    std::size_t from_string(std::string_view in, short& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, unsigned short& out) {
+    std::size_t from_string(std::string_view in, unsigned short& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, int& out) {
+    std::size_t from_string(std::string_view in, int& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, unsigned int& out) {
+    std::size_t from_string(std::string_view in, unsigned int& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, long& out) {
+    std::size_t from_string(std::string_view in, long& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, unsigned long& out) {
+    std::size_t from_string(std::string_view in, unsigned long& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, long long int& out) {
+    std::size_t from_string(std::string_view in, long long int& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, unsigned long long int& out) {
+    std::size_t from_string(std::string_view in, unsigned long long int& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, float& out) {
+    std::size_t from_string(std::string_view in, float& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, double& out) {
+    std::size_t from_string(std::string_view in, double& out) {
         return fundamental_from_string(in, out);
     }
     
-    std::size_t utils::from_string(std::string_view in, long double& out) {
+    std::size_t from_string(std::string_view in, long double& out) {
         return fundamental_from_string(in, out);
     }
     

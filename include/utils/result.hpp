@@ -12,28 +12,26 @@
 
 namespace utils {
     
-    // Unlike Result, a Response instance does not contain a data payload. This is suitable, for example, for when
-    // a validating function doesn't need to return any value on success but returns an error message on failure.
+    // Unlike Result, a Response instance does not contain a data payload
+    // This is suitable, for example, for when a validating function doesn't need to return any value on success but an error type on failure
     
+    template <typename E>
     class Response {
         public:
-            static Response OK();
+            static Response<E> OK();
             
             template <typename ...Ts>
-            static Response NOT_OK(const FormatString& fmt, const Ts&... args);
-            
-            ~Response();
+            static Response<E> NOT_OK(const Ts&... args);
             
             [[nodiscard]] bool ok() const;
-            [[nodiscard]] const std::string& what() const;
+            [[nodiscard]] const E& error() const;
             
-        private:
+        protected:
             Response();
-            explicit Response(std::string error);
             
-            std::string m_error;
+            std::optional<E> m_error;
     };
-    
+
     template <typename T, typename E>
     class Result {
         public:
@@ -43,41 +41,52 @@ namespace utils {
             template <typename ...Ts>
             static Result<T, E> NOT_OK(const Ts&... args);
             
-            ~Result();
-            
             [[nodiscard]] bool ok() const;
             
             [[nodiscard]] T& result();
             [[nodiscard]] const E& error() const;
-            
+        
         protected:
             Result();
             
             std::optional<T> m_result;
             std::optional<E> m_error;
-            
-        private:
-            template <typename S, typename ...Ts>
-            std::string format(const S& str, const Ts&... args) const;
-            
     };
     
-    // For returning the result of parsing a string
-    // Returns number of characters parsed on success or index of failed character on failure
+    
+    // ParseResponse/ParseResult types are specialized types for returning the result of parsing a string, following the same pattern as the Response/Result counter types
+    // Member function offset() returns the number of characters parsed on success or index of failed character on failure
+    
+    template <typename E>
+    class ParseResponse : public Response<E> {
+        public:
+            static ParseResponse<E> OK(std::size_t num_characters_parsed);
+            
+            template <typename ...Ts>
+            static ParseResponse<E> NOT_OK(std::size_t error_position, const Ts&... args);
+            
+            std::size_t offset() const;
+            
+        private:
+            ParseResponse();
+            
+            std::size_t m_offset;
+    };
+    
     template <typename T, typename E>
     class ParseResult : public Result<T, E> {
         public:
             template <typename ...Ts>
-            static ParseResult<T, E> OK(std::size_t offset, const Ts&... args);
+            static ParseResult<T, E> OK(std::size_t num_characters_parsed, const Ts&... args);
             
             template <typename ...Ts>
-            static ParseResult<T, E> NOT_OK(std::size_t offset, const Ts&... args);
+            static ParseResult<T, E> NOT_OK(std::size_t error_position, const Ts&... args);
 
             ~ParseResult();
             
             [[nodiscard]] std::size_t offset() const;
             
-        protected:
+        private:
             ParseResult();
             
             std::size_t m_offset;

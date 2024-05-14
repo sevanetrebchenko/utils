@@ -6,9 +6,12 @@
 
 #include "utils/logging/logging.hpp"
 #include "utils/constexpr.hpp"
+#include "utils/string.hpp"
+#include "utils/tuple.hpp"
 
 #include <charconv> // std::to_chars
 #include <queue> // std::priority_queue
+#include <limits> // std::numeric_limits
 
 namespace utils {
 
@@ -21,158 +24,123 @@ namespace utils {
         struct is_named_argument<NamedArgument<T>> : std::true_type { };
         
         template <typename T>
-        concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec) {
+        concept has_parse_method = requires(Formatter<T> formatter, const FormatString::Specification& spec) {
             { formatter.parse(spec) };
+        };
+        
+        template <typename T>
+        concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
+            { formatter.parse(spec) };
+            { formatter.format(value) } -> std::same_as<std::string>;
+        };
+        
+        template <typename T>
+        concept is_formattable_to = requires(Formatter<typename std::decay<T>::type> formatter, const T& value, FormattingContext& context) {
+            { formatter.reserve(value) } -> std::same_as<std::size_t>;
+            { formatter.format_to(value, context) } -> std::same_as<void>;
+        };
+        
+        template <typename T>
+        struct FormatterCache {
+            Formatter<T> formatter = { };
+            std::size_t capacity = 0u;
         };
         
     }
     
     template <typename ...Ts>
-    std::string FormatString::format(const Ts& ...args) const {
+    FormatString FormatString::format(const Ts& ...args) {
         if constexpr (sizeof...(Ts) == 0u) {
-            return m_result;
+            return { *this }; // Copy constructor
         }
         else {
-            std::string result = m_result;
+            // Providing fewer arguments than the number of placeholders is valid for both structured and unstructured format strings (placeholders missing arguments are simplified and included as-is in the resulting format string)
+            std::string result;
             
-            if (!m_identifiers.empty()) {
-                auto tuple = std::make_tuple(args...);
-        
-                if (m_identifiers[0].type == Identifier::Type::Auto) {
-                    // For unstructured format strings, there is a 1:1 correlation between a placeholder value and its insertion point.
-                    // Hence, the number of arguments provided to format(...) should be at least as many as the number of placeholders.
-                    // Note: while it is valid to provide more arguments than necessary, these arguments will be ignored.
-                    std::size_t placeholder_count = get_placeholder_count();
-                    if (placeholder_count > sizeof...(args)) {
-                        // Not enough arguments provided to format(...);
-                        throw FormattedError("expecting {} arguments, but received {}", placeholder_count, sizeof...(args));
+            if (!m_placeholders.empty()) {
+                // Contains true if argument is a named argument (NamedArgument<T>), false otherwise
+                std::vector<bool> is_named_argument { detail::is_named_argument<Ts>::value... };
+                
+                if (m_placeholders[0].identifier.type == Identifier::Type::Auto) {
+                    // Verify that argument list does not contain any NamedArgument types, as these are intended to only be used for named arguments (format string contains only auto-numbered placeholders)
+                    for (std::size_t i = 0u; i < sizeof...(Ts); ++i) {
+                        if (is_named_argument[i]) {
+                            throw FormattedError("invalid argument at position {} - named arguments are not allowed in format strings that only contain auto-numbered placeholders", i);
+                        }
                     }
                 }
                 else {
-                    // Format string should only contain positional / named placeholders.
-                    std::size_t required_positional_placeholder_count = get_positional_placeholder_count();
-                    std::size_t required_named_placeholder_count = get_named_placeholder_count();
-        
-                    if (required_positional_placeholder_count + required_named_placeholder_count > sizeof...(args)) {
-                        // Not enough arguments provided to format(...);
-                        throw FormattedError("expecting {} arguments, but received {}", required_positional_placeholder_count + required_named_placeholder_count, sizeof...(args));
-                    }
-        
-                    // All positional placeholders must come before any named placeholders.
-                    for (std::size_t i = 0u; i < required_positional_placeholder_count; ++i) {
-                        auto is_structured_type = []<typename T>(const T& value) -> std::string_view {
-                            if constexpr (detail::is_named_argument<T>::value) {
-                                return value.name;
+                    // Verify that all positional placeholder arguments come before any named placeholder arguments
+                    bool positional_arguments_parsed = false;
+                    for (std::size_t i = 0u; i < sizeof...(Ts); ++i) {
+                        if (is_named_argument[i]) {
+                            if (positional_arguments_parsed) {
+                                throw FormattedError("invalid argument at position {} - arguments for positional placeholders must come before arguments for named placeholders", i);
                             }
-                            return ""; // Empty names are not allowed.
-                        };
-                        
-//                        std::string_view name = runtime_get(tuple, i, is_structured_type);
-//                        if (!name.empty()) {
-//                            throw FormattedError("expecting value for positional placeholder {}, but received value for named placeholder '{}' - all positional placeholders values must come before any named placeholder values", i, name);
-//                        }
-                    }
-        
-                    // Check positional placeholder indices and warn on arguments not being used due to gaps in the positional placeholder values.
-                    std::vector<bool> is_placeholder_used { };
-                    is_placeholder_used.resize(required_positional_placeholder_count, false);
-                    
-                    for (const Identifier& identifier : m_identifiers) {
-                        if (identifier.type == Identifier::Type::Position) {
-                            is_placeholder_used[identifier.position] = true;
-                        }
-                    }
-                    
-                    for (std::size_t i = 0u; i < required_positional_placeholder_count; ++i) {
-                        if (!is_placeholder_used[i]) {
-                            logging::warning("positional placeholder '{}' is never referenced (value is never used)", i);
-                        }
-                    }
-                    
-                    // Verify that all named placeholders have values provided
-                    for (const Identifier& identifier : m_identifiers) {
-                        if (identifier.type == Identifier::Type::Name) {
-                            std::string_view name = identifier.name;
-                            bool found = false;
-                            
-                            for (std::size_t i = 0u; i < sizeof...(args); ++i) {
-//                                found |= runtime_get(tuple, i, [name]<typename T>(const T& value) -> bool {
-//                                    if constexpr (detail::is_named_argument<T>::value) {
-//                                        return value.name == name;
-//                                    }
-//                                    return false;
-//                                });
-                            }
-                            
-                            if (!found) {
-                                throw FormattedError("missing value for named placeholder '{}'", name);
-                            }
+                            positional_arguments_parsed = true;
                         }
                     }
                 }
                 
-                // Format all unique placeholders once to save on computation power.
-                // This is only really applicable for positional / named placeholder values, since these can be referenced multiple times
-                // in the format string, but this logic is near identical for auto-numbered placeholder values.
-                std::size_t unique_placeholder_count = get_placeholder_count();
-        
-                std::vector<std::string> formatted_placeholders;
-                formatted_placeholders.reserve(unique_placeholder_count);
-        
-                for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
-                    const Placeholder& placeholder = m_placeholders[i];
-//                    formatted_placeholders.emplace_back(runtime_get(tuple, placeholder.identifier_index, [&placeholder, this] <typename T>(const T& value) -> std::string {
-//                        // TODO: deconstructing types into named placeholders for custom type formatters (git:feature-customization branch)
-//                        using Type = std::decay<T>::type;
-//
-//                        Formatter<Type> formatter { };
-//
-//                        if constexpr (detail::is_formattable<Type>) {
-//                            formatter.parse(placeholder.spec);
-//                            return formatter.format(value);
-//                        }
-//                        else {
-//                            // TODO: better warning message
-//                            logging::warning("ignoring format specifiers for placeholder {} (originally called from {})", placeholder.identifier_index, m_source);
-//                            return formatter.format(value);
-//                        }
-//                    }));
-                }
-        
-                struct InsertionPoint {
-                    std::size_t placeholder_index; // Index of the placeholder to insert.
-                    std::size_t position; // Position at which the placeholder should be inserted.
-                };
-        
-                // Comparator to create a min heap based on the insertion point position.
-                static auto comparator = [](const InsertionPoint& a, const InsertionPoint& b) -> bool {
-                    return a.position > b.position;
-                };
-        
-                std::priority_queue<InsertionPoint, std::vector<InsertionPoint>, decltype(comparator)> insertion_points(comparator);
-                for (std::size_t i = 0u; i < unique_placeholder_count; ++i) {
-                    const Placeholder& placeholder = m_placeholders[i];
-        
-                    for (std::size_t position : placeholder.insertion_points) {
-                        insertion_points.emplace(i, position);
+                std::size_t capacity = m_result.length();
+
+                // Formatters must be default-constructible
+                std::tuple<Ts...> tuple = std::make_tuple(args...);
+                std::tuple<detail::FormatterCache<Ts>...> formatters { };
+                
+                utils::apply([&formatters, &capacity, this]<typename T, std::size_t I>(const T& value) {
+                    using Type = std::decay<T>::type;
+                    
+                    detail::FormatterCache<Type>& formatter_cache = std::get<I>(formatters);
+                    Formatter<Type>& formatter = formatter_cache.formatter;
+                    
+                    // Format all unique placeholders once to save on computation power
+                    if constexpr (detail::is_named_argument<T>::value) {
+                        // Named placeholder (NamedArgument<T>) cannot be retrieved by index and must be retrieved by name
+                        if (has_placeholder(value.name)) {
+                            const Placeholder& placeholder = get_placeholder(value.name);
+                            formatter.parse(placeholder.spec);
+                        }
+                        // Named placeholder is not referenced in the format string, computation time can be saved
+                        // else { ... }
                     }
-                }
-        
-                // Placeholder values are inserted into the string front to back. This allows an easier way of handling insertions for
-                // placeholders that are directly adjacent due to peculiarities with the std::string::insert() function inserting starting at
-                // the character right before the indicated position. By keeping track of an offset and adjusting the insertion point of
-                // subsequent placeholders accordingly, we can insert values for adjacent placeholders without any extra whitespace.
-        
-                std::size_t offset = 0u;
-        
-                while (!insertion_points.empty()) {
-                    const InsertionPoint& insertion_point = insertion_points.top();
-                    const std::string& placeholder_value = formatted_placeholders[insertion_point.placeholder_index];
-        
-                    result.insert(insertion_point.position + offset, placeholder_value);
-                    offset += placeholder_value.length();
-        
-                    insertion_points.pop();
+                    else {
+                        // Positional placeholder must be retrieved by index
+                        if (has_placeholder(I)) {
+                            const Placeholder& placeholder = get_placeholder(I);
+                            formatter.parse(placeholder.spec);
+                        }
+                    }
+                    
+                    // Formatters that support the reserve / format_to set of functions will have formatting memory pre-allocated in the output string for memory efficiency
+                    if constexpr (detail::is_formattable_to<Type>) {
+                        formatter_cache.capacity = formatter.reserve(value);
+                        capacity += formatter_cache.capacity;
+                    }
+                }, tuple);
+                
+                result.resize(capacity);
+
+                std::size_t last_insertion_position = 0u;
+
+                for (const InsertionPoint& insertion_point : m_insertion_points) {
+                    const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
+
+                    utils::apply([&formatters, &result]<typename T, std::size_t I>(const T& value) {
+                        using Type = std::decay<T>::type;
+                        
+                        detail::FormatterCache<Type>& formatter_cache = std::get<I>(formatters);
+                        Formatter<Type>& formatter = formatter_cache.formatter;
+                        
+                        if constexpr (detail::is_formattable_to<T>) {
+                            FormattingContext context { formatter_cache.capacity, &result[0] };
+                            formatter.format_to(value, context);
+                        }
+                        else {
+                            // Insert directly into string
+                            result.insert(0, formatter.format(value));
+                        }
+                    }, tuple, insertion_point.position);
                 }
             }
         
@@ -189,8 +157,8 @@ namespace utils {
     NamedArgument<T>::~NamedArgument() = default;
     
     template <typename ...Ts>
-    std::string format(const FormatString& fmt, const Ts&... args) {
-        return fmt.format(args...);
+    FormatString format(FormatString fmt, const Ts&... args) {
+        return std::move(fmt.format(args...));
     }
     
     template <typename ...Ts>
@@ -216,11 +184,39 @@ namespace utils {
     IntegerFormatter<T>::~IntegerFormatter() = default;
     
     template <typename T>
-    void parse(const FormatString::Specification& spec) {
+    void IntegerFormatter<T>::parse(const FormatString::Specification& spec) {
+        if (spec.has_specifier("representation")) {
+            std::string_view representation = spec["representation"];
+        }
+        
+        if (spec.has_specifier("sign")) {
+            std::string_view sign = spec["sign"];
+        }
+        
+        if (spec.has_specifier("justification")) {
+            std::string_view justification = spec["justification"];
+        }
+        
+        if (spec.has_specifier("width")) {
+        
+        }
+
+        if (spec.has_specifier("fill")) {
+        
+        }
+        
+        if (spec.has_specifier("padding")) {
+        
+        }
     }
     
     template <typename T>
-    std::string IntegerFormatter<T>::format(T value) {
+    std::size_t IntegerFormatter<T>::reserve(T value) const {
+        return 0;
+    }
+    
+    template <typename T>
+    std::string IntegerFormatter<T>::format(T value) const {
         int base;
         switch (m_representation) {
             case Representation::Decimal:

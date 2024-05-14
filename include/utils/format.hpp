@@ -13,13 +13,10 @@
 #include <variant> // std::variant
 #include <source_location> // std::source_location
 #include <stdexcept> // std::runtime_error
+#include <cstring> // strlen
 
 namespace utils {
 
-    // Forward declarations
-    template <typename T, typename E>
-    class ParseResult;
-    
     class FormatString {
         public:
             struct Identifier {
@@ -43,40 +40,63 @@ namespace utils {
             
             class Specification {
                 public:
+                    enum class Type : std::uint8_t {
+                        FormattingGroupList,
+                        SpecifierList
+                    };
+                    
+                    struct Specifier {
+                        Specifier(std::string name, std::string value = "");
+                        ~Specifier();
+                        
+                        bool operator==(const Specifier& other) const;
+                        bool operator!=(const Specifier& other) const;
+                        
+                        std::string name;
+                        std::string value;
+                    };
+                    
                     Specification();
                     ~Specification();
                     
                     bool operator==(const Specification& other) const;
+                    bool operator!=(const Specification& other) const;
                     
-                    void add_group(const Specification& spec);
-                    const Specification& get_group(std::size_t index) const;
+                    const Specification& operator[](std::size_t index) const;
+                    Specification& operator[](std::size_t index);
+
+                    std::string_view operator[](std::string_view key) const;
+                    std::string& operator[](std::string_view key);
+                    
+                    // Used to distinguish the type of data this Specification contains
+                    Type type() const;
+                    
                     bool has_group(std::size_t index) const;
-                    
-                    void add_specifier(std::size_t group, std::string_view key, std::string_view value);
-                    std::string_view get_specifier(std::size_t group, std::string_view key) const;
-                    bool has_specifier(std::size_t group, std::string_view key) const;
-                    
+                    bool has_specifier(std::string_view key) const;
+
+                    // Returns the number of groups or the number of specifiers
+                    std::size_t size() const;
                     bool empty() const;
                     
                 private:
-                    using SpecifierList = std::unordered_map<std::string_view, std::string_view>;
-                    
-                    SpecifierList& get_specifier_mapping(std::size_t group);
-                    const SpecifierList& get_specifier_mapping(std::size_t group) const;
-                    
-                    // A specification group can either be:
-                    //   - A mapping of key - value pairs, each representing a format specifier and value
-                    //   - A nested specification group
-                    std::vector<std::variant<SpecifierList, Specification*>> m_groups;
+                    using SpecifierList = std::vector<Specifier>;
+                    using FormattingGroupList = std::vector<Specification*>;
+
+                    // A specification can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
+                    // std::vector used instead of std::unordered_map as the number of formatting specifiers is expected to be relatively small and a vector
+                    // is more cache friendly for the types of query operations the specification is intended to be used for
+                    std::variant<SpecifierList, FormattingGroupList> m_spec;
+                    Type m_type;
             };
             
-            FormatString(std::string_view fmt, std::source_location source = std::source_location::current());
-            FormatString(const char* fmt, std::source_location source = std::source_location::current());
-            FormatString(std::string fmt, std::source_location source = std::source_location::current());
+            template <String T>
+            FormatString(T fmt, std::source_location source = std::source_location::current());
             ~FormatString();
 
             template <typename ...Ts>
-            [[nodiscard]] std::string format(const Ts&... args) const;
+            [[nodiscard]] FormatString format(const Ts&... args);
+            
+            operator std::string() const;
             
             [[nodiscard]] std::string_view format_string() const;
             [[nodiscard]] std::source_location source() const;
@@ -90,27 +110,30 @@ namespace utils {
         private:
             // A placeholder combines an Identifier and a formatting Specification
             struct Placeholder {
-                Placeholder(std::size_t identifier_index, const Specification& spec);
-                ~Placeholder();
-                
-                void add_insertion_point(std::size_t position);
-                
-                std::size_t identifier_index;
+                Identifier identifier;
                 Specification spec;
-                
-                std::vector<std::size_t> insertion_points;
             };
             
-            ParseResult<Specification, std::string_view> parse_specification(std::string_view in, bool nested = false);
+            struct InsertionPoint {
+                std::size_t placeholder_index;
+                std::size_t position;
+            };
             
             void parse();
             void register_placeholder(const Identifier& identifier, const Specification& spec, std::size_t position);
+            
+            bool has_placeholder(std::size_t position) const;
+            bool has_placeholder(std::string_view name) const;
+            
+            const Placeholder& get_placeholder(std::size_t position);
+            const Placeholder& get_placeholder(std::string_view name);
 
             std::string m_format;
             std::string m_result;
             std::source_location m_source;
-            std::vector<Identifier> m_identifiers;
+            
             std::vector<Placeholder> m_placeholders;
+            std::vector<InsertionPoint> m_insertion_points;
     };
     
     template <typename T>
@@ -123,49 +146,89 @@ namespace utils {
     };
     
     template <typename ...Ts>
-    std::string format(const FormatString& fmt, const Ts&... args);
+    FormatString format(FormatString fmt, const Ts&... args);
+    
+    
     
     struct FormattedError : public std::runtime_error {
         template <typename ...Ts>
         FormattedError(FormatString fmt, const Ts&... args);
     };
     
+    
+    
     template <typename T>
-    struct Formatter {
+    struct Formatter { };
+    
+    class FormattingContext {
+        public:
+            FormattingContext(std::size_t size, char* buffer = nullptr) {}
+            ~FormattingContext() {}
+
+            void clear() {}
+            
+            char& operator[](std::size_t index) {}
+            
+            void insert(std::size_t offset, char* src, std::size_t length = 0u) {}
+            void insert(std::size_t offset, char c, std::size_t count = 1u) {}
+        
+            FormattingContext& substring(std::size_t offset, std::size_t size) {}
+            
+        private:
+            std::size_t m_size;
+
+            bool m_has_ownership;
+            char* m_buffer;
     };
+    
     
     // Shared formatters
     
     template <typename T>
     class IntegerFormatter {
         public:
-            IntegerFormatter();
-            ~IntegerFormatter();
-            
-            void parse(const FormatString::Specification& spec);
-            std::string format(T value);
-        
-        private:
-            inline std::string to_base(T value, int base) const;
-            
-            enum class Representation : std::uint8_t {
+            enum class Representation {
                 Decimal,
                 Binary,
-                Hexadecimal
-            } m_representation;
+                Hexadecimal,
+                Bitset
+            };
             
             enum class Sign : std::uint8_t {
                 NegativeOnly,
                 Aligned,
                 Both,
                 None
-            } m_sign;
+            };
             
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            } m_justification;
+            };
+            
+            IntegerFormatter();
+            ~IntegerFormatter();
+            
+            void parse(const FormatString::Specification& spec);
+            
+            void set_representation(Representation representation);
+            void set_sign(Sign sign);
+            void set_justification(Justification justification);
+            
+            std::size_t reserve(T value) const;
+            
+            // Returns the number of characters written
+            std::size_t format_to(T value, FormattingContext& context) const {}
+            
+            std::string format(T value) const;
+        
+        private:
+            inline std::string to_base(T value, int base) const;
+            
+            Representation m_representation;
+            Sign m_sign;
+            Justification m_justification;
             
             std::uint32_t m_width;
             char m_fill;
@@ -238,19 +301,20 @@ namespace utils {
     template <>
     class Formatter<char> {
         public:
-            Formatter();
-            ~Formatter();
-            
-            void parse(const FormatString::Specification& spec);
-            std::string format(char value);
-            
-        private:
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            } m_justification;
+            };
             
+            Formatter() {}
+            ~Formatter() {}
+            
+            void parse(const FormatString::Specification& spec) {}
+            std::string format(char value) {}
+            
+        private:
+            Justification m_justification;
             std::uint32_t m_width;
             char m_fill;
     };
@@ -310,7 +374,7 @@ namespace utils {
     // String types
     
     template <>
-    struct Formatter<const char*> : StringFormatter<const char*> {
+    struct Formatter<char*> : StringFormatter<char*> {
     };
     
     template <>
@@ -326,11 +390,13 @@ namespace utils {
     template <Container T>
     class Formatter<T> {
         public:
-            void parse(const FormatString::Specification& spec);
-            std::string format(const std::vector<T>& value) const;
+            void parse(const FormatString::Specification& spec) {}
+            std::string format(const T& value) const {
+                return "vector";
+            }
         
         private:
-            Formatter<T> m_formatter;
+            // Formatter<T> m_formatter;
     };
     
     // Standard types
@@ -338,8 +404,15 @@ namespace utils {
     template <>
     class Formatter<std::source_location> {
         public:
-            void parse(const FormatString::Specification& spec);
-            std::string format(const std::source_location& value) const;
+            void parse(const FormatString::Specification& spec) {}
+            std::string format(const std::source_location& value) const {}
+            
+            std::size_t reserve(const std::source_location& value) const {
+                return std::strlen(value.file_name());
+            }
+            
+            void format_to(const std::source_location& value, FormattingContext& context) const {
+            }
             
         private:
             Formatter<std::uint64_t> m_line_formatter;
@@ -351,8 +424,8 @@ namespace utils {
     template <typename T>
     class Formatter<NamedArgument<T>> {
         public:
-            void parse(const FormatString::Specification& spec);
-            std::string format(const NamedArgument<T>& value) const;
+            void parse(const FormatString::Specification& spec) {}
+            std::string format(const NamedArgument<T>& value) const {}
             
         private:
             Formatter<T> m_formatter;

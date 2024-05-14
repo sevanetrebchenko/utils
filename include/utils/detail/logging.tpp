@@ -15,27 +15,27 @@ namespace utils::logging {
     }
     
     template <typename ...Ts>
-    void info(const FormatString& fmt, const Ts&... args) {
+    void info(FormatString fmt, const Ts&... args) {
         detail::log(MessageLevel::Info, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void debug(const FormatString& fmt, const Ts&... args) {
+    void debug(FormatString fmt, const Ts&... args) {
         detail::log(MessageLevel::Debug, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void warning(const FormatString& fmt, const Ts&... args) {
+    void warning(FormatString fmt, const Ts&... args) {
         detail::log(MessageLevel::Warning, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void error(const FormatString& fmt, const Ts&... args) {
+    void error(FormatString fmt, const Ts&... args) {
         detail::log(MessageLevel::Error, fmt.format(args...), fmt.source());
     }
     
     template <typename ...Ts>
-    void fatal(const FormatString& fmt, const Ts&... args) {
+    void fatal(FormatString fmt, const Ts&... args) {
         detail::log(MessageLevel::Fatal, fmt.format(args...), fmt.source());
     }
 }
