@@ -41,8 +41,8 @@ namespace utils {
         };
         
         template <typename T>
-        struct FormatterCache {
-            Formatter<T> formatter = { };
+        struct FormatData {
+            Formatter<T> formatter { };
             std::size_t capacity = 0u;
         };
         
@@ -55,8 +55,6 @@ namespace utils {
         }
         else {
             // Providing fewer arguments than the number of placeholders is valid for both structured and unstructured format strings (placeholders missing arguments are simplified and included as-is in the resulting format string)
-            std::string result;
-            
             if (!m_placeholders.empty()) {
                 // Contains true if argument is a named argument (NamedArgument<T>), false otherwise
                 std::vector<bool> is_named_argument { detail::is_named_argument<Ts>::value... };
@@ -82,26 +80,26 @@ namespace utils {
                     }
                 }
                 
+                // Must allocate at least enough capacity to hold the format string (without placeholders)
                 std::size_t capacity = m_result.length();
 
-                // Formatters must be default-constructible
                 std::tuple<Ts...> tuple = std::make_tuple(args...);
-                std::tuple<detail::FormatterCache<Ts>...> formatters { };
+                std::tuple<detail::FormatData<Ts>...> formatters { };
                 
                 utils::apply([&formatters, &capacity, this]<typename T, std::size_t I>(const T& value) {
                     using Type = std::decay<T>::type;
                     
-                    detail::FormatterCache<Type>& formatter_cache = std::get<I>(formatters);
-                    Formatter<Type>& formatter = formatter_cache.formatter;
+                    detail::FormatData<Type>& format_data = std::get<I>(formatters);
+                    Formatter<Type>& formatter = format_data.formatter;
                     
                     // Format all unique placeholders once to save on computation power
                     if constexpr (detail::is_named_argument<T>::value) {
-                        // Named placeholder (NamedArgument<T>) cannot be retrieved by index and must be retrieved by name
+                        // Named placeholder (NamedArgument<T>) must be retrieved by name
                         if (has_placeholder(value.name)) {
                             const Placeholder& placeholder = get_placeholder(value.name);
                             formatter.parse(placeholder.spec);
                         }
-                        // Named placeholder is not referenced in the format string, computation time can be saved
+                        // Named placeholder is not referenced in the format string, computation time can be saved by skipping formatting
                         // else { ... }
                     }
                     else {
@@ -112,39 +110,59 @@ namespace utils {
                         }
                     }
                     
-                    // Formatters that support the reserve / format_to set of functions will have formatting memory pre-allocated in the output string for memory efficiency
+                    // Formatters that support reserve / format_to will have formatting memory pre-allocated in the output string for memory efficiency
                     if constexpr (detail::is_formattable_to<Type>) {
-                        formatter_cache.capacity = formatter.reserve(value);
-                        capacity += formatter_cache.capacity;
+                        format_data.capacity = formatter.reserve(value);
+                        capacity += format_data.capacity;
                     }
                 }, tuple);
                 
+                std::string result;
                 result.resize(capacity);
-
-                std::size_t last_insertion_position = 0u;
-
-                for (const InsertionPoint& insertion_point : m_insertion_points) {
-                    const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
-
-                    utils::apply([&formatters, &result]<typename T, std::size_t I>(const T& value) {
-                        using Type = std::decay<T>::type;
+                
+                std::size_t write_position = 0u;
+                std::size_t read_position = 0u;
+                
+                if (m_placeholders[0].identifier.type == Identifier::Type::Auto) {
+                    for (std::size_t i = 0u; i < std::min(sizeof...(Ts), m_insertion_points.size()); ++i) {
+                        const InsertionPoint& insertion_point = m_insertion_points[i];
                         
-                        detail::FormatterCache<Type>& formatter_cache = std::get<I>(formatters);
-                        Formatter<Type>& formatter = formatter_cache.formatter;
+                        utils::apply([&formatters, &result, &write_position, &read_position, &insertion_point, this]<typename T, std::size_t I>(const T& value) {
+                            detail::FormatData<T>& format_data = std::get<I>(formatters);
+                            Formatter<T>& formatter = format_data.formatter;
+                            
+                            // Insert all format string contents up until this placeholder
+                            // offset, count, src, offset, count
+                            std::size_t num_characters = insertion_point.position - read_position;
+                            result.replace(write_position, num_characters, m_result, read_position, num_characters);
+                            write_position += num_characters;
+                            read_position += num_characters;
+                            
+                            if constexpr (detail::is_formattable_to<T>) {
+                                if (format_data.capacity) {
+                                    // std::string is guaranteed to be stored in contiguous memory
+                                    FormattingContext context { format_data.capacity, &result[write_position] };
+                                    formatter.format_to(value, context);
+                                    
+                                    write_position += format_data.capacity;
+                                }
+                            }
+                            else {
+                            
+                            }
+                        }, tuple, insertion_point.placeholder_index);
                         
-                        if constexpr (detail::is_formattable_to<T>) {
-                            FormattingContext context { formatter_cache.capacity, &result[0] };
-                            formatter.format_to(value, context);
-                        }
-                        else {
-                            // Insert directly into string
-                            result.insert(0, formatter.format(value));
-                        }
-                    }, tuple, insertion_point.position);
+                        
+                    }
                 }
+                else {
+                
+                }
+                
+                return std::move(result);
             }
-        
-            return std::move(result);
+
+            return "";
         }
     }
     

@@ -208,7 +208,7 @@ namespace utils {
         
         std::size_t length = fmt.length();
         std::size_t placeholder_start;
-        std::size_t placeholder_offset = 0u;
+        std::size_t offset = 0u;
         
         std::size_t i = 0u;
         std::size_t last_insert_position = 0u;
@@ -219,12 +219,14 @@ namespace utils {
                     throw FormattedError("unterminated '{' at index {}", i);
                 }
                 else if (fmt[i + 1u] == '{') {
-                    // Escaped opening brace '{' should only be added to the resulting string once
+                    // Escaped opening brace '{{'
+                    
                     ++i;
                     m_result.append(fmt.substr(last_insert_position, i - last_insert_position));
                     
                     ++i;
                     last_insert_position = i;
+                    ++offset;
                 }
                 else {
                     placeholder_start = i;
@@ -280,8 +282,8 @@ namespace utils {
                         }
                     }
                     
-                    register_placeholder(identifier, spec, placeholder_start - placeholder_offset);
-                    placeholder_offset += (i - placeholder_start) + 1;
+                    register_placeholder(identifier, spec, placeholder_start - offset);
+                    offset += (i - placeholder_start) + 1;
                     
                     // Append everything up until the start of the placeholder
                     m_result.append(fmt.substr(last_insert_position, placeholder_start - last_insert_position));
@@ -296,6 +298,7 @@ namespace utils {
                     
                     ++i;
                     last_insert_position = i;
+                    ++offset;
                 }
                 else {
                     throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped as '}}'", i);

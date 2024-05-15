@@ -26,37 +26,37 @@ namespace utils {
         // For invoking callback 'fn' on each element of the tuple
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::index_sequence<Is...>) requires (invocable_with_value<Fn, decltype(std::get<Is>(tuple))> && ...) {
-            (fn(std::get<Is>(tuple)), ...);
+            (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple)), ...);
         }
         
         // For invoking callback 'fn' on each element of the tuple, passing the index of the element as an additional parameter
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::index_sequence<Is...>) requires (invocable_with_runtime_index<Fn, decltype(std::get<Is>(tuple))> && ...) {
-            (fn.template operator()<Ts>(std::get<Is>(tuple), Is), ...);
+            (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple), Is), ...);
         }
         
         // For invoking callback 'fn' on one element of the tuple at runtime index 'index'
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::size_t index, std::index_sequence<Is...>) requires (invocable_with_value<Fn, decltype(std::get<Is>(tuple))> && ...)  {
-            ((index == Is && (fn(std::get<Is>(tuple))), true), ...);
+            ((index == Is && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple))), true), ...);
         }
         
         // For invoking callback 'fn' on one element of the tuple at runtime index 'index', passing 'index' as an additional parameter
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::size_t index, std::index_sequence<Is...>) requires (invocable_with_runtime_index<Fn, decltype(std::get<Is>(tuple))> && ...)  {
-            ((index == Is && (fn.template operator()<Ts>(std::get<Is>(tuple), Is), true)), ...);
+            ((index == Is && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple), Is), true)), ...);
         }
         
         // For invoking callback 'fn' on each element of the tuple, passing the index of the element as an additional template parameter
         template <typename Fn, typename... Ts, std::size_t ...Is>
         inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, decltype(std::get<Is>(tuple)), Is> && ...) {
-            ((fn.template operator()<Ts, Is>(std::get<Is>(tuple))), ...);
+            ((fn.template operator()<typename std::decay<Ts>::type, Is>(std::get<Is>(tuple))), ...);
         }
         
         // For invoking callback 'fn' on one element of the tuple at runtime index 'index', passing 'index' as an additional template parameter
         template <typename Fn, typename ...Ts, std::size_t ...Is>
-        inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::size_t index, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, decltype(std::get<Is>(tuple)), Is> && ...) {
-            ((index == Is && ((fn.template operator()<Ts, Is>(std::get<Is>(tuple))), true)), ...);
+        inline void apply(const Fn& fn, const std::tuple<Ts...>& tuple, std::size_t index, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, typename std::decay<decltype(std::get<Is>(tuple))>::type, Is> && ...) {
+            ((index == Is && ((fn.template operator()<typename std::decay<Ts>::type, Is>(std::get<Is>(tuple))), true)), ...);
         }
         
     }

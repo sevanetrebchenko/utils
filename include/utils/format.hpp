@@ -162,12 +162,15 @@ namespace utils {
     
     class FormattingContext {
         public:
-            FormattingContext(std::size_t size, char* buffer = nullptr) {}
+            FormattingContext(std::size_t size, char* buffer = nullptr) : m_size(size),
+                                                                          m_buffer(buffer) {}
             ~FormattingContext() {}
 
             void clear() {}
             
-            char& operator[](std::size_t index) {}
+            char& operator[](std::size_t index) {
+                return m_buffer[index];
+            }
             
             void insert(std::size_t offset, char* src, std::size_t length = 0u) {}
             void insert(std::size_t offset, char c, std::size_t count = 1u) {}
@@ -412,6 +415,10 @@ namespace utils {
             }
             
             void format_to(const std::source_location& value, FormattingContext& context) const {
+                const char* filename = value.file_name();
+                for (std::size_t i = 0u; i < strlen(filename); ++i) {
+                    context[i] = filename[i];
+                }
             }
             
         private:
