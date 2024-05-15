@@ -10,9 +10,6 @@
 
 namespace utils {
     
-    template <typename T, typename Fn, std::size_t N = 0>
-    auto runtime_get(const T& tuple, std::size_t index, const Fn& fn);
-    
     template <typename Fn, typename ...Ts>
     void apply(const Fn& fn, const std::tuple<Ts...>& tup);
     
