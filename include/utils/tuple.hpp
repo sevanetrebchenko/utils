@@ -16,6 +16,10 @@ namespace utils {
     template <typename Fn, typename ...Ts>
     void apply(const Fn& fn, const std::tuple<Ts...>& tup, std::size_t index);
     
+    // Range-based apply
+    template <typename Fn, typename ...Ts>
+    void apply_for(const Fn& fn, const std::tuple<Ts...>& tup, std::size_t start, std::size_t end = sizeof...(Ts));
+    
 }
 
 #include "utils/detail/tuple.tpp"

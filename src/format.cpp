@@ -410,46 +410,6 @@ namespace utils {
         m_insertion_points.emplace_back(placeholder_index, position);
     }
     
-    bool FormatString::has_placeholder(std::size_t position) const {
-        for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Position && placeholder.identifier.position == position) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    bool FormatString::has_placeholder(std::string_view name) const {
-        for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Name && placeholder.identifier.name == name) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    const FormatString::Placeholder& FormatString::get_placeholder(std::size_t position) {
-        for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Position && placeholder.identifier.position == position) {
-                return placeholder;
-            }
-        }
-    
-        throw FormattedError("placeholder at position {} does not exist", position);
-    }
-    
-    const FormatString::Placeholder& FormatString::get_placeholder(std::string_view name) {
-        for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Position && placeholder.identifier.name == name) {
-                return placeholder;
-            }
-        }
-    
-        throw FormattedError("placeholder with name '{}' does not exist", name);
-    }
-    
     FormatString::operator std::string() const {
         // Any placeholders that were not provided a value are replaced with a simplified version (contains no format specifiers)
         
@@ -732,8 +692,8 @@ namespace utils {
                     }
                     
                     // Both are valid pointers
-                    if (*(groups[i]) == *(other_groups[i])) {
-                        continue;
+                    if (*(groups[i]) != *(other_groups[i])) {
+                        return false;
                     }
                 }
                 

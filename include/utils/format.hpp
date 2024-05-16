@@ -34,8 +34,8 @@ namespace utils {
                 bool operator==(const Identifier& other) const;
 
                 Type type;
-                std::string_view name;
                 std::size_t position;
+                std::string_view name;
             };
             
             class Specification {
@@ -121,12 +121,6 @@ namespace utils {
             
             void parse();
             void register_placeholder(const Identifier& identifier, const Specification& spec, std::size_t position);
-            
-            bool has_placeholder(std::size_t position) const;
-            bool has_placeholder(std::string_view name) const;
-            
-            const Placeholder& get_placeholder(std::size_t position);
-            const Placeholder& get_placeholder(std::string_view name);
 
             std::string m_format;
             std::string m_result;

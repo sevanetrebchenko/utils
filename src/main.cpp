@@ -98,7 +98,7 @@ int main() {
 
     auto start = std::chrono::high_resolution_clock::now();
 //        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
-        std::string r = utils::format("{{ {{ asdf hehe {asdf} {{ {0:specifier=[value]} k", std::source_location::current());
+        std::string r = utils::format("{{ {{ asdf hehe {asdf} {{ {0:specifier=[value]} {0:specifier=[different]} k", std::source_location::current(), NamedArgument("asdf", std::source_location::current()));
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
 
