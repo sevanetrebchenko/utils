@@ -197,6 +197,13 @@ namespace utils {
         parse();
     }
     
+    FormatString::FormatString(const FormatString& fmt) : m_format(fmt.m_format),
+                                                          m_source(fmt.m_source),
+                                                          m_identifiers(fmt.m_identifiers),
+                                                          m_specifications(fmt.m_specifications),
+                                                          m_placeholders(fmt.m_placeholders) {
+    }
+    
     FormatString::~FormatString() = default;
 
     std::size_t FormatString::get_placeholder_count() const {
@@ -208,9 +215,10 @@ namespace utils {
 
         // The number of positional placeholders depends on the highest placeholder value encountered in the format string
         for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Position) {
+            const Identifier& identifier = m_identifiers[placeholder.identifier_index];
+            if (identifier.type == Identifier::Type::Position) {
                 // Positional placeholders indices start at 0
-                highest = std::max(placeholder.identifier.position + 1, highest);
+                highest = std::max(identifier.position + 1, highest);
             }
         }
 
@@ -221,7 +229,7 @@ namespace utils {
         std::size_t count = 0u;
 
         for (const Placeholder& placeholder : m_placeholders) {
-            if (placeholder.identifier.type == Identifier::Type::Name) {
+            if (m_identifiers[placeholder.identifier_index].type == Identifier::Type::Name) {
                 ++count;
             }
         }
@@ -263,7 +271,7 @@ namespace utils {
                     builder.add_section(last_insert_position, i);
                     
                     // Skip placeholder opening brace '{'
-                    placeholder_start = ++i;
+                    placeholder_start = i++;
                     
                     Identifier identifier { }; // Auto-numbered by default
                     if (std::isdigit(fmt[i])) {
@@ -276,7 +284,7 @@ namespace utils {
                         }
                         
                         std::size_t position;
-                        from_string(fmt.substr(placeholder_start, i - placeholder_start), position);
+                        from_string(fmt.substr(placeholder_start + 1u, i - (placeholder_start + 1u)), position);
                         
                         identifier = Identifier(position);
                     }
@@ -289,7 +297,7 @@ namespace utils {
                             ++i;
                         }
                         
-                        identifier = Identifier(fmt.substr(placeholder_start, i - placeholder_start));
+                        identifier = Identifier(std::string(fmt.substr(placeholder_start + 1u, i - (placeholder_start + 1u))));
                     }
 
                     if (fmt[i] != ':' && fmt[i] != '}') {
@@ -310,9 +318,10 @@ namespace utils {
                         
                         i += r.offset();
                     }
-                    
-                    // Skip placeholder closing brace '}'
-                    ++i;
+                    else {
+                        // Skip placeholder closing brace '}'
+                        ++i;
+                    }
                     
                     register_placeholder(identifier, spec, placeholder_start - offset);
                     last_insert_position = i;
@@ -342,7 +351,7 @@ namespace utils {
         }
         
         builder.add_section(last_insert_position, i);
-        m_result = std::move(builder.build(fmt));
+        m_format = std::move(builder.build(fmt));
         
         // Issue a warning if not all positional arguments are used
         std::size_t num_positional_placeholders = get_positional_placeholder_count();
@@ -350,8 +359,8 @@ namespace utils {
         std::vector<bool> positional_placeholder_usage;
         positional_placeholder_usage.resize(num_positional_placeholders, false);
         
-        for (const InsertionPoint& insertion_point : m_insertion_points) {
-            const Identifier& identifier = m_placeholders[insertion_point.placeholder_index].identifier;
+        for (const Placeholder& placeholder : m_placeholders) {
+            const Identifier& identifier = m_identifiers[placeholder.identifier_index];
             if (identifier.type == Identifier::Type::Position) {
                 positional_placeholder_usage[identifier.position] = true;
             }
@@ -366,136 +375,217 @@ namespace utils {
     void FormatString::register_placeholder(const Identifier& identifier, const Specification& spec, std::size_t position) {
         if (!m_placeholders.empty()) {
             // Verify format string homogeneity
-            // The first placeholder determines the type of format string this is
-            const Placeholder& placeholder = m_placeholders[0];
+            // The identifier of the first placeholder determines the type of format string this is
+            Identifier::Type type = m_identifiers[m_placeholders[0].identifier_index].type;
             
-            if (identifier.type == Identifier::Type::Auto) {
-                if (placeholder.identifier.type != Identifier::Type::Auto) {
-                    // Format string mixes an auto-numbered placeholder with a named / positional placeholder, which is not allowed
-                    throw FormattedError("format string placeholders must be homogeneous - auto-numbered placeholder at index {} cannot be mixed with positional/named placeholders (first encountered at index {})", position, m_insertion_points[0].position);
+            if (type == Identifier::Type::Auto) {
+                if (identifier.type == Identifier::Type::Position) {
+                    throw FormattedError("format string placeholders must be homogeneous - positional placeholder {} at index {} cannot be mixed with auto-numbered placeholders (first encountered at index {})", identifier.position, position, m_placeholders[0].position);
+                }
+                else {
+                    throw FormattedError("format string placeholders must be homogeneous - named placeholder '{}' at index {} cannot be mixed with auto-numbered placeholders (first encountered at index {})", identifier.name, position, m_placeholders[0].position);
                 }
             }
             else {
-                if (placeholder.identifier.type == Identifier::Type::Auto) {
-                    // Format string mixes a named / positional placeholder with an auto-numbered placeholder, which is not allowed
-                    if (identifier.type == Identifier::Type::Position) {
-                        throw FormattedError("format string placeholders must be homogeneous - positional placeholder {} at index {} cannot be mixed with positional/named placeholders (first encountered at index {})", identifier.position, position, m_insertion_points[0].position);
-                    }
-                    else {
-                        throw FormattedError("format string placeholders must be homogeneous - named placeholder '{}' at index {} cannot be mixed with positional/named placeholders (first encountered at index {})", identifier.name, position, m_insertion_points[0].position);
-                    }
-                }
-            }
-        }
-
-        std::size_t placeholder_index = m_placeholders.size(); // Invalid index
-        if (identifier.type != Identifier::Type::Auto) {
-            // A placeholder can be de-duplicated if both the identifier and the formatting specification match
-            // Auto-numbered placeholders are never de-duplicated and always contribute as a new placeholder
-            for (std::size_t i = 0u; i < m_placeholders.size(); ++i) {
-                if (m_placeholders[i].identifier == identifier && m_placeholders[i].spec == spec) {
-                    placeholder_index = i;
-                    break;
+                // Format string mixes a named / positional placeholder with an auto-numbered placeholder, which is not allowed
+                if (identifier.type == Identifier::Type::Auto) {
+                    // Format string mixes an auto-numbered placeholder with a named / positional placeholder, which is not allowed
+                    throw FormattedError("format string placeholders must be homogeneous - auto-numbered placeholder at index {} cannot be mixed with positional/named placeholders (first encountered at index {})", position, m_placeholders[0].position);
                 }
             }
         }
         
-        if (placeholder_index == m_placeholders.size()) {
-            m_placeholders.emplace_back(identifier, spec);
+        std::size_t num_identifiers = m_identifiers.size();
+        std::size_t identifier_index = num_identifiers;
+        
+        for (std::size_t i = 0u; i < num_identifiers; ++i) {
+            if (m_identifiers[i] == identifier) {
+                identifier_index = i;
+                break;
+            }
         }
         
-        Placeholder& placeholder = m_placeholders[placeholder_index];
-
-        // This way, insertion points are automatically sorted by insertion position
-        m_insertion_points.emplace_back(placeholder_index, position);
+        if (identifier_index == num_identifiers) {
+            m_identifiers.emplace_back(identifier);
+        }
+        
+        // Find (or register) new format specification
+        std::size_t num_format_specifications = m_specifications.size();
+        std::size_t specification_index = num_format_specifications;
+        
+        for (std::size_t i = 0u; i < num_format_specifications; ++i) {
+            if (m_specifications[i] == spec) {
+                specification_index = i;
+                break;
+            }
+        }
+        
+        if (specification_index == num_format_specifications) {
+            // Register new identifier
+            m_specifications.emplace_back(spec);
+        }
+    
+        // Placeholders are automatically sorted by their position in the format string
+        m_placeholders.emplace_back(identifier_index, specification_index, position);
     }
     
     FormatString::operator std::string() const {
-        // Any placeholders that were not provided a value are replaced with a simplified version (contains no format specifiers)
+        if (m_placeholders.empty()) {
+            return m_format;
+        }
         
-        // Calculate the length of the resulting string
-        std::size_t capacity = m_result.length();
+        std::size_t num_placeholders = m_placeholders.size();
         
-        Formatter<std::size_t> position_formatter { };
+        
+        Formatter<std::size_t> position_formatter { }; // Use default settings for formatter
         
         std::vector<std::size_t> placeholder_lengths;
-        placeholder_lengths.resize(m_insertion_points.size(), 0);
+        placeholder_lengths.resize(m_placeholders.size());
         
-        for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
-            const Placeholder& placeholder = m_placeholders[m_insertion_points[i].placeholder_index];
-            const Identifier& identifier = placeholder.identifier;
-            
-            // Each placeholder is surrounded by braces '{...}'
-            capacity += 2u;
-            
-            std::size_t length = 0u;
+        // Add capacity for placeholder braces (one opening brace + one closing brace)
+        std::size_t capacity = m_format.length();
+        
+        for (std::size_t i = 0u; i < num_placeholders; ++i) {
+            const Identifier& identifier = m_identifiers[m_placeholders[i].identifier_index];
             switch (identifier.type) {
+                case Identifier::Type::Auto:
+                    placeholder_lengths[i] = 0u;
+                    break;
                 case Identifier::Type::Position:
-                    length = position_formatter.reserve(identifier.position);
+                    placeholder_lengths[i] = position_formatter.reserve(identifier.position);
                     break;
                 case Identifier::Type::Name:
-                    length = identifier.name.length();
-                    break;
-                case Identifier::Type::Auto:
-                default:
-                    // Auto-numbered placeholders have no content (length is 0)
+                    placeholder_lengths[i] = identifier.name.length();
                     break;
             }
             
-            capacity += length;
-            placeholder_lengths[i] = length;
+            capacity += placeholder_lengths[i] + 2u; // Include placeholder braces
         }
         
-        // Allocate resulting capacity up front to prevent multiple (re)allocations while building resulting string
         std::string result;
         result.resize(capacity);
         
-        std::size_t last_insert_position = 0u;
-        std::size_t num_characters_written;
+        std::size_t last_read_position = 0u;
+        std::size_t last_write_position = 0u;
         
-        for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
-            const InsertionPoint& insertion_point = m_insertion_points[i];
+        for (std::size_t i = 0u; i < num_placeholders; ++i) {
+            const Placeholder& placeholder = m_placeholders[i];
             
-            const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
-            const Identifier& identifier = placeholder.identifier;
+            // Insert string contents up until this placeholder (from the end of the previous placeholder)
+            std::size_t num_characters = placeholder.position - last_read_position;
+            result.replace(last_write_position, num_characters, m_format, last_read_position, num_characters);
             
-            // Add everything up from the format string until the start of this placeholder
-            result.replace(last_insert_position, insertion_point.position, std::string_view(m_result));
-            num_characters_written = insertion_point.position - last_insert_position;
-            last_insert_position = insertion_point.position;
+            last_write_position += num_characters;
+            last_read_position += num_characters;
             
-            // Placeholder opening brace
-            result[last_insert_position] = '{';
-            ++num_characters_written;
-            
-            // Placeholder
+            std::size_t length = placeholder_lengths[i];
+
+            result[last_write_position++] = '{';
+            const Identifier& identifier = m_identifiers[placeholder.identifier_index];
             switch (identifier.type) {
-                case Identifier::Type::Position: {
-                    FormattingContext formatting_context { placeholder_lengths[i], &result[last_insert_position] };
-                    position_formatter.format_to(identifier.position, formatting_context);
-                    break;
-                }
-                case Identifier::Type::Name: {
-                    result.replace(last_insert_position + num_characters_written, placeholder_lengths[i], identifier.name);
-                    break;
-                }
                 case Identifier::Type::Auto:
-                default:
-                    // Auto-numbered placeholders have no content (length is 0)
+                    result.replace(placeholder.position + 1u, length, "{}");
+                    break;
+                case Identifier::Type::Position: {
+                    FormattingContext context { length, &result[placeholder.position + 1u] };
+                    position_formatter.format_to(identifier.position, context);
+                    break;
+                }
+                case Identifier::Type::Name:
+                    result.replace(placeholder.position + 1u, length, identifier.name);
                     break;
             }
-            
-            num_characters_written += placeholder_lengths[i];
-            
-            // Placeholder closing brace
-            result[last_insert_position] = '}';
-            ++num_characters_written;
-            
-            last_insert_position += num_characters_written;
+            last_write_position += length;
+            result[last_write_position++] = '}';
         }
         
-        result.replace(last_insert_position, m_result.length() - last_insert_position, std::string_view(m_result));
         return std::move(result);
+        
+//        // Any placeholders that were not provided a value are replaced with a simplified version (contains no format specifiers)
+//
+//        // Calculate the length of the resulting string
+//        std::size_t capacity = m_result.length();
+//
+//        Formatter<std::size_t> position_formatter { };
+//
+//        std::vector<std::size_t> placeholder_lengths;
+//        placeholder_lengths.resize(m_insertion_points.size(), 0);
+//
+//        for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
+//            const Placeholder& placeholder = m_placeholders[m_insertion_points[i].placeholder_index];
+//            const Identifier& identifier = placeholder.identifier;
+//
+//            // Each placeholder is surrounded by braces '{...}'
+//            capacity += 2u;
+//
+//            std::size_t length = 0u;
+//            switch (identifier.type) {
+//                case Identifier::Type::Position:
+//                    length = position_formatter.reserve(identifier.position);
+//                    break;
+//                case Identifier::Type::Name:
+//                    length = identifier.name.length();
+//                    break;
+//                case Identifier::Type::Auto:
+//                default:
+//                    // Auto-numbered placeholders have no content (length is 0)
+//                    break;
+//            }
+//
+//            capacity += length;
+//            placeholder_lengths[i] = length;
+//        }
+//
+//        // Allocate resulting capacity up front to prevent multiple (re)allocations while building resulting string
+//        std::string result;
+//        result.resize(capacity);
+//
+//        std::size_t last_insert_position = 0u;
+//        std::size_t num_characters_written;
+//
+//        for (std::size_t i = 0u; i < m_insertion_points.size(); ++i) {
+//            const InsertionPoint& insertion_point = m_insertion_points[i];
+//
+//            const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
+//            const Identifier& identifier = placeholder.identifier;
+//
+//            // Add everything up from the format string until the start of this placeholder
+//            result.replace(last_insert_position, insertion_point.position, std::string_view(m_result));
+//            num_characters_written = insertion_point.position - last_insert_position;
+//            last_insert_position = insertion_point.position;
+//
+//            // Placeholder opening brace
+//            result[last_insert_position] = '{';
+//            ++num_characters_written;
+//
+//            // Placeholder
+//            switch (identifier.type) {
+//                case Identifier::Type::Position: {
+//                    FormattingContext formatting_context { placeholder_lengths[i], &result[last_insert_position] };
+//                    position_formatter.format_to(identifier.position, formatting_context);
+//                    break;
+//                }
+//                case Identifier::Type::Name: {
+//                    result.replace(last_insert_position + num_characters_written, placeholder_lengths[i], identifier.name);
+//                    break;
+//                }
+//                case Identifier::Type::Auto:
+//                default:
+//                    // Auto-numbered placeholders have no content (length is 0)
+//                    break;
+//            }
+//
+//            num_characters_written += placeholder_lengths[i];
+//
+//            // Placeholder closing brace
+//            result[last_insert_position] = '}';
+//            ++num_characters_written;
+//
+//            last_insert_position += num_characters_written;
+//        }
+//
+//        result.replace(last_insert_position, m_result.length() - last_insert_position, std::string_view(m_result));
+//        return std::move(result);
     }
     
     std::string_view FormatString::format_string() const {
@@ -518,9 +608,9 @@ namespace utils {
                                                                  name() {
     }
     
-    FormatString::Identifier::Identifier(std::string_view name) : type(Type::Name),
-                                                                  position(std::numeric_limits<std::size_t>::max()),
-                                                                  name(name) {
+    FormatString::Identifier::Identifier(std::string name) : type(Type::Name),
+                                                             position(std::numeric_limits<std::size_t>::max()),
+                                                             name(std::move(name)) {
     }
     
     FormatString::Identifier::~Identifier() = default;
@@ -655,8 +745,7 @@ namespace utils {
             return false;
         }
         
-        const SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
-        for (const Specifier& specifier : specifiers) {
+        for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
             if (specifier.name == key) {
                 return true;
             }

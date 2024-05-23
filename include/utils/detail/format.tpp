@@ -13,6 +13,7 @@
 #include <charconv> // std::to_chars
 #include <queue> // std::priority_queue
 #include <limits> // std::numeric_limits
+#include <optional> // std::optional
 
 namespace utils {
 
@@ -25,66 +26,41 @@ namespace utils {
         struct is_named_argument<NamedArgument<T>> : std::true_type { };
         
         template <typename T>
-        concept has_parse_method = requires(Formatter<T> formatter, const FormatString::Specification& spec) {
-            { formatter.parse(spec) };
-        };
-        
-        template <typename T>
-        concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
+        concept is_formattable = requires(Formatter<typename std::decay<T>::type> formatter, const FormatString::Specification& spec, const T& value) {
             { formatter.parse(spec) };
             { formatter.format(value) } -> std::same_as<std::string>;
         };
         
         template <typename T>
-        concept is_formattable_to = requires(Formatter<typename std::decay<T>::type> formatter, const T& value, FormattingContext& context) {
+        concept is_formattable_to = requires(Formatter<typename std::decay<T>::type> formatter, const T& value, FormattingContext context) {
             { formatter.reserve(value) } -> std::same_as<std::size_t>;
-            { formatter.format_to(value, context) } -> std::same_as<void>;
+            { formatter.format_to(value, context) };
         };
         
         template <typename T>
-        struct FormatterGroup {
-            struct FormatterWrapper {
-                FormatterWrapper() : formatter(),
-                                     capacity(0u) {
-                }
-                
-                ~FormatterWrapper() = default;
-                
-                inline void parse(const FormatString::Specification& spec) {
-                    formatter.parse(spec);
-                }
-                
-                inline std::size_t reserve(const T& value) {
-                    if constexpr (detail::is_formattable_to<T>) {
-                        // Cache capacity for future reference
-                        capacity = formatter.reserve(value);
-                    }
-                    return capacity;
-                }
-                
-                inline void format_to(const T& value, FormattingContext& context) const {
-                    if constexpr (detail::is_formattable_to<T>) {
-                        formatter.format_to(value, context);
-                    }
-                }
-                
-                Formatter<T> formatter;
-                std::size_t capacity; // Cached capacity
-            };
-            
-            FormatterWrapper& add() {
-                return formatters.emplace_back();
+        struct PlaceholderFormatter : public Formatter<T> {
+            explicit PlaceholderFormatter(std::size_t spec_id) : capacity(0u),
+                                                                 start(1u),
+                                                                 end(0u),
+                                                                 specification_index(spec_id) {
             }
             
-            std::vector<FormatterWrapper> formatters;
+            bool initialized() const {
+                return start <= end;
+            }
+            
+            std::size_t capacity;
+            
+            std::size_t start;
+            std::size_t end;
+
+            std::size_t specification_index;
         };
         
-        template <typename T>
-        struct FormatData {
-            Formatter<T> formatter { };
-            std::size_t capacity = 0u;
+        struct PlaceholderIndices {
+            std::size_t argument_index;
+            std::size_t formatter_index;
         };
-        
     }
     
     template <typename ...Ts>
@@ -101,7 +77,7 @@ namespace utils {
                 // Contains true if argument is a named argument (NamedArgument<T>), false otherwise
                 std::vector<bool> is_named_argument { detail::is_named_argument<Ts>::value... };
                 
-                if (m_placeholders[0].identifier.type == Identifier::Type::Auto) {
+                if (m_identifiers[m_placeholders[0].identifier_index].type == Identifier::Type::Auto) {
                     // Verify that argument list does not contain any NamedArgument types, as these are intended to only be used for named arguments (format string contains only auto-numbered placeholders)
                     for (std::size_t i = 0u; i < argument_count; ++i) {
                         if (is_named_argument[i]) {
@@ -110,20 +86,20 @@ namespace utils {
                     }
                 }
                 else {
-                    // Extract information about arguments
+                    // Extract information about arguments for doing validation checks
                     std::vector<Identifier> argument_identifiers;
-                    argument_identifiers.resize(argument_count);
+                    argument_identifiers.reserve(argument_count);
                     
-                    utils::apply([&argument_identifiers]<typename T>(const T& value, std::size_t index) {
+                    utils::apply([&argument_identifiers] <typename T>(const T& value, std::size_t index) {
                         if constexpr (detail::is_named_argument<T>::value) {
-                            argument_identifiers[index] = Identifier(value.name);
+                            argument_identifiers.emplace_back(value.name);
                         }
                         else {
-                            argument_identifiers[index] = Identifier(index);
+                            argument_identifiers.emplace_back(index);
                         }
                     }, tuple);
                     
-                    // Arguments for positional placeholders must come before any arguments for named placeholders
+                    // Check: arguments for positional placeholders must come before any arguments for named placeholders
                     bool positional_arguments_parsed = false;
                     std::size_t positional_argument_count = 0u;
                     
@@ -135,225 +111,190 @@ namespace utils {
                             }
                         }
                         else if (positional_arguments_parsed) {
-                            // Positional argument encountered after named argument cutoff
+                            // Encountered positional argument after named argument cutoff
                             throw FormattedError("invalid argument at position {} - arguments for positional placeholders must come before arguments for named placeholders", i);
                         }
                     }
                     
-                    // Two NamedArgument<T> arguments may not reference the same named argument
+                    // Check: two NamedArgument<T> arguments should not reference the same named placeholder
                     for (std::size_t i = positional_argument_count; i < argument_count; ++i) {
                         for (std::size_t j = i + 1u; j < argument_count; ++j) {
-                            // TODO: assert named argument?
-                            // ASSERT(argument_identifiers[i].type == Identifier::Type::Name, "expecting named argument");
-                            
                             if (argument_identifiers[i].name == argument_identifiers[j].name) {
                                 throw FormattedError("invalid argument at position {} - named arguments must be unique (argument for placeholder '{}' first encountered at position {})", j, argument_identifiers[i].name, i);
                             }
                         }
                     }
                     
-                    std::size_t num_insertion_points = m_insertion_points.size();
+                    std::size_t num_placeholders = m_placeholders.size();
+                    std::size_t capacity = m_format.size();
                     
-                    std::vector<std::size_t> insertion_point_argument_indices;
-                    insertion_point_argument_indices.reserve(num_insertion_points);
+                    std::vector<detail::PlaceholderIndices> placeholder_indices;
+                    placeholder_indices.resize(num_placeholders);
                     
-                    for (std::size_t i = 0u; i < num_insertion_points; ++i) {
-                        const InsertionPoint& insertion_point = m_insertion_points[i];
+                    for (const Placeholder& placeholder : m_placeholders) {
+                        const Identifier& identifier = m_identifiers[placeholder.identifier_index];
+                        const Specification& spec = m_specifications[placeholder.specification_index];
                         
-                        const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
-                        const Identifier& identifier = placeholder.identifier;
-
-                        std::size_t argument_index = argument_count; // Invalid index
+                        std::size_t argument_index = argument_count; // Invalid index, represents an argument position or name that was not provided to format(...)
                         
                         if (identifier.type == Identifier::Type::Position) {
-                            if (insertion_point.placeholder_index < positional_argument_count) {
-                                argument_index = insertion_point.placeholder_index;
+                            // Identifier (position) indicates the argument index to use when formatting
+                            // It is possible that not all positional arguments will have values associated with them
+                            if (identifier.position < positional_argument_count) {
+                                argument_index = identifier.position;
                             }
                         }
                         else {
-                            // Index into the argument_identifiers array corresponds to the index of the argument passed to format(...)
+                            // Named arguments can be passed in an order that is different that how they are referenced in the format string, so it is first necessary to determine which placeholder is being referenced
                             for (std::size_t j = positional_argument_count; j < argument_count; ++j) {
-                                if (argument_identifiers[i].name == identifier.name) {
+                                if (argument_identifiers[j].name == identifier.name) {
                                     argument_index = j;
                                     break;
                                 }
                             }
                         }
                         
-                        // The user is not required to provide values for all positional placeholders
-                        insertion_point_argument_indices.emplace_back(argument_index);
+                        detail::PlaceholderIndices& indices = placeholder_indices.emplace_back();
+                        indices.argument_index = argument_index;
                     }
                     
-                    // Seed formatters
-                    std::size_t capacity = m_result.size();
-                    std::tuple<detail::FormatterGroup<Ts>...> formatters { };
                     
-                    utils::apply([&formatters, &capacity, this]<typename T, std::size_t I>(const T& value) {
-                        detail::FormatterGroup<T>& formatter_group = std::get<I>(formatters);
-    
-                        // Format all unique placeholders once to save on computation power
+                    // A placeholder can be referenced multiple times in the same format string with different format specifications
+                    // Key into 'formatters' tuple is the argument index as provided to format(...)
+                    // Key into FormatterGroup is the index of the Formatter to use (described below)
+                    std::tuple<std::vector<detail::PlaceholderFormatter<Ts>>...> formatters { };
+                    
+                    // "this is a format string example: {0:representation=[binary]}, {0:[representation=[hexadecimal]}, {0:representation=[binary]}"
+                    // The above format string requires two unique Formatters for positional placeholder 0
+                    // The 'placeholder_formatter_indices' vector keeps track of the index into the FormatterGroup to use for the argument referenced by the placeholder
+                    
+                    // Initialize formatters
+                    for (std::size_t i = 0u; i < num_placeholders; ++i) {
+                        detail::PlaceholderIndices& indices = placeholder_indices[i];
                         
-                        // It is possible that several placeholders reference the same NamedArgument<T>, but have different formatting specifications
-                        // In this case, each placeholder will have a unique formatter associated with it
+                        if (indices.argument_index == argument_count) {
+                            // A value was not provided for this placeholder, no need to initialize a Formatter
+                            continue;
+                        }
                         
-                        for (const Placeholder& placeholder : m_placeholders) {
-                            const Identifier& identifier = placeholder.identifier;
+                        // Uniqueness for formatters (per placeholder) are determined by the specification index
+                        std::size_t specification_index = m_placeholders[i].specification_index;
+                        
+                        const Identifier& identifier = m_identifiers[m_placeholders[i].identifier_index];
+                        const Specification& spec = m_specifications[specification_index];
+                        
+                        utils::apply([this, &capacity, &formatters, &indices, &spec, specification_index] <typename T, std::size_t I>(const T& value) {
+                            std::vector<detail::PlaceholderFormatter<T>>& placeholder_formatters = std::get<I>(formatters);
                             
-                            if constexpr (detail::is_named_argument<T>::value) {
-                                if (identifier.type != Identifier::Type::Name) {
-                                    continue;
+                            for (std::size_t i = 0u; i < placeholder_formatters.size(); ++i) {
+                                if (specification_index == placeholder_formatters[i].specification_index) {
+                                    // Custom formatter for this format specification already exists, use it
+                                    indices.formatter_index = i;
+                                    return;
                                 }
-                                if (identifier.name != value.name) {
-                                    continue;
+                            }
+                            
+                            indices.formatter_index = placeholder_formatters.size();
+                            
+                            // Initialize new formatter
+                            detail::PlaceholderFormatter<T>& formatter = placeholder_formatters.emplace_back(specification_index);
+                            formatter.parse(spec);
+                            if constexpr (detail::is_formattable_to<T>) {
+                                formatter.capacity = formatter.reserve(value);
+                                capacity += formatter.capacity;
+                            }
+                        }, tuple, indices.argument_index);
+                    }
+                    
+                    // Increase capacity so that inserts can be done with as little additional memory allocations as possible
+                    m_format.reserve(capacity);
+                    std::size_t placeholder_offset = 0u;
+                    
+                    std::vector<bool> is_placeholder_formatted;
+                    is_placeholder_formatted.resize(num_placeholders, false);
+                    
+                    // Format placeholders
+                    for (std::size_t i = 0u; i < num_placeholders; ++i) {
+                        detail::PlaceholderIndices& indices = placeholder_indices[i];
+                        Placeholder& placeholder = m_placeholders[i];
+                        
+                        if (indices.argument_index == argument_count) {
+                            // A value was not provided for this placeholder, formatting is a no-op
+                            // Positions of placeholders that have not yet been formatted need to be adjusted so that future calls to format write placeholder values to the correct locations
+                            placeholder.position += placeholder_offset;
+                            continue;
+                        }
+                        
+                        // Insert formatted placeholder
+                        utils::apply([this, &formatters, &placeholder_offset, write_position = placeholder.position + placeholder_offset, formatter_index = indices.formatter_index] <typename T, std::size_t I>(const T& value) {
+                            std::vector<detail::PlaceholderFormatter<T>>& placeholder_formatters = std::get<I>(formatters);
+                            detail::PlaceholderFormatter<T>& formatter = placeholder_formatters[formatter_index];
+                            
+                            if constexpr (detail::is_formattable_to<T>) {
+                                std::size_t capacity = formatter.capacity;
+                                
+                                if (capacity > 0u) {
+                                    // Formatter<T>::format_to does not work properly when capacity is 0
+                                    if (formatter.initialized()) {
+                                        std::size_t num_characters = formatter.end - formatter.start;
+                                        m_format.insert(write_position, m_format.substr(formatter.start, num_characters));
+                                        placeholder_offset += num_characters;
+                                    }
+                                    else {
+                                        // format_to needs a valid memory buffer to write to
+                                        m_format.insert(write_position, capacity, '\0');
+                                        FormattingContext context { capacity, &m_format[write_position] };
+                                        formatter.format_to(value, context);
+                                        
+                                        // Cache start and end positions of resulting string so that future accesses to this formatter do not require re-formatting the value
+                                        formatter.start = write_position;
+                                        formatter.end = write_position + capacity;
+                                        
+                                        placeholder_offset += capacity;
+                                    }
+                                }
+                                else {
+                                    // Formatter<T>::reserve returned 0, which is an invalid capacity, so fall back to using Formatter<T>::format instead
+                                    logging::warning("performance implication");
+                                    
+                                    std::string result = std::move(formatter.format(value));
+                                    std::size_t length = result.length();
+                                    result.insert(write_position, result);
+                                    
+                                    formatter.start = write_position;
+                                    formatter.end = write_position + length;
+                                    
+                                    placeholder_offset += length;
                                 }
                             }
                             else {
-                                if (identifier.type != Identifier::Type::Position) {
-                                    continue;
-                                }
-                                if (identifier.position != I) {
-                                    continue;
-                                }
+                                // Formatter does not support reserve / format_to
+                                logging::warning("performance implication");
+                                
+                                std::string result = std::move(formatter.format(value));
+                                std::size_t length = result.length();
+                                result.insert(write_position, result);
+                                
+                                formatter.start = write_position;
+                                formatter.end = write_position + length;
+                                
+                                placeholder_offset += length;
                             }
-                            
-                            typename detail::FormatterGroup<T>::FormatterWrapper& formatter = formatter_group.add();
-                            formatter.parse(placeholder.spec);
-                            
-                            // Formatters that support reserve / format_to will have formatting memory pre-allocated in the output string for memory efficiency
-                            if constexpr (detail::is_formattable_to<T>) {
-                                capacity += formatter.reserve(value);
-                            }
-                        }
-                    }, tuple);
-                    
-                    // String views point into resulting string to save on memory usage
-                    std::vector<std::string_view> formatted_arguments;
-                    formatted_arguments.resize(m_placeholders.size());
-                    
-//                    utils::apply([&formatted_arguments]<typename T, std::size_t I>(const T& value) {
-//                        detail::FormatData<T>& format_data = std::get<I>(formatters);
-//                        Formatter<T>& formatter = format_data.formatter;
-//
-//                    }, tuple);
-                    
-                    // Insert into string
-                    for (std::size_t i = 0u; i < num_insertion_points; ++i) {
-                        std::size_t argument_index = insertion_point_argument_indices[i];
+                        }, tuple, indices.argument_index);
                         
-                        
-                        
+                        is_placeholder_formatted[i] = true;
                     }
+                    
+                    // Remove placeholders that have been formatted
+                    auto it = std::remove_if(m_placeholders.begin(), m_placeholders.end(), [&is_placeholder_formatted, index = 0](const Placeholder&) mutable {
+                        return is_placeholder_formatted[index++];
+                    });
+                    m_placeholders.erase(it, m_placeholders.end());
                 }
-                
-                
-//                // Must allocate at least enough capacity to hold the format string (without placeholders)
-//                std::size_t capacity = m_result.length();
-//
-//                std::tuple<Ts...> tuple = std::make_tuple(args...);
-//                std::tuple<detail::FormatData<Ts>...> formatters { };
-//
-//                utils::apply([&formatters, &capacity, this]<typename T, std::size_t I>(const T& value) {
-//                    using Type = std::decay<T>::type;
-//
-//                    detail::FormatData<Type>& format_data = std::get<I>(formatters);
-//                    Formatter<Type>& formatter = format_data.formatter;
-//
-//                    // Format all unique placeholders once to save on computation power
-//                    if constexpr (detail::is_named_argument<T>::value) {
-//                        // Named placeholder (NamedArgument<T>) must be retrieved by name
-//                        if (has_placeholder(value.name)) {
-//                            const Placeholder& placeholder = get_placeholder(value.name);
-//                            formatter.parse(placeholder.spec);
-//                        }
-//                        // Named placeholder is not referenced in the format string, computation time can be saved by skipping formatting
-//                        // else { ... }
-//                    }
-//                    else {
-//                        // Positional placeholder must be retrieved by index
-//                        if (has_placeholder(I)) {
-//                            const Placeholder& placeholder = get_placeholder(I);
-//                            formatter.parse(placeholder.spec);
-//                        }
-//                    }
-//
-//                    // Formatters that support reserve / format_to will have formatting memory pre-allocated in the output string for memory efficiency
-//                    if constexpr (detail::is_formattable_to<Type>) {
-//                        format_data.capacity = formatter.reserve(value);
-//                        capacity += format_data.capacity;
-//                    }
-//                }, tuple);
-//
-//                std::string result;
-//                result.resize(capacity);
-//
-//                std::size_t write_position = 0u;
-//                std::size_t read_position = 0u;
-//
-//                for (std::size_t i = 0u; i < std::min(sizeof...(Ts), m_insertion_points.size()); ++i) {
-//                    const InsertionPoint& insertion_point = m_insertion_points[i];
-//
-//                    const Placeholder& placeholder = m_placeholders[insertion_point.placeholder_index];
-//                    std::size_t position = insertion_point.position;
-//
-//                    // Determine the index
-//                    std::size_t argument_index = argument_count;
-//
-//                    switch (placeholder.identifier.type) {
-//                        case Identifier::Type::Auto:
-//                            argument_index = i;
-//                            break;
-//                        case Identifier::Type::Position: {
-//                            argument_index = placeholder.identifier.position;
-//                            break;
-//                        }
-//                        case Identifier::Type::Name:
-//                            // Find a NamedArgument argument that has the same name
-//                            utils::apply([&argument_index, &placeholder]<typename T>(const T& value, std::size_t index) {
-//                                if constexpr (detail::is_named_argument<T>::value) {
-//                                    if (value.name == placeholder.identifier.name) {
-//                                        argument_index = index;
-//                                    }
-//                                }
-//                            }, tuple, positional_argument_count, argument_count);
-//                            break;
-//                    }
-//
-//                    if (argument_index == sizeof...(Ts)) {
-//                        // Argument not found
-//                        continue;
-//                    }
-//
-//                    utils::apply([&formatters, &result, &write_position, &read_position, &insertion_point, this]<typename T, std::size_t I>(const T& value) {
-//                        detail::FormatData<T>& format_data = std::get<I>(formatters);
-//                        Formatter<T>& formatter = format_data.formatter;
-//
-//                        // Insert all format string contents up until this placeholder
-//                        // offset, count, src, offset, count
-//                        std::size_t num_characters = insertion_point.position - read_position;
-//                        result.replace(write_position, num_characters, m_result, read_position, num_characters);
-//                        write_position += num_characters;
-//                        read_position += num_characters;
-//
-//                        if constexpr (detail::is_formattable_to<T>) {
-//                            if (format_data.capacity) {
-//                                // std::string is guaranteed to be stored in contiguous memory
-//                                FormattingContext context { format_data.capacity, &result[write_position] };
-//                                formatter.format_to(value, context);
-//
-//                                write_position += format_data.capacity;
-//                            }
-//                        }
-//                        else {
-//
-//                        }
-//                    }, tuple, argument_index);
-//                }
-//
-//                return std::move(result);
             }
-
-            return "";
         }
+        
+        return *this;
     }
     
     template <typename T>

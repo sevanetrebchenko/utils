@@ -28,14 +28,14 @@ namespace utils {
                 
                 Identifier();
                 Identifier(std::size_t position);
-                Identifier(std::string_view name);
+                Identifier(std::string name);
                 ~Identifier();
                 
                 bool operator==(const Identifier& other) const;
 
                 Type type;
                 std::size_t position;
-                std::string_view name;
+                std::string name;
             };
             
             class Specification {
@@ -91,6 +91,7 @@ namespace utils {
             
             template <String T>
             FormatString(T fmt, std::source_location source = std::source_location::current());
+            FormatString(const FormatString& fmt);
             ~FormatString();
 
             template <typename ...Ts>
@@ -108,14 +109,9 @@ namespace utils {
             [[nodiscard]] std::size_t get_named_placeholder_count() const;
 
         private:
-            // A placeholder combines an Identifier and a formatting Specification
             struct Placeholder {
-                Identifier identifier;
-                Specification spec;
-            };
-            
-            struct InsertionPoint {
-                std::size_t placeholder_index;
+                std::size_t identifier_index;
+                std::size_t specification_index;
                 std::size_t position;
             };
             
@@ -123,11 +119,12 @@ namespace utils {
             void register_placeholder(const Identifier& identifier, const Specification& spec, std::size_t position);
 
             std::string m_format;
-            std::string m_result;
             std::source_location m_source;
             
+            std::vector<Identifier> m_identifiers;
+            std::vector<Specification> m_specifications;
+            
             std::vector<Placeholder> m_placeholders;
-            std::vector<InsertionPoint> m_insertion_points;
     };
     
     template <typename T>
@@ -171,10 +168,12 @@ namespace utils {
         
             FormattingContext& substring(std::size_t offset, std::size_t size) {}
             
+            const char* data() const;
+            
         private:
             std::size_t m_size;
 
-            bool m_has_ownership;
+            bool m_owner;
             char* m_buffer;
     };
     
@@ -426,7 +425,9 @@ namespace utils {
     class Formatter<NamedArgument<T>> {
         public:
             void parse(const FormatString::Specification& spec) {}
-            std::string format(const NamedArgument<T>& value) const {}
+            std::string format(const NamedArgument<T>& value) const {
+                return m_formatter.format(value.value);
+            }
             
         private:
             Formatter<T> m_formatter;
