@@ -113,6 +113,8 @@ namespace utils {
                 std::size_t identifier_index;
                 std::size_t specification_index;
                 std::size_t position;
+                
+                bool formatted = false;
             };
             
             void parse();
