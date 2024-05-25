@@ -82,6 +82,9 @@ namespace utils {
                     using SpecifierList = std::vector<Specifier>;
                     using FormattingGroupList = std::vector<Specification*>;
 
+                    // Conversion from specifier list to formatting group list
+                    Specification(SpecifierList&& specifiers);
+                    
                     // A specification can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
                     // std::vector used instead of std::unordered_map as the number of formatting specifiers is expected to be relatively small and a vector
                     // is more cache friendly for the types of query operations the specification is intended to be used for

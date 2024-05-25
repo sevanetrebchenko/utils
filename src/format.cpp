@@ -131,7 +131,6 @@ namespace utils {
                 
                 // Skip formatting group separator ':'
                 ++i;
-                
                 continue;
             }
             else if (in[i] == '|') {
@@ -331,14 +330,9 @@ namespace utils {
                 ++i;
             }
         }
-        
-//        builder.add_section(last_insert_position, i);
-//        m_format = std::move(builder.build(fmt));
-//
-        std::size_t positional_placeholder_count = get_positional_placeholder_count();
-        
+
         // Issue a warning if not all positional arguments are used
-        for (std::size_t position = 0u; position < positional_placeholder_count; ++position) {
+        for (std::size_t position = 0u; position < get_positional_placeholder_count(); ++position) {
             bool found = false;
             for (const Placeholder& placeholder : m_placeholders) {
                 const Identifier& identifier = m_identifiers[placeholder.identifier_index];
@@ -512,6 +506,10 @@ namespace utils {
                                                    m_type(Type::SpecifierList) {
     }
 
+    FormatString::Specification::Specification(SpecifierList&& specifiers) : m_spec(std::move(specifiers)),
+                                                                             m_type(Type::SpecifierList) {
+    }
+    
     FormatString::Specification::~Specification()= default;
     
     const FormatString::Specification& FormatString::Specification::operator[](std::size_t index) const {
@@ -528,15 +526,19 @@ namespace utils {
     }
     
     FormatString::Specification& FormatString::Specification::operator[](std::size_t index) {
+        // Try not to incur extra memory / performance overhead when the formatting specification only contains a specifier list
+        // Use a specifier list in line in place of a formatting group list there is only one active group
         if (m_type == Type::SpecifierList) {
-            // By default, formatting groups are initialized to specifier lists, which can be repurposed to be formatting groups if empty
-            const SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
-            if (!specifiers.empty()) {
-                throw FormattedError("bad format specification access - formatting group {} contains a mapping of specifier name/value pairs and cannot be accessed by index", index);
+            if (index == 0u) {
+                // Continue treating this as a specifier list and not a formatting group list
+                return *this;
             }
-    
-            m_spec = FormattingGroupList { };
-            m_type = Type::FormattingGroupList;
+            else {
+                // When an additional group is requested, convert internal structure to a formatting group list
+                // This first requires the conversion of this (specifier list) to the first formatting group
+                m_spec = FormattingGroupList { new Specification(std::move(std::get<SpecifierList>(m_spec))) };
+                m_type = Type::FormattingGroupList;
+            }
         }
         
         FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);

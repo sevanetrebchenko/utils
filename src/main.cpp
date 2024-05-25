@@ -96,8 +96,7 @@ int main() {
 //        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
     
     for (std::size_t i = 0u; i < 100000; ++i) {
-        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
-        std::cout << r << std::endl;
+        utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
     }
 //    auto end = std::chrono::high_resolution_clock::now();
 //    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
