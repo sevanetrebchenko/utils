@@ -21,7 +21,7 @@ namespace utils {
             static Response<E> OK();
             
             template <typename ...Ts>
-            static Response<E> NOT_OK(const Ts&... args);
+            static Response<E> NOT_OK(Ts&&... args);
             
             [[nodiscard]] bool ok() const;
             [[nodiscard]] const E& error() const;
@@ -36,10 +36,10 @@ namespace utils {
     class Result {
         public:
             template <typename ...Ts>
-            static Result<T, E> OK(const Ts&... args);
+            static Result<T, E> OK(Ts&&... args);
             
             template <typename ...Ts>
-            static Result<T, E> NOT_OK(const Ts&... args);
+            static Result<T, E> NOT_OK(Ts&&... args);
             
             [[nodiscard]] bool ok() const;
             
@@ -63,7 +63,7 @@ namespace utils {
             static ParseResponse<E> OK(std::size_t num_characters_parsed);
             
             template <typename ...Ts>
-            static ParseResponse<E> NOT_OK(std::size_t error_position, const Ts&... args);
+            static ParseResponse<E> NOT_OK(std::size_t error_position, Ts&&... args);
             
             std::size_t offset() const;
             
@@ -77,10 +77,10 @@ namespace utils {
     class ParseResult : public Result<T, E> {
         public:
             template <typename ...Ts>
-            static ParseResult<T, E> OK(std::size_t num_characters_parsed, const Ts&... args);
+            static ParseResult<T, E> OK(std::size_t num_characters_parsed, Ts&&... args);
             
             template <typename ...Ts>
-            static ParseResult<T, E> NOT_OK(std::size_t error_position, const Ts&... args);
+            static ParseResult<T, E> NOT_OK(std::size_t error_position, Ts&&... args);
 
             ~ParseResult();
             

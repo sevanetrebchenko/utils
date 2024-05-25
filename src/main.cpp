@@ -31,8 +31,6 @@ namespace mynamespace {
 
 int main() {
     using namespace utils;
-    
-    std::vector<int> v { 1, 2, 3, 4, 5 };
 //    int* c = nullptr;
 //
 //    if constexpr (detail::is_deconstructible<std::source_location>) {
@@ -94,16 +92,16 @@ int main() {
 //    // f["precision"] = "30";
 //
 
-    std::cout << detail::is_formattable_to<std::source_location> << std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
+//    auto start = std::chrono::high_resolution_clock::now();
 //        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
-        std::string r = utils::format("{{ {{ asdf hehe {} {{ {} {}}} k", std::source_location::current());
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
-
-    std::cout << r << std::endl;
     
+    for (std::size_t i = 0u; i < 100000; ++i) {
+        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+        std::cout << r << std::endl;
+    }
+//    auto end = std::chrono::high_resolution_clock::now();
+//    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
+
 //
 //    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");
 //    adapter->info("asdf", 4);

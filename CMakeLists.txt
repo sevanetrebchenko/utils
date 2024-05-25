@@ -16,5 +16,6 @@ add_executable("${PROJECT_NAME}"
 
     "${PROJECT_SOURCE_DIR}/src/string/conversions.cpp"
 )
+add_compile_options(/Zi /DEBUG)
 
 target_include_directories("${PROJECT_NAME}" PUBLIC "${PROJECT_SOURCE_DIR}/include")

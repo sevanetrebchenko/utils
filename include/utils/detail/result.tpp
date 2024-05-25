@@ -19,8 +19,8 @@ namespace utils {
         constexpr bool is_format_string = std::is_same<typename std::decay<T>::type, FormatString>::value;
         
         template <typename T, typename ...Ts>
-        inline FormatString format_string_helper(const T& fmt, const Ts&... args) {
-            return FormatString(fmt).format(args...);
+        inline FormatString format_string_helper(const T& fmt, Ts&&... args) {
+            return FormatString(fmt).format(std::move(args)...);
         }
         
     }
@@ -37,13 +37,13 @@ namespace utils {
     
     template <typename E>
     template <typename ...Ts>
-    Response<E> Response<E>::NOT_OK(const Ts& ...args) {
+    Response<E> Response<E>::NOT_OK(Ts&& ...args) {
         if constexpr (detail::is_format_string<E>) {
-            return detail::format_string_helper(args...);
+            return detail::format_string_helper(std::move(args)...);
         }
         else {
             Response<E> e { };
-            e.m_error = { args... };
+            e.m_error = { std::move(args)... };
             return std::move(e);
         }
     }
@@ -69,14 +69,14 @@ namespace utils {
     
     template <typename T, typename E>
     template <typename ...Ts>
-    Result<T, E> Result<T, E>::OK(const Ts&... args) {
+    Result<T, E> Result<T, E>::OK(Ts&&... args) {
         Result<T, E> r { };
         
         if constexpr (detail::is_format_string<T>) {
-            r.m_result = detail::format_string_helper(args...);
+            r.m_result = detail::format_string_helper(std::move(args)...);
         }
         else {
-            r.m_result = { args... };
+            r.m_result = { std::move(args)... };
         }
         
         return std::move(r);
@@ -84,14 +84,14 @@ namespace utils {
     
     template <typename T, typename E>
     template <typename ...Ts>
-    Result<T, E> Result<T, E>::NOT_OK(const Ts&... args) {
+    Result<T, E> Result<T, E>::NOT_OK(Ts&&... args) {
         Result<T, E> e { };
         
         if constexpr (detail::is_format_string<E>) {
-            e.m_error = detail::format_string_helper(args...);
+            e.m_error = detail::format_string_helper(std::move(args)...);
         }
         else {
-            e.m_error = { args... };
+            e.m_error = { std::move(args)... };
         }
         
         return std::move(e);
@@ -136,15 +136,15 @@ namespace utils {
     
     template <typename E>
     template <typename ...Ts>
-    ParseResponse<E> ParseResponse<E>::NOT_OK(std::size_t error_position, const Ts&... args) {
+    ParseResponse<E> ParseResponse<E>::NOT_OK(std::size_t error_position, Ts&&... args) {
         ParseResponse<E> e { };
         e.m_offset = error_position;
         
         if constexpr (detail::is_format_string<E>) {
-            e.Response<E>::m_error = detail::format_string_helper(args...);
+            e.Response<E>::m_error = detail::format_string_helper(std::move(args)...);
         }
         else {
-            e.Response<E>::m_error = { args... };
+            e.Response<E>::m_error = { std::move(args)... };
         }
         
         return std::move(e);
@@ -164,15 +164,15 @@ namespace utils {
     
     template <typename T, typename E>
     template <typename ...Ts>
-    ParseResult<T, E> ParseResult<T, E>::OK(std::size_t num_characters_parsed, const Ts& ...args) {
+    ParseResult<T, E> ParseResult<T, E>::OK(std::size_t num_characters_parsed, Ts&& ...args) {
         ParseResult<T, E> r { };
         r.m_offset = num_characters_parsed;
         
         if constexpr (detail::is_format_string<T>) {
-            r.Result<T, E>::m_result = detail::format_string_helper(args...);
+            r.Result<T, E>::m_result = detail::format_string_helper(std::move(args)...);
         }
         else {
-            r.Result<T, E>::m_result = { args... };
+            r.Result<T, E>::m_result = { std::move(args)... };
         }
         
         return std::move(r);
@@ -180,15 +180,15 @@ namespace utils {
     
     template <typename T, typename E>
     template <typename ...Ts>
-    ParseResult<T, E> ParseResult<T, E>::NOT_OK(std::size_t error_position, const Ts& ... args) {
+    ParseResult<T, E> ParseResult<T, E>::NOT_OK(std::size_t error_position, Ts&& ... args) {
         ParseResult<T, E> e { };
         e.m_offset = error_position;
         
         if constexpr (detail::is_format_string<E>) {
-            e.Result<T, E>::m_error = detail::format_string_helper(args...);
+            e.Result<T, E>::m_error = detail::format_string_helper(std::move(args)...);
         }
         else {
-            e.Result<T, E>::m_error = { args... };
+            e.Result<T, E>::m_error = { std::move(args)... };
         }
         
         return std::move(e);

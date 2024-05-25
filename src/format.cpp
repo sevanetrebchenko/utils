@@ -9,35 +9,6 @@
 
 namespace utils {
     
-    // String builder class to improve performance when building string out of sections
-    struct StringBuilder {
-        StringBuilder() : capacity(0u) { }
-        ~StringBuilder() = default;
-        
-        void add_section(std::size_t start, std::size_t end) {
-            sections.emplace_back(start, end);
-        }
-        
-        std::string build(std::string_view src) const {
-            std::string result;
-            result.reserve(capacity);
-            
-            for (const Section& section : sections) {
-                result.append(src.substr(section.start, section.end - section.start));
-            }
-            
-            return std::move(result);
-        }
-        
-        struct Section {
-            std::size_t start;
-            std::size_t end;
-        };
-        
-        std::vector<Section> sections;
-        std::size_t capacity;
-    };
-    
     template <typename T>
     constexpr std::size_t count_digits(T num) {
         return (num < 10) ? 1 : 1 + count_digits(num / 10);
@@ -60,7 +31,7 @@ namespace utils {
             return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "invalid character '{0}' at index {index} - format specifier separator must be '='", in[i]);
         }
         
-        std::string_view specifier = in.substr(0, i);
+        std::string specifier = std::string(in.substr(0, i));
         
         // Skip separator '='
         ++i;
@@ -71,13 +42,13 @@ namespace utils {
         
         // Skip specifier value opening brace '['
         std::size_t specifier_value_start = ++i;
+        std::size_t escaped_brace_count = 0u;
         
-        StringBuilder builder { };
-        std::size_t last_insert_position = specifier_value_start;
-        
+        // Determine specifier value length
         while (i < length) {
             if (in[i] == '[') {
                 if (i + 1u == length) {
+                    // Unterminated specifier value opening brace '['
                     break;
                 }
                 
@@ -85,25 +56,18 @@ namespace utils {
                     return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "unescaped '[' at index {index} - opening formatting brace literals must be escaped as '[[' inside specifier values");
                 }
                 
-                // Escaped opening brace '[['
-                
-                // Include the first brace
-                builder.add_section(last_insert_position, ++i);
-                
-                // Skip the second brace
-                last_insert_position = ++i;
+                // Escaped opening specifier value brace '[['
+                ++escaped_brace_count;
+                i += 2u;
             }
             else if (in[i] == ']') {
                 if (i + 1u < length && in[i + 1u] == ']') {
-                    // Escaped closing brace ']]'
-                    
-                    // Include the first brace
-                    builder.add_section(last_insert_position, ++i);
-                    
-                    // Skip the second brace
-                    last_insert_position = ++i;
+                    // Escaped closing specifier value brace ']]'
+                    ++escaped_brace_count;
+                    i += 2u;
                 }
                 else {
+                    // Closing specifier value brace ']'
                     break;
                 }
             }
@@ -116,12 +80,29 @@ namespace utils {
             return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(specifier_value_start, "unterminated formatting specifier value at index {index}");
         }
         
-        builder.add_section(last_insert_position, i);
+        // Build specifier value
+        std::string value;
+        std::size_t specifier_value_length = i - specifier_value_start - escaped_brace_count;
+        value.reserve(specifier_value_length);
+        
+        std::size_t last_insert_position = specifier_value_start;
+        for (std::size_t j = specifier_value_start; j < i; ++j) {
+            bool escaped_brace = (in[j] == '[' && in[j + 1u] == '[') ||
+                                 (in[j] == ']' && in[j + 1u] == ']');
+            
+            if (escaped_brace) {
+                // Insert everything up until the first escaped brace
+                value.append(in, last_insert_position, j - last_insert_position);
+                last_insert_position = ++j; // SKip second escaped brace
+            }
+        }
+        
+        value.append(in, last_insert_position, i - last_insert_position);
         
         // Skip specifier value closing brace ']'
         ++i;
         
-        return ParseResult<FormatString::Specification::Specifier, FormatString>::OK(i, std::string(specifier), builder.build(in));
+        return ParseResult<FormatString::Specification::Specifier, FormatString>::OK(i, std::move(specifier), std::move(value));
     }
     
     ParseResponse<FormatString> parse_specification(std::string_view in, FormatString::Specification& spec, bool nested = false) {
@@ -248,104 +229,99 @@ namespace utils {
             return;
         }
         
-        std::string_view fmt = m_format;
-        StringBuilder builder { };
-        std::size_t last_insert_position = 0u;
-        
-        std::size_t length = fmt.length();
+        std::size_t length = m_format.length();
         std::size_t placeholder_start;
-        std::size_t offset = 0u;
         
         std::size_t i = 0u;
         
         while (i < length) {
-            if (fmt[i] == '{') {
+            if (m_format[i] == '{') {
                 if (i + 1u == length) {
                     throw FormattedError("unterminated '{' at index {}", i);
                 }
-                else if (fmt[i + 1u] == '{') {
-                    // Escaped opening brace '{{'
-
-                    // Include the first opening brace
-                    builder.add_section(last_insert_position, ++i);
+                else if (m_format[i + 1u] == '{') {
+                    // Escaped opening brace '{{', keep only one
+                    std::memcpy(&m_format[i], &m_format[i + 1u], m_format.length() - i);
                     
-                    // Skip the second opening brace
-                    last_insert_position = ++i;
-                    ++offset;
+                    m_format.resize(length - 1u);
+                    length = m_format.length();
+                    
+                    ++i;
                 }
                 else {
-                    builder.add_section(last_insert_position, i);
-                    
                     // Skip placeholder opening brace '{'
                     placeholder_start = i++;
-                    
+
                     Identifier identifier { }; // Auto-numbered by default
-                    if (std::isdigit(fmt[i])) {
+                    if (std::isdigit(m_format[i])) {
                         // Positional placeholder
                         ++i;
-                        
+
                         // Positional placeholders must only contain numbers
-                        while (std::isdigit(fmt[i])) {
+                        while (std::isdigit(m_format[i])) {
                             ++i;
                         }
-                        
+
                         std::size_t position;
-                        from_string(fmt.substr(placeholder_start + 1u, i - (placeholder_start + 1u)), position);
-                        
+                        from_string(m_format.substr(placeholder_start + 1u, i - (placeholder_start + 1u)), position);
+
                         identifier = Identifier(position);
                     }
                     // Named placeholders follow the same identifier rules as standard C/C++ identifiers
-                    else if (std::isalpha(fmt[i]) || (fmt[i] == '_')) {
+                    else if (std::isalpha(m_format[i]) || (m_format[i] == '_')) {
                         // Named placeholder
                         ++i;
-                        
-                        while (std::isalpha(fmt[i]) || std::isdigit(fmt[i]) || (fmt[i] == '_')) {
+
+                        while (std::isalpha(m_format[i]) || std::isdigit(m_format[i]) || (m_format[i] == '_')) {
                             ++i;
                         }
-                        
-                        identifier = Identifier(std::string(fmt.substr(placeholder_start + 1u, i - (placeholder_start + 1u))));
+
+                        identifier = Identifier(std::string(m_format.substr(placeholder_start + 1u, i - (placeholder_start + 1u))));
                     }
 
-                    if (fmt[i] != ':' && fmt[i] != '}') {
-                        throw FormattedError("invalid character '{}' at index {} - expecting formatting separator ':' or placeholder terminator '}'", fmt[i], i);
+                    if (m_format[i] != ':' && m_format[i] != '}') {
+                        throw FormattedError("invalid character '{}' at index {} - expecting formatting separator ':' or placeholder terminator '}'", m_format[i], i);
                     }
-                    
+
                     Specification spec { };
-                    if (fmt[i] == ':') {
+                    if (m_format[i] == ':') {
                         // Skip format specification separator ':'
                         ++i;
-                        
-                        // Parse custom formatting
-                        ParseResponse<FormatString> r = parse_specification(fmt.substr(i), spec);
+
+                        // Parse custom formatting (consumes placeholder closing brace '}')
+                        ParseResponse<FormatString> r = parse_specification(m_format.substr(i), spec);
                         if (!r.ok()) {
                             // Throw exception with the error position relative to the start of the string
                             throw FormattedError(r.error(), NamedArgument("index", r.offset() + i));
                         }
-                        
+
                         i += r.offset();
                     }
                     else {
                         // Skip placeholder closing brace '}'
                         ++i;
                     }
+
+                    register_placeholder(identifier, spec, placeholder_start);
                     
-                    register_placeholder(identifier, spec, placeholder_start - offset);
-                    last_insert_position = i;
+                    std::memcpy(&m_format[placeholder_start], &m_format[i], length - i);
                     
-                    offset += i - placeholder_start;
+                    m_format.resize(length - (i - placeholder_start));
+                    length = m_format.length();
+                    
+                    // Reset parsing position to the start of the placeholder
+                    i = placeholder_start;
                 }
             }
-            else if (fmt[i] == '}') {
-                if ((i + 1u != length) && fmt[i + 1u] == '}') {
-                    // Escaped closing brace '}}'
-
-                    // Include the first brace
-                    builder.add_section(last_insert_position, ++i);
+            else if (m_format[i] == '}') {
+                if ((i + 1u != length) && m_format[i + 1u] == '}') {
+                    // Escaped closing brace '}}', keep only one
+                    std::memcpy(&m_format[i], &m_format[i + 1u], m_format.length() - i);
                     
-                    // Skip the second brace
-                    last_insert_position = ++i;
+                    m_format.resize(length - 1u);
+                    length = m_format.length();
                     
-                    ++offset;
+                    ++i;
                 }
                 else {
                     throw FormattedError("invalid '}' at index {} - closing brace literals must be escaped as '}}'", i);
@@ -356,23 +332,22 @@ namespace utils {
             }
         }
         
-        builder.add_section(last_insert_position, i);
-        m_format = std::move(builder.build(fmt));
+//        builder.add_section(last_insert_position, i);
+//        m_format = std::move(builder.build(fmt));
+//
+        std::size_t positional_placeholder_count = get_positional_placeholder_count();
         
         // Issue a warning if not all positional arguments are used
-        std::size_t num_positional_placeholders = get_positional_placeholder_count();
-        
-        std::vector<bool> positional_placeholder_usage;
-        positional_placeholder_usage.resize(num_positional_placeholders, false);
-        
-        for (const Placeholder& placeholder : m_placeholders) {
-            const Identifier& identifier = m_identifiers[placeholder.identifier_index];
-            if (identifier.type == Identifier::Type::Position) {
-                positional_placeholder_usage[identifier.position] = true;
+        for (std::size_t position = 0u; position < positional_placeholder_count; ++position) {
+            bool found = false;
+            for (const Placeholder& placeholder : m_placeholders) {
+                const Identifier& identifier = m_identifiers[placeholder.identifier_index];
+                if (identifier.type == Identifier::Type::Position && identifier.position == position) {
+                    found = true;
+                    break;
+                }
             }
-        }
-        for (i = 0u; i < num_positional_placeholders; ++i) {
-            if (!positional_placeholder_usage[i]) {
+            if (!found) {
                 logging::warning("value for positional placeholder {} is never referenced in the format string", i);
             }
         }
@@ -496,14 +471,6 @@ namespace utils {
         }
         
         return std::move(result);
-    }
-    
-    std::string_view FormatString::format_string() const {
-        return m_format;
-    }
-    
-    std::source_location FormatString::source() const {
-        return m_source;
     }
     
     // FormatString::Identifier implementation

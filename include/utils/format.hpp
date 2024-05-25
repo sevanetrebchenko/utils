@@ -99,8 +99,9 @@ namespace utils {
             
             operator std::string() const;
             
-            [[nodiscard]] std::string_view format_string() const;
-            [[nodiscard]] std::source_location source() const;
+            [[nodiscard]] std::source_location source() const {
+                return m_source;
+            }
             
             // Retrieves the total number of unique placeholders.
             // Placeholder uniqueness is determined by the identifier and formatting.
@@ -115,6 +116,8 @@ namespace utils {
                 std::size_t position;
                 
                 bool formatted = false;
+                std::size_t start;
+                std::size_t end;
             };
             
             void parse();
@@ -217,7 +220,9 @@ namespace utils {
             std::size_t reserve(T value) const;
             
             // Returns the number of characters written
-            std::size_t format_to(T value, FormattingContext& context) const {}
+            std::size_t format_to(T value, FormattingContext& context) const {
+                return 0;
+            }
             
             std::string format(T value) const;
         
@@ -309,7 +314,9 @@ namespace utils {
             ~Formatter() {}
             
             void parse(const FormatString::Specification& spec) {}
-            std::string format(char value) {}
+            std::string format(char value) {
+                return "";
+            }
             
         private:
             Justification m_justification;
@@ -403,7 +410,9 @@ namespace utils {
     class Formatter<std::source_location> {
         public:
             void parse(const FormatString::Specification& spec) {}
-            std::string format(const std::source_location& value) const {}
+            std::string format(const std::source_location& value) const {
+                return "";
+            }
             
             std::size_t reserve(const std::source_location& value) const {
                 return std::strlen(value.file_name());
