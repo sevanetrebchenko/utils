@@ -39,28 +39,23 @@ namespace utils {
         
         template <typename T>
         struct PlaceholderFormatter : public Formatter<T> {
-            PlaceholderFormatter() : capacity(0u),
-                                     start(1u),
-                                     end(0u),
-                                     specification_index(0u) {
+            PlaceholderFormatter() : length(0u),
+                                     specification_index(0u),
+                                     start(std::numeric_limits<std::size_t>::max()) {
             }
             
-            PlaceholderFormatter(std::size_t spec_id) : capacity(0u),
-                                                        start(1u),
-                                                        end(0u),
-                                                        specification_index(spec_id) {
+            PlaceholderFormatter(std::size_t spec_id) : length(0u),
+                                                        specification_index(spec_id),
+                                                        start(std::numeric_limits<std::size_t>::max()) {
             }
             
             bool initialized() const {
-                return start <= end;
+                return start != std::numeric_limits<std::size_t>::max();
             }
             
-            std::size_t capacity;
-            
-            std::size_t start;
-            std::size_t end;
-
+            std::size_t length;
             std::size_t specification_index;
+            std::size_t start; // start + capacity is the formatted value
         };
         
         struct PlaceholderIndices {
@@ -71,6 +66,9 @@ namespace utils {
     
     template <typename ...Ts>
     FormatString FormatString::format(const Ts&... args) {
+        // Note: arguments that are not used in the format string intentionally do not have warning messages emitted
+        // This is a feature that can be used by other systems to insert additional data to format strings without requiring the user to explicitly provide values, which are instead provided by the internals of the system in question
+        
         if constexpr (sizeof...(Ts) == 0u) {
             return { *this }; // Copy constructor
         }
@@ -102,66 +100,53 @@ namespace utils {
                             detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
                             formatter.parse(spec);
                             if constexpr (detail::is_formattable_to<T>) {
-                                formatter.capacity = formatter.reserve(value);
-                                capacity += formatter.capacity;
+                                formatter.length = formatter.reserve(value);
+                                capacity += formatter.length;
                             }
                         }, tuple, i);
                     }
                     
                     // Increase capacity so that inserts can be done with as little additional memory allocations as possible
+                    // Prefer inserts (despite needing to shift over characters) over allocating an entirely new buffer - this may need deeper profiling for optimizing runtime performance
                     m_format.reserve(capacity);
-                    std::size_t placeholder_offset = 0u;
+                    std::size_t inserted_placeholder_offset = 0u;
                     
                     // Format placeholders
                     for (std::size_t i = 0u; i < argument_count; ++i) {
                         Placeholder& placeholder = m_placeholders[i];
                         
-                        // Insert formatted placeholder
-                        utils::apply([this, &formatters, &placeholder_offset, write_position = placeholder.position + placeholder_offset] <typename T, std::size_t I>(const T& value) {
+                        // Insert formatted placeholder value
+                        utils::apply([this, &formatters, &inserted_placeholder_offset, write_position = placeholder.position + inserted_placeholder_offset] <typename T, std::size_t I>(const T& value) {
                             detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
                             
+                            std::size_t length;
                             if constexpr (detail::is_formattable_to<T>) {
-                                std::size_t capacity = formatter.capacity;
-                                
-                                if (capacity > 0u) {
-                                    // format_to needs a valid memory buffer to write to
-                                    m_format.insert(write_position, capacity, '\0');
-                                    FormattingContext context { capacity, &m_format[write_position] };
+                                length = formatter.length;
+                                if (length > 0u) {
+                                    // If a Formatter returns a valid capacity, adequate space for it will be reserved in the output string
+                                    m_format.insert(write_position, length, '\0');
+                                    FormattingContext context { length, &m_format[write_position] };
                                     formatter.format_to(value, context);
-                                    
-                                    // Cache start and end positions of resulting string so that future accesses to this formatter do not require re-formatting the value
-                                    formatter.start = write_position;
-                                    formatter.end = write_position + capacity;
-                                    
-                                    placeholder_offset += capacity;
                                 }
-                                else {
-                                    // Formatter<T>::reserve returned 0, which is an invalid capacity, so fall back to using Formatter<T>::format instead
-                                    logging::warning("performance implication");
-                                    
-                                    std::string result = std::move(formatter.format(value));
-                                    std::size_t length = result.length();
-                                    result.insert(write_position, result);
-                                    
-                                    formatter.start = write_position;
-                                    formatter.end = write_position + length;
-                                    
-                                    placeholder_offset += length;
-                                }
+                                // Skip over formatting values for which the expected capacity is 0 characters
+                                // else { ... }
                             }
-                            else {
-                                // Formatter does not support reserve / format_to
-                                logging::warning("performance implication");
+                            else if constexpr (detail::is_formattable<T>) {
+                                // The Formatter<T>::format function serves as a quick and dirty solution
+                                // For optimal performance, Formatters should provide reserve / format_to, so write a log message to remind the user :)
+                                logging::warning("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback");
                                 
                                 std::string result = std::move(formatter.format(value));
-                                std::size_t length = result.length();
-                                result.insert(write_position, result);
-                                
-                                formatter.start = write_position;
-                                formatter.end = write_position + length;
-                                
-                                placeholder_offset += length;
+                                length = result.length();
+                                m_format.insert(write_position, result);
                             }
+                            else {
+                                // Well-defined custom Formatters must provide (at least) the Formatter<T>::format function
+                                throw FormattedError("custom Formatter<T> type must provide (at least) a format(...) function");
+                            }
+                            
+                            // Auto-numbered placeholder values do not share formatter data, no point in caching the start and end of the formatted values
+                            inserted_placeholder_offset += length;
                         }, tuple, i);
                         
                         placeholder.formatted = true;
@@ -169,7 +154,7 @@ namespace utils {
                     
                     // Offset any remaining placeholders that were not formatted
                     for (std::size_t i = argument_count; i < placeholder_count; ++i) {
-                        m_placeholders[i].position += placeholder_offset;
+                        m_placeholders[i].position += inserted_placeholder_offset;
                     }
                 }
                 else {
@@ -180,12 +165,15 @@ namespace utils {
                         if constexpr (detail::is_named_argument<T>::value) {
                             if (!positional_arguments_parsed) {
                                 positional_arguments_parsed = true;
-                                positional_argument_count = index;
                             }
-                            else {
+                        }
+                        else {
+                            if (positional_arguments_parsed) {
                                 // Encountered positional argument after named argument cutoff
                                 throw FormattedError("invalid argument at position {} - arguments for positional placeholders must come before arguments for named placeholders", index);
                             }
+                            
+                            ++positional_argument_count;
                         }
                     }, tuple);
                     
@@ -202,10 +190,8 @@ namespace utils {
                                         throw FormattedError("invalid argument at position {} - named arguments must be unique (argument for placeholder '{}' first encountered at position {})", j, inner.name, i);
                                     }
                                 }
-                                
                             }, tuple, i + 1u, argument_count);
                         }
-
                     }, tuple, positional_argument_count, argument_count);
                     
                     std::size_t capacity = m_format.size();
@@ -243,7 +229,7 @@ namespace utils {
                     
                     // A placeholder can be referenced multiple times in the same format string with different format specifications
                     // Key into 'formatters' tuple is the argument index as provided to format(...)
-                    // Key into FormatterGroup is the index of the Formatter to use (described below)
+                    // Key into the Formatter vector is the index of the Formatter to use (described below)
                     std::tuple<std::vector<detail::PlaceholderFormatter<Ts>>...> formatters { };
                     
                     // "this is a format string example: {0:representation=[binary]}, {0:[representation=[hexadecimal]}, {0:representation=[binary]}"
@@ -282,15 +268,15 @@ namespace utils {
                             detail::PlaceholderFormatter<T>& formatter = placeholder_formatters.emplace_back(specification_index);
                             formatter.parse(spec);
                             if constexpr (detail::is_formattable_to<T>) {
-                                formatter.capacity = formatter.reserve(value);
-                                capacity += formatter.capacity;
+                                formatter.length = formatter.reserve(value);
+                                capacity += formatter.length;
                             }
                         }, tuple, indices.argument_index);
                     }
                     
                     // Increase capacity so that inserts can be done with as little additional memory allocations as possible
                     m_format.reserve(capacity);
-                    std::size_t placeholder_offset = 0u;
+                    std::size_t inserted_placeholder_offset = 0u;
                     
                     // Format placeholders
                     for (std::size_t i = 0u; i < placeholder_count; ++i) {
@@ -300,65 +286,58 @@ namespace utils {
                         if (indices.argument_index == argument_count) {
                             // A value was not provided for this placeholder, formatting is a no-op
                             // Positions of placeholders that have not yet been formatted need to be adjusted so that future calls to format write placeholder values to the correct locations
-                            placeholder.position += placeholder_offset;
+                            placeholder.position += inserted_placeholder_offset;
                             continue;
                         }
                         
-                        // Insert formatted placeholder
-                        utils::apply([this, &formatters, &placeholder_offset, write_position = placeholder.position + placeholder_offset, formatter_index = indices.formatter_index] <typename T, std::size_t I>(const T& value) {
+                        // Insert formatted placeholder value
+                        utils::apply([this, &formatters, &inserted_placeholder_offset, write_position = placeholder.position + inserted_placeholder_offset, formatter_index = indices.formatter_index] <typename T, std::size_t I>(const T& value) {
                             std::vector<detail::PlaceholderFormatter<T>>& placeholder_formatters = std::get<I>(formatters);
                             detail::PlaceholderFormatter<T>& formatter = placeholder_formatters[formatter_index];
                             
                             if constexpr (detail::is_formattable_to<T>) {
-                                std::size_t capacity = formatter.capacity;
-                                
-                                if (capacity > 0u) {
-                                    // Formatter<T>::format_to does not work properly when capacity is 0
+                                if (formatter.length > 0u) {
                                     if (formatter.initialized()) {
-                                        std::size_t num_characters = formatter.end - formatter.start;
-                                        m_format.insert(write_position, m_format.substr(formatter.start, num_characters));
-                                        placeholder_offset += num_characters;
+                                        // Use cached result to avoid re-formatting, which is a potentially expensive operation
+                                        m_format.insert(write_position, m_format.substr(formatter.start, formatter.length));
                                     }
                                     else {
-                                        // format_to needs a valid memory buffer to write to
-                                        m_format.insert(write_position, capacity, '\0');
-                                        FormattingContext context { capacity, &m_format[write_position] };
+                                        // Formatter<T>::format_to expects a valid buffer to write to
+                                        // Memory for this buffer is already be accounted for, so this should not result in any additional memory allocations
+                                        m_format.insert(write_position, formatter.length, '\0');
+                                        FormattingContext context { formatter.length, &m_format[write_position] };
                                         formatter.format_to(value, context);
                                         
-                                        // Cache start and end positions of resulting string so that future accesses to this formatter do not require re-formatting the value
+                                        // Cache start and end positions of resulting string for future accesses
                                         formatter.start = write_position;
-                                        formatter.end = write_position + capacity;
-                                        
-                                        placeholder_offset += capacity;
                                     }
                                 }
+                                // Skip over formatting values for which the expected capacity is 0 characters
+                                // else { ... }
+                            }
+                            else if constexpr (detail::is_formattable<T>){
+                                // The Formatter<T>::format function serves as a quick and dirty solution
+                                // For optimal performance, Formatters should provide reserve / format_to (write a log message to remind the user :) )
+                                logging::warning("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback");
+                                
+                                if (formatter.initialized()) {
+                                    // Use cached result to avoid re-formatting, which is a potentially expensive operation
+                                    m_format.insert(write_position, m_format.substr(formatter.start, formatter.length));
+                                }
                                 else {
-                                    // Formatter<T>::reserve returned 0, which is an invalid capacity, so fall back to using Formatter<T>::format instead
-                                    logging::warning("performance implication");
-                                    
                                     std::string result = std::move(formatter.format(value));
-                                    std::size_t length = result.length();
-                                    result.insert(write_position, result);
-                                    
-                                    formatter.start = write_position;
-                                    formatter.end = write_position + length;
-                                    
-                                    placeholder_offset += length;
+                                    m_format.insert(write_position, result);
+                                    formatter.length = result.length(); // Cache the length of the result in Formatter<T>::length for later reuse
                                 }
                             }
                             else {
-                                // Formatter does not support reserve / format_to
-                                logging::warning("performance implication");
-                                
-                                std::string result = std::move(formatter.format(value));
-                                std::size_t length = result.length();
-                                result.insert(write_position, result);
-                                
-                                formatter.start = write_position;
-                                formatter.end = write_position + length;
-                                
-                                placeholder_offset += length;
+                                // Well-defined custom Formatters must provide (at least) the Formatter<T>::format function
+                                throw FormattedError("custom Formatter<T> type must provide (at least) a format(...) function");
                             }
+                            
+                            // The position a cached result is read from does not matter as it will always point to the same substring
+                            formatter.start = write_position;
+                            inserted_placeholder_offset += formatter.length;
                         }, tuple, indices.argument_index);
                         
                         placeholder.formatted = true;

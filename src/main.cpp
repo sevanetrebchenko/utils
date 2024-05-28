@@ -78,34 +78,32 @@ int main() {
 //    auto list = to_placeholder_list(std::source_location::current());
     
     // std::cout << from_string<unsigned>("12344123123123123123") << std::endl;
-    
-    using namespace detail;
-    
-//    Formatting f { };
-//    f["representation"] = "fixed";
-//    f["sign"] = "aligned";
-//    f["group_size"] = "6";
-//    f["use_base_prefix"] = "true";
-//    f["width"] = "20";
-//    f["justification"] = "center";
-//    f["use_separator"] = "true";
-//    // f["precision"] = "30";
-//
 
-//    auto start = std::chrono::high_resolution_clock::now();
-//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", v, std::source_location::current());
-    
-    for (std::size_t i = 0u; i < 100000; ++i) {
-        utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+    std::size_t amount = 100000;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (std::size_t i = 0u; i < amount; ++i) {
+        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
     }
-//    auto end = std::chrono::high_resolution_clock::now();
-//    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "time to format " << amount << ": " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
 
-//
-//    std::shared_ptr<logging::Adapter> adapter = logging::get_adapter("stdout");
-//    adapter->info("asdf", 4);
-    
-//    std::string a = format("test ", arg("test", 2), b, pair, nullptr, c, tup);
+    std::vector<std::size_t> durations;
+    durations.reserve(amount);
+
+    for (std::size_t i = 0u; i < amount; ++i) {
+        start = std::chrono::high_resolution_clock::now();
+        std::string r = utils::format("test {0}", std::source_location::current(), NamedArgument("asdf", 1));
+        // std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+        end = std::chrono::high_resolution_clock::now();
+        durations.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+    }
+
+    std::size_t total = 0;
+    for (auto duration : durations) {
+        total += duration;
+    }
+    std::cout << "average time per format: " << total / amount << std::endl;
     
     return 0;
 }

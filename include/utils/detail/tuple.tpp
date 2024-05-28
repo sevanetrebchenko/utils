@@ -62,18 +62,18 @@ namespace utils {
         
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply_for(Fn&& fn, const std::tuple<Ts...>& tuple, std::size_t start, std::size_t end, std::index_sequence<Is...>) requires (invocable_with_value<Fn, typename std::decay<decltype(std::get<Is>(tuple))>::type> && ...)  {
-            (((Is >= start && Is <= end) && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple))), true), ...);
+            (((Is >= start && Is < end) && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple))), true), ...);
         }
         
         
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply_for(Fn&& fn, const std::tuple<Ts...>& tuple, std::size_t start, std::size_t end, std::index_sequence<Is...>) requires (invocable_with_runtime_index<Fn, typename std::decay<decltype(std::get<Is>(tuple))>::type> && ...)  {
-            (((Is >= start && Is <= end) && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple), Is), true)), ...);
+            (((Is >= start && Is < end) && (fn.template operator()<typename std::decay<Ts>::type>(std::get<Is>(tuple), Is), true)), ...);
         }
         
         template <typename Fn, typename ...Ts, std::size_t ...Is>
         inline void apply_for(Fn&& fn, const std::tuple<Ts...>& tuple, std::size_t start, std::size_t end, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, typename std::decay<decltype(std::get<Is>(tuple))>::type, Is> && ...) {
-            (((Is >= start && Is <= end) && ((fn.template operator()<typename std::decay<Ts>::type, Is>(std::get<Is>(tuple))), true)), ...);
+            (((Is >= start && Is < end) && ((fn.template operator()<typename std::decay<Ts>::type, Is>(std::get<Is>(tuple))), true)), ...);
         }
         
     }

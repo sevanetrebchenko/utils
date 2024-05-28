@@ -5,7 +5,6 @@
 #include "utils/logging/logging.hpp"
 
 #include <limits> // std::numeric_limits
-#include <iostream>
 
 namespace utils {
     
@@ -401,7 +400,7 @@ namespace utils {
         }
     
         // Placeholders are automatically sorted by their position in the format string
-        m_placeholders.emplace_back(identifier_index, specification_index, position);
+        m_placeholders.emplace_back(identifier_index, specification_index, position, false);
     }
     
     FormatString::operator std::string() const {
