@@ -8,9 +8,26 @@
 
 namespace utils {
     
-    template <typename T>
-    constexpr std::size_t count_digits(T num) {
-        return (num < 10) ? 1 : 1 + count_digits(num / 10);
+    namespace detail {
+        
+        int round_up_to_multiple(int value, int multiple) {
+            if (multiple == 0) {
+                return value;
+            }
+    
+            int remainder = value % multiple;
+            if (remainder == 0) {
+                return value;
+            }
+    
+            return value + multiple - remainder;
+        }
+        
+        template <typename T>
+        constexpr std::size_t count_digits(T num) {
+            return (num < 10) ? 1 : 1 + count_digits(num / 10);
+        }
+        
     }
     
     ParseResult<FormatString::Specification::Specifier, FormatString> parse_specifier(std::string_view in) {
@@ -418,7 +435,7 @@ namespace utils {
                     break;
                 case Identifier::Type::Position:
                     // Can also use Formatter<T>::reserve for this, but this is evaluated at compile time and is faster
-                    capacity += count_digits(identifier.position);
+                    capacity += detail::count_digits(identifier.position);
                     break;
                 case Identifier::Type::Name:
                     capacity += identifier.name.length();
@@ -443,7 +460,7 @@ namespace utils {
             const Identifier& identifier = m_identifiers[placeholder.identifier_index];
             switch (identifier.type) {
                 case Identifier::Type::Position: {
-                    length = count_digits(placeholder.position);
+                    length = detail::count_digits(placeholder.position);
                     FormattingContext context { length, &result[write_position] };
                     position_formatter.format_to(identifier.position, context);
                     break;
@@ -578,7 +595,7 @@ namespace utils {
         
         SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
         for (Specifier& specifier : specifiers) {
-            if (specifier.name == key) {
+            if (casecmp(specifier.name, key)) {
                 return specifier.value;
             }
         }
@@ -624,7 +641,7 @@ namespace utils {
         }
         
         for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
-            if (specifier.name == key) {
+            if (casecmp(specifier.name, key)) {
                 return true;
             }
         }

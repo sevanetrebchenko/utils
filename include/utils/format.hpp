@@ -45,6 +45,7 @@ namespace utils {
                         SpecifierList
                     };
                     
+                    // Specifiers are case-insensitive
                     struct Specifier {
                         Specifier(std::string name, std::string value = "");
                         ~Specifier();
@@ -174,6 +175,10 @@ namespace utils {
             FormattingContext& substring(std::size_t offset, std::size_t size) {}
             
             const char* data() const;
+
+            std::size_t length() const {
+                return m_size;
+            }
             
         private:
             std::size_t m_size;
@@ -188,60 +193,50 @@ namespace utils {
     template <typename T>
     class IntegerFormatter {
         public:
-            enum class Representation {
+            enum class Representation : std::uint8_t {
                 Decimal,
                 Binary,
                 Hexadecimal,
                 Bitset
-            };
+            } representation;
             
             enum class Sign : std::uint8_t {
                 NegativeOnly,
                 Aligned,
                 Both,
                 None
-            };
+            } sign;
             
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            };
+            } justification;
             
             IntegerFormatter();
             ~IntegerFormatter();
             
             void parse(const FormatString::Specification& spec);
-            
-            void set_representation(Representation representation);
-            void set_sign(Sign sign);
-            void set_justification(Justification justification);
+            std::string format(T value) const;
             
             std::size_t reserve(T value) const;
+            void format_to(T value, FormattingContext& context) const;
             
-            // Returns the number of characters written
-            std::size_t format_to(T value, FormattingContext& context) const {
-                return 0;
-            }
-            
-            std::string format(T value) const;
-        
-        private:
-            inline std::string to_base(T value, int base) const;
-            
-            Representation m_representation;
-            Sign m_sign;
-            Justification m_justification;
-            
-            std::uint32_t m_width;
-            char m_fill;
-            
-            char m_padding;
-            char m_separator;
+            std::size_t width;
+            char fill;
+            char padding;
+            char separator;
             
             // Optional specifiers for alternate representations
-            bool m_use_base_prefix;
-            std::uint8_t m_group_size;
+            bool use_base_prefix;
+            std::uint8_t group_size;
+            std::size_t precision;
+            
+        private:
+            inline int get_base() const;
+            
+            inline std::size_t to_base(T value, int base, FormattingContext* context) const;
+            inline std::size_t apply_justification(std::size_t capacity, FormattingContext& context) const;
     };
     
     template <typename T>
