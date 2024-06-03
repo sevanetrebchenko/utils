@@ -56,6 +56,18 @@ namespace utils {
                         std::string name;
                         std::string value;
                     };
+
+                    // Readonly specifier
+                    struct SpecifierView {
+                        SpecifierView();
+                        ~SpecifierView();
+                        
+                        bool operator==(const Specifier& other) const;
+                        bool operator!=(const Specifier& other) const;
+                        
+                        std::string_view name;
+                        std::string_view value;
+                    };
                     
                     Specification();
                     ~Specification();
@@ -69,11 +81,20 @@ namespace utils {
                     std::string_view operator[](std::string_view key) const;
                     std::string& operator[](std::string_view key);
                     
-                    // Used to distinguish the type of data this Specification contains
-                    Type type() const;
+                    void set_specifier(std::string_view key, std::string value);
+                    std::string_view get_specifier(std::string_view key) const;
+                    std::string& get_specifier(std::string_view key);
                     
                     bool has_group(std::size_t index) const;
-                    bool has_specifier(std::string_view key) const;
+                    
+                    template <String T, String ...Ts>
+                    SpecifierView one_of(const T& first, const Ts&... rest) const;
+                    
+                    template <String T, String ...Ts>
+                    bool has_specifier(const T& first, const Ts&... args) const;
+                    
+                    // Used to distinguish the type of data this Specification contains
+                    Type type() const;
 
                     // Returns the number of groups or the number of specifiers
                     std::size_t size() const;
@@ -198,20 +219,20 @@ namespace utils {
                 Binary,
                 Hexadecimal,
                 Bitset
-            } representation;
+            };
             
             enum class Sign : std::uint8_t {
                 NegativeOnly,
                 Aligned,
                 Both,
                 None
-            } sign;
+            };
             
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            } justification;
+            };
             
             IntegerFormatter();
             ~IntegerFormatter();
@@ -222,21 +243,56 @@ namespace utils {
             std::size_t reserve(T value) const;
             void format_to(T value, FormattingContext& context) const;
             
-            std::size_t width;
-            char fill;
-            char padding;
-            char separator;
             
-            // Optional specifiers for alternate representations
-            bool use_base_prefix;
-            std::uint8_t group_size;
-            std::size_t precision;
+            void set_representation(Representation representation);
+            Representation get_representation() const;
+            
+            void set_sign(Sign sign);
+            Sign get_sign() const;
+            
+            void set_justification(Justification justification);
+            Justification get_justification() const;
+            
+            void set_width() const;
+            std::size_t get_width() const;
+            
+            void set_fill_character(char fill);
+            char get_fill_character() const;
+            
+            void set_padding_character(char padding);
+            char get_padding_character() const;
+            
+            void set_separator_character(char padding);
+            char get_separator_character() const;
+            
+            void use_base_prefix(bool use);
+            bool use_base_prefix() const;
+            
+            void set_group_size(std::size_t group_size);
+            std::size_t get_group_size() const;
+
+            void set_precision(std::size_t precision);
+            std::size_t get_precision() const;
             
         private:
             inline int get_base() const;
             
             inline std::size_t to_base(T value, int base, FormattingContext* context) const;
             inline std::size_t apply_justification(std::size_t capacity, FormattingContext& context) const;
+            
+            Representation m_representation;
+            Sign m_sign;
+            Justification m_justification;
+            
+            std::size_t m_width;
+            char m_fill;
+            
+            // Optional specifiers for alternate representations
+            char m_separator;
+            char m_padding;
+            bool m_use_base_prefix;
+            std::uint8_t m_group_size;
+            std::size_t m_precision;
     };
     
     template <typename T>

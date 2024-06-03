@@ -4,6 +4,8 @@
 #ifndef STRING_HPP
 #define STRING_HPP
 
+#include "utils/concepts.hpp"
+
 #include <vector> // std::vector
 #include <string> // std::string
 #include <string_view> // std::string_view
@@ -16,7 +18,12 @@ namespace utils {
     // Trim off all whitespace characters on either side of 'in'.
     [[nodiscard]] std::string_view trim(std::string_view in);
     
-    [[nodiscard]] bool casecmp(std::string_view first, std::string_view second);
+    // std::strcasecmp requires null-terminated strings
+    template <String T, String U>
+    [[nodiscard]] bool casecmp(const T& first, const U& second);
+    
+    template <String T, String U>
+    [[nodiscard]] bool operator==(const T& first, const U& second);
     
     // from_string for fundamental types (wrapper around std::from_chars)
     // Returns the number of characters processed, throws on invalid argument

@@ -65,6 +65,23 @@ namespace utils {
         
         int round_up_to_multiple(int value, int multiple);
         
+        // Helper function to join multiple std::string_views into one
+        template <typename ...Ts>
+        std::string join(Ts... args) {
+            std::tuple<Ts...> tuple { args... };
+            std::string result;
+
+            
+            
+            return std::move(result);
+        }
+        
+    }
+    
+    template <String T>
+    FormatString::FormatString(T fmt, std::source_location source) : m_format(fmt),
+                                                                     m_source(source) {
+        parse();
     }
     
     template <typename ...Ts>
@@ -359,6 +376,84 @@ namespace utils {
         return *this;
     }
     
+    // Specification implementation
+    
+    template <String T, String ...Ts>
+    bool FormatString::Specification::has_specifier(const T& first, const Ts& ...args) const {
+        if (std::holds_alternative<FormattingGroupList>(m_spec)) {
+            // TODO: calling has_group on a formatting group list makes no sense, throw exception?
+            return false;
+        }
+        
+        bool has_specifier = false;
+        
+        utils::apply([this, &has_specifier](std::string_view name, std::size_t index) {
+            for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
+                if (casecmp(specifier.name, name)) {
+                    has_specifier = true;
+                }
+            }
+        }, std::make_tuple(first, args...));
+        
+        return has_specifier;
+    }
+    
+    template <String T, String ...Ts>
+    FormatString::Specification::SpecifierView FormatString::Specification::one_of(const T& first, const Ts&... args) const {
+        constexpr std::size_t argument_count = sizeof...(Ts) + 1u;
+        
+        std::tuple<T, Ts...> tuple = std::make_tuple(first, args...);
+        SpecifierView specifier_views[argument_count];
+        
+        utils::apply([this, &specifier_views](std::string_view name, std::size_t index) {
+            specifier_views[index].name = name;
+            if (has_specifier(name)) {
+                specifier_views[index].value = operator[](name);
+            }
+        }, tuple);
+        
+        // Remove duplicates
+        std::remove_if(std::begin(specifier_views), std::end(specifier_views), [](const SpecifierView& first, const SpecifierView& second) {
+            return first.name == second.name;
+        });
+        
+        std::size_t index = argument_count; // Invalid index
+        bool multiple_definitions = false;
+        for (std::size_t i = 0u; i < argument_count; ++i) {
+            if (!specifier_views[i].value.empty()) {
+                if (index == argument_count) {
+                    index = i;
+                }
+                else {
+                    multiple_definitions = true;
+                    break;
+                }
+            }
+        }
+        
+        if (multiple_definitions) {
+            std::size_t capacity = 0u;
+            utils::apply([&capacity](std::string_view specifier) {
+                // Include space for quotes
+                capacity += specifier.length();
+            }, tuple);
+            
+            std::string error;
+            error.reserve(capacity + (argument_count - 1u) * 2u);
+            
+            utils::apply([&error, argument_count](std::string_view name, std::size_t index) {
+                error.append("\"").append(name.data(), name.length()).append("\"");
+                if (index < argument_count) {
+                    error.append(", ");
+                }
+            }, tuple);
+        
+            throw FormattedError("ambiguous format specifier resolution - specification contains values for more than one of the following specifiers: {}", error);
+        }
+
+        return specifier_views[index];
+    }
+    
     template <typename T>
     NamedArgument<T>::NamedArgument(std::string name, const T& value) : name(std::move(name)),
                                                                         value(value) {
@@ -379,16 +474,16 @@ namespace utils {
     // IntegerFormatter implementation
     
     template <typename T>
-    IntegerFormatter<T>::IntegerFormatter() : representation(Representation::Decimal),
-                                              sign(Sign::NegativeOnly),
-                                              justification(Justification::Left),
-                                              width(0u),
-                                              fill(0),
-                                              padding(0),
-                                              separator(0),
-                                              use_base_prefix(false),
-                                              group_size(0u),
-                                              precision(0u) {
+    IntegerFormatter<T>::IntegerFormatter() : m_representation(Representation::Decimal),
+                                              m_sign(Sign::NegativeOnly),
+                                              m_justification(Justification::Left),
+                                              m_width(0u),
+                                              m_fill(0),
+                                              m_padding(0),
+                                              m_separator(0),
+                                              m_use_base_prefix(false),
+                                              m_group_size(0u),
+                                              m_precision(0u) {
         static_assert(is_integer_type<T>::value, "value must be an integer type");
     }
     
@@ -401,125 +496,141 @@ namespace utils {
             throw FormattedError("format specification for integer values must be a list of specifiers");
         }
         
-        std::string_view value;
-        
-        // Sign should be parsed first, as it can be overwritten with other specifiers
-        if (spec.has_specifier("sign")) {
-            value = spec["sign"];
-            if (casecmp(value, "negativeonly")) {
-                sign = Sign::NegativeOnly;
+        if (spec.has_specifier("representation")) {
+            std::string_view value = spec["representation"];
+            if (casecmp(value, "decimal")) {
+                set_representation(Representation::Decimal);
             }
-            else if (casecmp(value, "aligned")) {
-                sign = Sign::Aligned;
+            else if (casecmp(value, "binary")) {
+                set_representation(Representation::Binary);
             }
-            else if (casecmp(value, "both")) {
-                sign = Sign::Both;
+            else if (casecmp(value, "hexadecimal")) {
+                set_representation(Representation::Hexadecimal);
             }
-            else if (casecmp(value, "none")) {
-                sign = Sign::None;
+            else if (casecmp(value, "bitset")) {
+                set_representation(Representation::Bitset);
             }
             else {
-                // unknown
+                logging::warning("ignoring unknown 'representation' specifier value: '{}'", value);
+            }
+        }
+        
+        if (spec.has_specifier("sign")) {
+            std::string_view value = spec["sign"];
+            if (casecmp(value.data(), "negative only") || casecmp(value.data(), "negative_only")) {
+                set_sign(Sign::NegativeOnly);
+            }
+            else if (casecmp(value, "aligned")) {
+                set_sign(Sign::Aligned);
+            }
+            else if (casecmp(value, "both")) {
+                set_sign(Sign::Both);
+            }
+            else if (casecmp(value, "none")) {
+                set_sign(Sign::None);
+            }
+            else {
+                logging::warning("ignoring unknown 'sign' specifier value: '{}'", value);
+            }
+        }
+        
+        if (spec.has_specifier("justification", "justify", "align")) {
+            FormatString::Specification::SpecifierView view = spec.one_of("justification", "justify", "align");
+            
+            if (casecmp(view.value, "left")) {
+                set_justification(Justification::Left);
+            }
+            else if (casecmp(view.value, "right")) {
+                set_justification(Justification::Right);
+            }
+            else if (casecmp(view.value, "center")) {
+                set_justification(Justification::Center);
+            }
+            else {
+                logging::warning("ignoring unknown '{}' specifier value: '{}'", view.name, view.value);
             }
         }
         
         if (spec.has_specifier("use_base_prefix")) {
-            value = spec["use_base_prefix"];
+            std::string_view value = spec["use_base_prefix"];
             if (casecmp(value, "true") || casecmp(value, "1")) {
-                use_base_prefix = true;
+                m_use_base_prefix = true;
+            }
+            else if (casecmp(value, "false") || casecmp(value, "0")) {
+                // Support explicitly disabling base prefix
+                m_use_base_prefix = false;
             }
             else {
-                // unknown
-            }
-        }
-        
-        if (spec.has_specifier("representation")) {
-            value = spec["representation"];
-            if (casecmp(value, "decimal")) {
-                representation = Representation::Decimal;
-            }
-            else if (casecmp(value, "binary")) {
-                representation = Representation::Binary;
-            }
-            else if (casecmp(value, "hexadecimal")) {
-                representation = Representation::Hexadecimal;
-            }
-            else if (casecmp(value, "bitset")) {
-                representation = Representation::Bitset;
-                
-                // Bitset mode affects more than just representation
-                sign = Sign::None;
-                use_base_prefix = false;
-            }
-            else {
-                // unknown
-            }
-        }
-        
-        if (spec.has_specifier("justification")) {
-            value = spec["justification"];
-            if (casecmp(value, "left")) {
-                justification = Justification::Left;
-            }
-            else if (casecmp(value, "right")) {
-                justification = Justification::Right;
-            }
-            else if (casecmp(value, "center")) {
-                justification = Justification::Center;
-            }
-            else {
-                // unknown
+                logging::warning("ignoring unknown '' specifier value: '{}'", value);
             }
         }
         
         if (spec.has_specifier("width")) {
-            from_string(spec["width"], width);
+            std::string_view value = spec["width"];
+            std::size_t num_characters_read = from_string(value, m_width);
             
-            // TODO: check to make sure full value is read
-        }
-
-        if (spec.has_specifier("fill")) {
-            value = spec["fill"];
-            
-            if (value.length() > 1u) {
-                logging::warning("");
+            if (num_characters_read < value.length()) {
+                // Specifier value includes a non-integer character
+                logging::warning("encountered invalid character '{}' at position {} of 'width' specifier value - using {} for width", value, num_characters_read, m_width);
             }
-            
-            fill = value[0];
         }
         
-        if (spec.has_specifier("padding")) {
-            value = spec["fill"];
+        if (spec.has_specifier("group", "group_size")) {
+            std::string_view value = spec["group_size"];
+            std::size_t num_characters_read = from_string(value, m_group_size);
             
-            if (value.length() > 1u) {
-                logging::warning("");
+            if (num_characters_read < value.length()) {
+                // Specifier value includes a non-integer character
+                logging::warning("encountered invalid character '{}' at position {} of 'group_size' specifier value - using {} for group size", value, num_characters_read, m_width);
             }
-            
-            padding = value[0];
-        }
-        
-        if (spec.has_specifier("separator")) {
-            value = spec["fill"];
-            
-            if (value.length() > 1u) {
-                logging::warning("");
-            }
-            
-            separator = value[0];
-        }
-        
-        if (spec.has_specifier("group_size")) {
-            from_string(spec["group_size"], group_size);
         }
         
         if (spec.has_specifier("precision")) {
-            from_string(spec["precision"], precision);
+            std::string_view value = spec["precision"];
+            std::size_t num_characters_read = from_string(value, m_precision);
+            
+            if (num_characters_read < value.length()) {
+                // Specifier value includes a non-integer character
+                logging::warning("encountered invalid character '{}' at position {} of 'precision' specifier value - using {} for precision", value, num_characters_read, m_width);
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character")) {
+            FormatString::Specification::SpecifierView view = spec.one_of("fill", "fill_character");
+            
+            if (view.value.length() > 1u) {
+                logging::warning("too many characters in '{}' specifier value '{}' - using '{}' as fill character", view.name, view.value, view.value[0]);
+            }
+
+            m_fill = view.value[0];
+        }
+        
+        if (spec.has_specifier("padding", "padding_character")) {
+            FormatString::Specification::SpecifierView view = spec.one_of("padding", "padding_character");
+            
+            if (view.value.length() > 1u) {
+                logging::warning("too many characters in '{}' specifier value '{}' - using '{}' as padding character", view.name, view.value, view.value[0]);
+            }
+
+            m_padding = view.value[0];
+        }
+        
+        if (spec.has_specifier("separator", "separator_character")) {
+            FormatString::Specification::SpecifierView view = spec.one_of("separator", "separator_character");
+            
+            if (view.value.length() > 1u) {
+                logging::warning("too many characters in '{}' specifier value '{}' - using '{}' as separator character", view.name, view.value, view.value[0]);
+            }
+
+            m_separator = view.value[0];
         }
     }
 
     template <typename T>
     std::string IntegerFormatter<T>::format(T value) const {
-        std::size_t capacity = reserve(value);
+        int base = get_base();
+        
+        std::size_t capacity = to_base(value, base, nullptr);
         std::string result(capacity, 0);
         
         FormattingContext context { capacity, &result[0] };
@@ -539,6 +650,103 @@ namespace utils {
     }
     
     template <typename T>
+    void IntegerFormatter<T>::set_representation(Representation representation) {
+        m_representation = representation;
+        
+        if (m_representation == Representation::Bitset) {
+            m_sign = Sign::None;
+            m_use_base_prefix = false;
+        }
+    }
+    
+    template <typename T>
+    IntegerFormatter<T>::Representation IntegerFormatter<T>::get_representation() const {
+        return m_representation;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_sign(Sign sign) {
+    
+    }
+    
+    template <typename T>
+    IntegerFormatter<T>::Sign IntegerFormatter<T>::get_sign() const {
+        return m_sign;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_justification(Justification justification) {
+    }
+    
+    template <typename T>
+    IntegerFormatter<T>::Justification IntegerFormatter<T>::get_justification() const {
+        return m_justification;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_width() const {
+    }
+
+    template <typename T>
+    std::size_t IntegerFormatter<T>::get_width() const {
+        return m_width;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_fill_character(char fill) {
+    }
+
+    template <typename T>
+    char IntegerFormatter<T>::get_fill_character() const {
+        return m_fill;
+    }
+
+    template <typename T>
+    void IntegerFormatter<T>::set_padding_character(char padding) {
+    }
+
+    template <typename T>
+    char IntegerFormatter<T>::get_padding_character() const {
+        return m_padding;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_separator_character(char padding) {
+    }
+
+    template <typename T>
+    char IntegerFormatter<T>::get_separator_character() const {
+        return m_separator;
+    }
+
+    template <typename T>
+    void IntegerFormatter<T>::use_base_prefix(bool use) {
+    }
+    
+    template <typename T>
+    bool IntegerFormatter<T>::use_base_prefix() const {
+        return m_use_base_prefix;
+    }
+    
+    template <typename T>
+    void IntegerFormatter<T>::set_group_size(std::size_t group_size) {
+    }
+
+    template <typename T>
+    std::size_t IntegerFormatter<T>::get_group_size() const {
+        return m_group_size;
+    }
+
+    template <typename T>
+    void IntegerFormatter<T>::set_precision(std::size_t precision) {
+    }
+
+    template <typename T>
+    std::size_t IntegerFormatter<T>::get_precision() const {
+        return m_precision;
+    }
+    
+    template <typename T>
     std::size_t IntegerFormatter<T>::to_base(T value, int base, FormattingContext* context) const {
         std::size_t capacity = 0u;
         std::size_t read_position = 0u;
@@ -546,13 +754,13 @@ namespace utils {
         char sign_character = 0;
         if (value < 0) {
             read_position = 1u; // Do not read negative sign in resulting buffer
-            if (sign != Sign::None) {
+            if (m_sign != Sign::None) {
                 sign_character = '-';
                 ++capacity;
             }
         }
         else {
-            switch (sign) {
+            switch (m_sign) {
                 case Sign::Aligned:
                     sign_character = ' ';
                     ++capacity;
@@ -582,9 +790,9 @@ namespace utils {
         // Simplified case for decimal representations, since this representation does not support many of the available formatting specifiers
         if (base == 10) {
             // Group size is always 3 for decimal representation
-            std::size_t gs = 3u;
-            if (separator) {
-                capacity += num_characters_written / gs - int(num_characters_written % gs == 0);
+            std::size_t group_size = 3u;
+            if (m_separator) {
+                capacity += num_characters_written / group_size - int(num_characters_written % group_size == 0);
             }
             
             // Resulting formatted string should only be generated if a valid context is provided
@@ -596,11 +804,11 @@ namespace utils {
                     result[write_position++] = sign_character;
                 }
                 
-                if (separator) {
-                    std::size_t current = group_size - (num_characters_written % group_size);
+                if (m_separator) {
+                    std::size_t current = m_group_size - (num_characters_written % m_group_size);
                     for (std::size_t i = 0u; i < num_characters_written; ++i, ++current) {
-                        if (i && (current % group_size) == 0u) {
-                            result[write_position++] = separator;
+                        if (i && (current % m_group_size) == 0u) {
+                            result[write_position++] = m_separator;
                         }
     
                         result[write_position++] = *(buffer + read_position + i);
@@ -616,33 +824,33 @@ namespace utils {
         else {
             std::size_t num_padding_characters = 0u;
             
-            if (group_size) {
+            if (m_group_size) {
                 // Last group may not be the same size as the other groups
-                num_padding_characters += group_size - (num_characters_written % group_size);
+                num_padding_characters += m_group_size - (num_characters_written % m_group_size);
                 
                 // Add characters to reach the desired precision
-                if (num_characters_written + num_padding_characters < precision) {
-                    num_padding_characters += detail::round_up_to_multiple(precision - (num_characters_written + num_padding_characters), group_size);
+                if (num_characters_written + num_padding_characters < m_precision) {
+                    num_padding_characters += detail::round_up_to_multiple(m_precision - (num_characters_written + num_padding_characters), m_group_size);
                 }
                 
                 // Separator character is inserted between two groups
-                capacity += (num_characters_written + num_padding_characters) / group_size - 1u;
+                capacity += (num_characters_written + num_padding_characters) / m_group_size - 1u;
             }
             else {
-                if (num_characters_written < precision) {
-                    num_padding_characters = precision - num_characters_written;
+                if (num_characters_written < m_precision) {
+                    num_padding_characters = m_precision - num_characters_written;
                 }
             }
 
             capacity += num_padding_characters;
             
-            if (use_base_prefix) {
+            if (m_use_base_prefix) {
                 ASSERT(representation != Representation::Bitset, "bitset representations should not use base prefixes");
                 
                 // +2 characters for base prefix
                 capacity += 2u;
                 
-                if (group_size) {
+                if (m_group_size) {
                     // +1 character for a separator between the groups and the base prefix
                     capacity += 1u;
                 }
@@ -653,20 +861,20 @@ namespace utils {
                 std::size_t write_position = apply_justification(capacity, result);
                 
                 char padding_character = '.';
-                if (padding) {
-                    padding_character = padding_character;
+                if (m_padding) {
+                    padding_character = m_padding;
                 }
                 
                 char separator_character = ' ';
-                if (separator) {
-                    separator_character = separator;
+                if (m_separator) {
+                    separator_character = m_separator;
                 }
                 
                 if (sign_character) {
                     result[write_position++] = sign_character;
                 }
                 
-                if (use_base_prefix) {
+                if (m_use_base_prefix) {
                     result[write_position++] = '0';
                     
                     if (base == 2) {
@@ -676,23 +884,23 @@ namespace utils {
                         result[write_position++] = 'x';
                     }
     
-                    if (group_size) {
+                    if (m_group_size) {
                         result[write_position++] = separator_character;
                     }
                 }
                 
-                if (group_size) {
+                if (m_group_size) {
                     std::size_t current = 0u;
     
                     for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
-                        if (current && current % group_size == 0u) {
+                        if (current && current % m_group_size == 0u) {
                             result[write_position++] = separator_character;
                         }
                         result[write_position++] = padding_character;
                     }
     
                     for (start = buffer + read_position; start != ptr; ++start, ++current) {
-                        if (current && current % group_size == 0u) {
+                        if (current && current % m_group_size == 0u) {
                             result[write_position++] = separator_character;
                         }
     
@@ -711,8 +919,8 @@ namespace utils {
             }
         }
         
-        if (capacity < width) {
-            capacity = width;
+        if (capacity < m_width) {
+            capacity = m_width;
         }
         
         return capacity;
@@ -720,7 +928,7 @@ namespace utils {
     
     template <typename T>
     int IntegerFormatter<T>::get_base() const {
-        switch (representation) {
+        switch (m_representation) {
             case Representation::Decimal:
                 return 10;
             case Representation::Binary:
@@ -739,25 +947,25 @@ namespace utils {
         std::size_t start = 0u;
 
         char fill_character = ' ';
-        if (fill) {
-            fill_character = fill;
+        if (m_fill) {
+            fill_character = m_fill;
         }
         
-        if (capacity < width) {
-            switch (justification) {
+        if (capacity < m_width) {
+            switch (m_justification) {
                 case Justification::Left:
-                    for (std::size_t i = capacity; i < width; ++i) {
+                    for (std::size_t i = capacity; i < m_width; ++i) {
                         context[i] = fill_character;
                     }
                     break;
                 case Justification::Right:
-                    start = (width - 1u) - capacity;
+                    start = (m_width - 1u) - capacity;
                     for (std::size_t i = 0u; i < start; ++i) {
                         context[i] = fill_character;
                     }
                     break;
                 case Justification::Center:
-                    start = (width - capacity) / 2;
+                    start = (m_width - capacity) / 2;
                     
                     // Left side
                     for (std::size_t i = 0u; i < start; ++i) {
@@ -766,7 +974,7 @@ namespace utils {
                     
                     // Right side (account for additional character in the case that width is odd)
                     std::size_t last = context.length() - 1u;
-                    for (std::size_t i = 0u; i < start + ((width - capacity) % 2); ++i) {
+                    for (std::size_t i = 0u; i < start + ((m_width - capacity) % 2); ++i) {
                         context[last - i] = fill_character;
                     }
                     break;

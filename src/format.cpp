@@ -193,12 +193,6 @@ namespace utils {
     
     // FormatString implementation
     
-    template <String T>
-    FormatString::FormatString(T fmt, std::source_location source) : m_format(fmt),
-                                                                     m_source(source) {
-        parse();
-    }
-    
     FormatString::FormatString(const FormatString& fmt) : m_format(fmt.m_format),
                                                           m_source(fmt.m_source),
                                                           m_identifiers(fmt.m_identifiers),
@@ -632,21 +626,6 @@ namespace utils {
         
         const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
         return index < groups.size();
-    }
-    
-    bool FormatString::Specification::has_specifier(std::string_view key) const {
-        if (std::holds_alternative<FormattingGroupList>(m_spec)) {
-            // TODO: calling has_group on a formatting group list makes no sense, throw exception?
-            return false;
-        }
-        
-        for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
-            if (casecmp(specifier.name, key)) {
-                return true;
-            }
-        }
-        
-        return false;
     }
     
     bool FormatString::Specification::operator==(const FormatString::Specification& other) const {
