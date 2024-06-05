@@ -38,7 +38,7 @@ namespace utils {
         };
         
         template <typename T>
-        struct PlaceholderFormatter : public Formatter<T> {
+        struct PlaceholderFormatter : public Formatter<typename std::decay<T>::type> {
             PlaceholderFormatter() : length(0u),
                                      specification_index(0u),
                                      start(std::numeric_limits<std::size_t>::max()) {
@@ -65,15 +65,19 @@ namespace utils {
         
         int round_up_to_multiple(int value, int multiple);
         
-        // Helper function to join multiple std::string_views into one
+        template <typename T>
+        std::string_view to_string_view(const T& value) {
+            if constexpr (std::is_same<T, const char*>::value || std::is_same<T, char*>::value || std::is_same<T, std::string>::value) {
+                return std::string_view(value);
+            }
+            else {
+                return value;
+            }
+        }
+        
         template <typename ...Ts>
-        std::string join(Ts... args) {
-            std::tuple<Ts...> tuple { args... };
-            std::string result;
-
-            
-            
-            return std::move(result);
+        auto make_string_view_tuple(const Ts&... args) {
+            return std::make_tuple(to_string_view(args)...);
         }
         
     }
@@ -116,7 +120,7 @@ namespace utils {
                         const Identifier& identifier = m_identifiers[m_placeholders[i].identifier_index];
                         const Specification& spec = m_specifications[m_placeholders[i].specification_index];
                         
-                        utils::apply([&capacity, &formatters, &spec] <typename T, std::size_t I>(const T& value) {
+                        utils::apply([&capacity, &formatters, &spec]<typename T, std::size_t I>(const T& value) {
                             detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
                             formatter.parse(spec);
                             if constexpr (detail::is_formattable_to<T>) {
@@ -378,13 +382,14 @@ namespace utils {
     
     // Specification implementation
     
-    template <String T, String ...Ts>
-    bool FormatString::Specification::has_specifier(const T& first, const Ts& ...args) const {
+    template <typename T, typename ...Ts>
+    bool FormatString::Specification::has_specifier(const T& first, const Ts& ...rest) const {
         if (std::holds_alternative<FormattingGroupList>(m_spec)) {
             // TODO: calling has_group on a formatting group list makes no sense, throw exception?
             return false;
         }
         
+        auto tuple = detail::make_string_view_tuple(first, rest...);
         bool has_specifier = false;
         
         utils::apply([this, &has_specifier](std::string_view name, std::size_t index) {
@@ -393,29 +398,29 @@ namespace utils {
                     has_specifier = true;
                 }
             }
-        }, std::make_tuple(first, args...));
+        }, tuple);
         
         return has_specifier;
     }
     
-    template <String T, String ...Ts>
-    FormatString::Specification::SpecifierView FormatString::Specification::one_of(const T& first, const Ts&... args) const {
+    template <typename T, typename ...Ts>
+    FormatString::Specification::SpecifierView FormatString::Specification::one_of(const T& first, const Ts&... rest) const {
         constexpr std::size_t argument_count = sizeof...(Ts) + 1u;
         
-        std::tuple<T, Ts...> tuple = std::make_tuple(first, args...);
+        auto tuple = detail::make_string_view_tuple(first, rest...);
         SpecifierView specifier_views[argument_count];
         
         utils::apply([this, &specifier_views](std::string_view name, std::size_t index) {
             specifier_views[index].name = name;
             if (has_specifier(name)) {
-                specifier_views[index].value = operator[](name);
+                specifier_views[index].value = get_specifier(name);
             }
         }, tuple);
         
         // Remove duplicates
-        std::remove_if(std::begin(specifier_views), std::end(specifier_views), [](const SpecifierView& first, const SpecifierView& second) {
-            return first.name == second.name;
-        });
+//        std::remove_if(std::begin(specifier_views), std::end(specifier_views), [](const SpecifierView& first, const SpecifierView& second) {
+//            return first.name == second.name;
+//        });
         
         std::size_t index = argument_count; // Invalid index
         bool multiple_definitions = false;
@@ -433,9 +438,9 @@ namespace utils {
         
         if (multiple_definitions) {
             std::size_t capacity = 0u;
-            utils::apply([&capacity](std::string_view specifier) {
+            utils::apply([&capacity](std::string_view name) {
                 // Include space for quotes
-                capacity += specifier.length();
+                capacity += name.length();
             }, tuple);
             
             std::string error;
@@ -448,7 +453,7 @@ namespace utils {
                 }
             }, tuple);
         
-            throw FormattedError("ambiguous format specifier resolution - specification contains values for more than one of the following specifiers: {}", error);
+            throw FormattedError("bad and/or ambiguous format specification access - specification contains values for more than one of the following specifiers: {}", error);
         }
 
         return specifier_views[index];

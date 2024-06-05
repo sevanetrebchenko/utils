@@ -59,11 +59,11 @@ namespace utils {
 
                     // Readonly specifier
                     struct SpecifierView {
-                        SpecifierView();
-                        ~SpecifierView();
+                        SpecifierView() {}
+                        ~SpecifierView() {}
                         
-                        bool operator==(const Specifier& other) const;
-                        bool operator!=(const Specifier& other) const;
+                        bool operator==(const Specifier& other) const {}
+                        bool operator!=(const Specifier& other) const {}
                         
                         std::string_view name;
                         std::string_view value;
@@ -87,10 +87,10 @@ namespace utils {
                     
                     bool has_group(std::size_t index) const;
                     
-                    template <String T, String ...Ts>
+                    template <typename T, typename ...Ts>
                     SpecifierView one_of(const T& first, const Ts&... rest) const;
                     
-                    template <String T, String ...Ts>
+                    template <typename T, typename ...Ts>
                     bool has_specifier(const T& first, const Ts&... args) const;
                     
                     // Used to distinguish the type of data this Specification contains

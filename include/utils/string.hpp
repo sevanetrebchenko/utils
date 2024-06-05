@@ -20,10 +20,10 @@ namespace utils {
     
     // std::strcasecmp requires null-terminated strings
     template <String T, String U>
-    [[nodiscard]] bool casecmp(const T& first, const U& second);
+    [[nodiscard]] bool casecmp(const T& first, const U& second) {}
     
     template <String T, String U>
-    [[nodiscard]] bool operator==(const T& first, const U& second);
+    [[nodiscard]] bool operator==(const T& first, const U& second) {}
     
     // from_string for fundamental types (wrapper around std::from_chars)
     // Returns the number of characters processed, throws on invalid argument
