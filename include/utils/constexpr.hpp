@@ -205,11 +205,55 @@ namespace utils {
         static constexpr bool value = std::is_same<Type, float>::value || std::is_same<Type, double>::value || std::is_same<Type, long double>::value;
     };
     
+    // TODO: handle volatile?
+    
     template <typename T>
-    struct is_string_type {
-        using Type = std::decay<T>::type;
-        static constexpr bool value = std::is_same<Type, char*>::value || std::is_same<Type, std::string_view>::value || std::is_same<Type, std::string>::value;
+    struct is_string_type : std::false_type {
     };
+    
+    // Specializations of is_string_type for string types
+    
+    // char*
+    template <>
+    struct is_string_type<char*> : std::true_type {
+    };
+    
+    // const char*
+    template <>
+    struct is_string_type<const char*> : std::true_type {
+    };
+    
+    // char[]
+    template <std::size_t N>
+    struct is_string_type<char[N]> : std::true_type {
+    };
+    
+    // const char[]
+    template <std::size_t N>
+    struct is_string_type<const char[N]> : std::true_type {
+    };
+    
+    // std::string
+    template <>
+    struct is_string_type<std::string> : std::true_type {
+    };
+    
+    template <>
+    struct is_string_type<std::string_view> : std::true_type {
+    };
+    
+    // Handle references to string types
+    template <typename T>
+    struct is_string_type<T&> : is_string_type<T> {
+    };
+    
+    template <typename T>
+    struct is_string_type<const T&> : is_string_type<T> {
+    };
+ 
+    template <typename T>
+    inline constexpr bool is_string_type_v = is_string_type<T>::value;
+    
 }
 
 
