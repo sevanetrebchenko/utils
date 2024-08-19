@@ -9,12 +9,12 @@ namespace utils {
     class FormatString;
     
     namespace logging {
+
+        template <typename ...Ts>
+        void info(FormatString fmt, const Ts&... args);
         
         template <typename ...Ts>
         void debug(FormatString fmt, const Ts&... args);
-        
-        template <typename ...Ts>
-        void info(FormatString fmt, const Ts&... args);
         
         template <typename ...Ts>
         void warning(FormatString fmt, const Ts&... args);

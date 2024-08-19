@@ -5,6 +5,7 @@
 #define STRING_HPP
 
 #include "utils/concepts.hpp"
+#include "utils/format.hpp"
 
 #include <vector> // std::vector
 #include <string> // std::string
