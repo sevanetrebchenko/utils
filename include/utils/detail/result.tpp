@@ -4,8 +4,8 @@
 #ifndef RESULT_TPP
 #define RESULT_TPP
 
-#include "utils/format.hpp"
 #include "utils/constexpr.hpp"
+#include "utils/string.hpp"
 
 #include <utility> // std::move
 #include <stdexcept> // std::runtime_error
@@ -19,7 +19,7 @@ namespace utils {
         constexpr bool is_format_string = std::is_same<typename std::decay<T>::type, FormatString>::value;
         
         template <typename T, typename ...Ts>
-        inline FormatString format_string_helper(const T& fmt, Ts&&... args) {
+        inline FormatString to_format_string(T&& fmt, Ts&&... args) {
             return FormatString(fmt).format(std::move(args)...);
         }
         
@@ -39,7 +39,7 @@ namespace utils {
     template <typename ...Ts>
     Response<E> Response<E>::NOT_OK(Ts&& ...args) {
         if constexpr (detail::is_format_string<E>) {
-            return detail::format_string_helper(std::move(args)...);
+            return detail::to_format_string(std::move(args)...);
         }
         else {
             Response<E> e { };
@@ -73,7 +73,7 @@ namespace utils {
         Result<T, E> r { };
         
         if constexpr (detail::is_format_string<T>) {
-            r.m_result = detail::format_string_helper(std::move(args)...);
+            r.m_result = detail::to_format_string(std::move(args)...);
         }
         else {
             r.m_result = { std::move(args)... };
@@ -88,7 +88,7 @@ namespace utils {
         Result<T, E> e { };
         
         if constexpr (detail::is_format_string<E>) {
-            e.m_error = detail::format_string_helper(std::move(args)...);
+            e.m_error = detail::to_format_string(std::move(args)...);
         }
         else {
             e.m_error = { std::move(args)... };
@@ -141,7 +141,7 @@ namespace utils {
         e.m_offset = error_position;
         
         if constexpr (detail::is_format_string<E>) {
-            e.Response<E>::m_error = detail::format_string_helper(std::move(args)...);
+            e.Response<E>::m_error = detail::to_format_string(std::move(args)...);
         }
         else {
             e.Response<E>::m_error = { std::move(args)... };
@@ -169,7 +169,7 @@ namespace utils {
         r.m_offset = num_characters_parsed;
         
         if constexpr (detail::is_format_string<T>) {
-            r.Result<T, E>::m_result = detail::format_string_helper(std::move(args)...);
+            r.Result<T, E>::m_result = detail::to_format_string(std::move(args)...);
         }
         else {
             r.Result<T, E>::m_result = { std::move(args)... };
@@ -185,7 +185,7 @@ namespace utils {
         e.m_offset = error_position;
         
         if constexpr (detail::is_format_string<E>) {
-            e.Result<T, E>::m_error = detail::format_string_helper(std::move(args)...);
+            e.Result<T, E>::m_error = detail::to_format_string(std::move(args)...);
         }
         else {
             e.Result<T, E>::m_error = { std::move(args)... };

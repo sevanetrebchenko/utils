@@ -4,8 +4,6 @@
 #ifndef RESULT_HPP
 #define RESULT_HPP
 
-#include "utils/format.hpp"
-
 #include <string> // std::string
 #include <string_view> // std::string_view
 #include <optional> // std::optional
