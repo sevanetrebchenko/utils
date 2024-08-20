@@ -127,6 +127,12 @@ namespace utils {
                     template <String ...Ts>
                     bool has_specifier(const Ts&... specifiers) const;
                     
+                    template <String ...Ts>
+                    void ignore(const Ts&... specifiers) const;
+                    
+                    template <String ...Ts>
+                    void enable(const Ts&... specifiers) const;
+                    
                     // Methods for formatting group lists
                     
                     Specification& operator[](std::size_t index);
@@ -148,7 +154,7 @@ namespace utils {
                     
                     // A specification can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
                     // Specifiers are stored in a std::vector instead of std::unordered map as the number of formatting specifiers is expected to be relatively small
-                    std::variant<SpecifierList, FormattingGroupList> m_spec;
+                    mutable std::variant<SpecifierList, FormattingGroupList> m_spec;
                     Type m_type;
             };
             
@@ -213,8 +219,6 @@ namespace utils {
     template <typename ...Ts>
     FormatString format(FormatString fmt, const Ts&... args);
     
-    
-
     // Section: Formatters
     
     template <typename T>
@@ -223,34 +227,44 @@ namespace utils {
     
     class FormattingContext {
         public:
-            FormattingContext(std::size_t size, char* buffer = nullptr) : m_size(size),
-                                                                          m_buffer(buffer) {}
-            ~FormattingContext() {}
+            // Formatting context allocates a block of length 'length' if a source buffer 'src' is not provided
+            FormattingContext(std::size_t length, char* src = nullptr);
+            ~FormattingContext();
 
-            void clear() {}
+            [[nodiscard]] char& operator[](std::size_t index);
+            [[nodiscard]] char& at(std::size_t index);
             
-            char& operator[](std::size_t index) {
-                return m_buffer[index];
-            }
-            
-            void insert(std::size_t offset, char* src, std::size_t length = 0u) {}
-            void insert(std::size_t offset, char c, std::size_t count = 1u) {}
+            void insert(std::size_t offset, const char* src, std::size_t length = 0u);
+            void insert(std::size_t offset, char c, std::size_t count = 1u);
         
-            FormattingContext& substring(std::size_t offset, std::size_t size) {}
+            // Retrieves a subcontext starting at 'offset' and spanning 'length'
+            // Throws exception if 'length' is out of range
+            FormattingContext slice(std::size_t offset, std::size_t length = std::string::npos);
             
-            const char* data() const;
+            [[nodiscard]] std::string string() const;
+            [[nodiscard]] const char* data() const;
 
-            std::size_t length() const {
-                return m_size;
-            }
+            [[nodiscard]] std::size_t length() const;
+            [[nodiscard]] std::size_t size() const;
             
         private:
-            std::size_t m_size;
-
-            bool m_owner;
             char* m_buffer;
+            bool m_owner;
+            std::size_t m_length;
     };
     
+    template <typename T>
+    concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
+        { formatter.parse(spec) };
+        { formatter.format(value) } -> std::same_as<std::string>;
+    };
+    
+    template <typename T>
+    concept is_formattable_to = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value, FormattingContext context) {
+        { formatter.parse(spec) };
+        { formatter.reserve(value) } -> std::same_as<std::size_t>;
+        { formatter.format_to(value, context) };
+    };
     
     // Shared formatters
     
@@ -264,7 +278,7 @@ namespace utils {
             std::string format(T value) const;
             
             std::size_t reserve(T value) const;
-            void format_to(T value, FormattingContext& context) const;
+            void format_to(T value, FormattingContext context) const;
             
             enum class Representation : std::uint8_t {
                 Decimal,
@@ -309,7 +323,7 @@ namespace utils {
             std::string format(T value);
             
             std::size_t reserve(T value) const;
-            void format_to(T value, FormattingContext& context) const;
+            void format_to(T value, FormattingContext context) const;
 
             enum class Representation : std::uint8_t {
                 Fixed,
@@ -348,7 +362,7 @@ namespace utils {
             std::string format(const T& value) const;
             
             std::size_t reserve(const T& value) const;
-            void format_to(const T& value, FormattingContext& context) const;
+            void format_to(const T& value, FormattingContext context) const;
         
             enum class Justification : std::uint8_t {
                 Left,
@@ -465,45 +479,25 @@ namespace utils {
     
     // Standard types
     
+    // Format: filename:line
     template <>
     class Formatter<std::source_location> {
         public:
-            void parse(const FormatString::Specification& spec) {}
-            std::string format(const std::source_location& value) const {
-//                return "";
-            }
+            Formatter();
+            ~Formatter();
             
-            std::size_t reserve(const std::source_location& value) const {
-                // return std::strlen(value.file_name());
-                return 0;
-            }
+            void parse(const FormatString::Specification& spec);
+            std::string format(const std::source_location& value) const;
             
-            void format_to(const std::source_location& value, FormattingContext& context) const {
-//                const char* filename = value.file_name();
-//                for (std::size_t i = 0u; i < strlen(filename); ++i) {
-//                    context[i] = filename[i];
-//                }
-            }
+            std::size_t reserve(const std::source_location& value) const;
+            void format_to(const std::source_location& value, FormattingContext context) const;
             
         private:
-            Formatter<std::uint64_t> m_line_formatter;
+            Formatter<unsigned> m_line_formatter;
             Formatter<const char*> m_filename_formatter;
     };
     
     // User-defined / custom types
-    
-    template <typename T>
-    concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
-        { formatter.parse(spec) };
-        { formatter.format(value) } -> std::same_as<std::string>;
-    };
-    
-    template <typename T>
-    concept is_formattable_to = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value, FormattingContext& context) {
-        { formatter.parse(spec) };
-        { formatter.reserve(value) } -> std::same_as<std::size_t>;
-        { formatter.format_to(value, context) };
-    };
     
     template <typename T>
     struct Formatter<NamedArgument<T>> : Formatter<T> {
@@ -511,10 +505,10 @@ namespace utils {
         ~Formatter();
         
         void parse(const FormatString::Specification& spec);
-        std::string format(const NamedArgument<T>& value) const requires is_formattable<T>;
+        std::string format(const NamedArgument<T>& value) const requires is_formattable<T> ;
         
         std::size_t reserve(const NamedArgument<T>& value) const requires is_formattable_to<T>;
-        void format_to(const NamedArgument<T>& value, FormattingContext& context) const requires is_formattable_to<T>;
+        void format_to(const NamedArgument<T>& value, FormattingContext context) const requires is_formattable_to<T>;
     };
     
 }

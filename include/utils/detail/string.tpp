@@ -57,7 +57,7 @@ namespace utils {
         // 0 - left
         // 1 - right
         // 2 - center
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext& context);
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext context);
         
     }
 
@@ -701,7 +701,7 @@ namespace utils {
     }
     
     template <typename T>
-    void IntegerFormatter<T>::format_to(T value, FormattingContext& context) const {
+    void IntegerFormatter<T>::format_to(T value, FormattingContext context) const {
         format_to(value, get_base(), &context);
     }
     
@@ -753,7 +753,7 @@ namespace utils {
             
             // Resulting formatted string should only be generated if a valid context is provided
             if (context) {
-                FormattingContext& result = *context;
+                FormattingContext result = *context;
                 std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
                 
                 if (sign_character) {
@@ -811,7 +811,7 @@ namespace utils {
             }
             
             if (context) {
-                FormattingContext& result = *context;
+                FormattingContext result = *context;
                 std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
                 
                 char padding = '.';
@@ -1024,7 +1024,7 @@ namespace utils {
     }
     
     template <typename T>
-    void FloatingPointFormatter<T>::format_to(T value, FormattingContext& context) const {
+    void FloatingPointFormatter<T>::format_to(T value, FormattingContext context) const {
         format_to(value, &context);
     }
     
@@ -1098,7 +1098,7 @@ namespace utils {
 
         
         if (context) {
-            FormattingContext& result = *context;
+            FormattingContext result = *context;
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<FloatingPointFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
             
             if (sign_character) {
@@ -1239,7 +1239,7 @@ namespace utils {
     }
     
     template <typename T>
-    void StringFormatter<T>::format_to(const T& value, FormattingContext& context) const {
+    void StringFormatter<T>::format_to(const T& value, FormattingContext context) const {
         format_to(value, &context);
     }
     
@@ -1254,7 +1254,7 @@ namespace utils {
         }
         
         if (context) {
-            FormattingContext& result = *context;
+            FormattingContext result = *context;
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<StringFormatter<T>::Justification>::type>(justification), fill_character, length, result);
             
             if constexpr (is_character_type<T>::value) {
@@ -1293,7 +1293,7 @@ namespace utils {
     }
     
     template <typename T>
-    void Formatter<NamedArgument<T>>::format_to(const NamedArgument<T>& value, FormattingContext& context) const requires is_formattable_to<T> {
+    void Formatter<NamedArgument<T>>::format_to(const NamedArgument<T>& value, FormattingContext context) const requires is_formattable_to<T> {
         return Formatter<T>::format_to(value.value, context);
     }
     

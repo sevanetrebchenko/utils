@@ -1,10 +1,11 @@
 
 #include "utils/string.hpp"
 #include "utils/result.hpp"
+#include "utils/assert.hpp"
 
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
-#include <cstring> // std::memcpy
+#include <cstring> // std::memcpy, strlen
 
 namespace utils {
     
@@ -23,7 +24,7 @@ namespace utils {
             return value + multiple - remainder;
         }
         
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext& context) {
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext context) {
             std::size_t capacity = context.length();
             std::size_t start = 0u;
     
@@ -946,6 +947,127 @@ namespace utils {
     std::ostream& operator<<(std::ostream& stream, const FormatString& fmt) {
         stream << fmt.string();
         return stream;
+    }
+    
+    FormattingContext::FormattingContext(std::size_t length, char* src) : m_buffer(src ? src : new char[length]),
+                                                                          m_owner(src == nullptr),
+                                                                          m_length(length) {
+    }
+    
+    FormattingContext::~FormattingContext() {
+        if (m_owner) {
+            delete[] m_buffer;
+        }
+    }
+    
+    char& FormattingContext::operator[](std::size_t index) {
+        if (index >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::operator[]: index {} exceeds the formatting context length ({})", index, m_length));
+        }
+        return m_buffer[index];
+    }
+    
+    char& FormattingContext::at(std::size_t index) {
+        if (index >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::at: index {} exceeds the formatting context length ({})", index, m_length));
+        }
+        return m_buffer[index];
+    }
+    
+    void FormattingContext::insert(std::size_t offset, const char* src, std::size_t length) {
+        if (offset + length >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the formatting context length ({})", length, offset, m_length));
+        }
+        std::memcpy(m_buffer, src, length);
+    }
+    
+    void FormattingContext::insert(std::size_t offset, char c, std::size_t count) {
+        if (offset + count >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the formatting context length ({})", count, offset, m_length));
+        }
+        for (std::size_t i = 0u; i < count; ++i) {
+            m_buffer[offset + i] = c;
+        }
+    }
+    
+    FormattingContext FormattingContext::slice(std::size_t offset, std::size_t length) {
+        if (offset + length >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::slice: a subcontext of length {} at offset {} exceeds the length of the underlying formatting context ({})", length, offset, m_length));
+        }
+        
+        // Specifying std::string::npos returns a slice until the end of the buffer
+        return { length == std::string::npos ? m_length - offset : length, &m_buffer[offset] };
+    }
+    
+    std::string FormattingContext::string() const {
+        return std::move(std::string(m_buffer, m_length));
+    }
+    
+    const char* FormattingContext::data() const {
+        return m_buffer;
+    }
+    
+    std::size_t FormattingContext::length() const {
+        return m_length;
+    }
+    
+    std::size_t FormattingContext::size() const {
+        return m_length;
+    }
+    
+    Formatter<std::source_location>::Formatter() : m_line_formatter(),
+                                                   m_filename_formatter() {
+    }
+    
+    Formatter<std::source_location>::~Formatter() = default;
+    
+    void Formatter<std::source_location>::parse(const FormatString::Specification& spec) {
+        switch (spec.type()) {
+            case FormatString::Specification::Type::FormattingGroupList:
+                if (spec.has_group(0)) {
+                    m_line_formatter.parse(spec.get_formatting_group(0));
+                }
+                if (spec.has_group(1)) {
+                    m_filename_formatter.parse(spec.get_formatting_group(1));
+                }
+                break;
+            case FormatString::Specification::Type::SpecifierList:
+                m_line_formatter.parse(spec);
+                break;
+        }
+    }
+
+    std::string Formatter<std::source_location>::format(const std::source_location& value) const {
+        unsigned line = value.line();
+        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
+
+        const char* filename = value.file_name();
+        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
+
+        // Account for joining ':' in format string 'filename:line'
+        std::size_t capacity = formatted_line_number_length + 1u + formatted_filename_length;
+
+        FormattingContext context { capacity };
+        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
+        context[formatted_filename_length] = ':';
+        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
+        return std::move(context.string());
+    }
+
+    std::size_t Formatter<std::source_location>::reserve(const std::source_location& value) const {
+        return m_line_formatter.reserve(value.line()) + 1u + m_filename_formatter.reserve(value.file_name());
+    }
+
+    void Formatter<std::source_location>::format_to(const std::source_location& value, FormattingContext context) const {
+        unsigned line = value.line();
+        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
+
+        const char* filename = value.file_name();
+        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
+        
+        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
+        context[formatted_filename_length] = ':';
+        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
     }
     
 }
