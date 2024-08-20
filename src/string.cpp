@@ -1032,7 +1032,7 @@ namespace utils {
                 }
                 break;
             case FormatString::Specification::Type::SpecifierList:
-                m_line_formatter.parse(spec);
+                logging::warning(""); // TODO:
                 break;
         }
     }

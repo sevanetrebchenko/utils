@@ -683,16 +683,10 @@ namespace utils {
     template <typename T>
     std::string IntegerFormatter<T>::format(T value) const {
         int base = get_base();
-        
         std::size_t capacity = format_to(value, base, nullptr);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        FormattingContext context { capacity, &result[0] };
-        format_to(value, get_base(), &context);
-        
-        return std::move(result);
+        FormattingContext context { capacity };
+        format_to(value, base, &context);
+        return std::move(context.string());
     }
 
     template <typename T>
@@ -1008,14 +1002,9 @@ namespace utils {
     template <typename T>
     std::string FloatingPointFormatter<T>::format(T value) {
         std::size_t capacity = format_to(value, nullptr);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        FormattingContext context { capacity, &result[0] };
+        FormattingContext context { capacity };
         format_to(value, &context);
-        
-        return std::move(result);
+        return std::move(context.string());
     }
     
     template <typename T>
@@ -1223,14 +1212,9 @@ namespace utils {
     template <typename T>
     std::string StringFormatter<T>::format(const T& value) const {
         std::size_t capacity = format_to(value, nullptr);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        FormattingContext context { capacity, &result[0] };
+        FormattingContext context { capacity };
         format_to(value, &context);
-        
-        return std::move(result);
+        return std::move(context.string());
     }
     
     template <typename T>
