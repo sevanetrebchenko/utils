@@ -67,7 +67,7 @@ namespace utils {
         // 0 - left
         // 1 - right
         // 2 - center
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, unsigned length, FormattingContext& context);
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext& context);
         
     }
 
@@ -796,7 +796,7 @@ namespace utils {
                 
                 // Add characters to reach the desired precision
                 if (num_characters_written + num_padding_characters < precision) {
-                    num_padding_characters += detail::round_up_to_multiple(precision - (num_characters_written + num_padding_characters), group_size);
+                    num_padding_characters += (std::size_t) detail::round_up_to_multiple(precision - (std::size_t) (num_characters_written + num_padding_characters), group_size);
                 }
                 
                 // Separator character is inserted between two groups
@@ -1106,28 +1106,13 @@ namespace utils {
             capacity += (decimal_position - 1) / 3;
         }
 
-        std::size_t write_offset = 0u;
-        if (capacity < width) {
-            switch (justification) {
-                case Justification::Right:
-                    write_offset = width - capacity;
-                    break;
-                case Justification::Center:
-                    write_offset = (width - capacity) / 2;
-                    break;
-                default:
-                    break;
-            }
-
-            capacity = width;
-        }
         
         if (context) {
             FormattingContext& result = *context;
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<FloatingPointFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
             
             if (sign_character) {
-                result[write_offset++] = sign_character[0];
+                result[write_position++] = sign_character[0];
             }
     
             if (representation == Representation::Scientific) {
@@ -1135,16 +1120,16 @@ namespace utils {
                 std::size_t e_position = e - (start + read_offset);
     
                 for (std::size_t i = 0u; i < e_position; ++i) {
-                    result[write_offset++] = *(buffer + read_offset + i);
+                    result[write_position++] = *(buffer + read_offset + i);
                 }
     
                 // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
                 for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
-                    result[write_offset++] = '0';
+                    result[write_position++] = '0';
                 }
     
                 for (start = buffer + read_offset + e_position; start != ptr; ++start) {
-                    result[write_offset++] = *start;
+                    result[write_position++] = *start;
                 }
             }
             else {
@@ -1160,26 +1145,26 @@ namespace utils {
                     // Write the number portion, up until the decimal point (with separators)
                     for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
                         if (i && counter % group_size == 0u) {
-                            result[write_offset++] = separator;
+                            result[write_position++] = separator;
                         }
     
-                        result[write_offset++] = *(buffer + read_offset + i);
+                        result[write_position++] = *(buffer + read_offset + i);
                     }
     
                     // Write decimal portion
                     for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
-                        result[write_offset++] = *start;
+                        result[write_position++] = *start;
                     }
                 }
                 else {
                     for (start = buffer + read_offset; start != ptr; ++start) {
-                        result[write_offset++] = *start;
+                        result[write_position++] = *start;
                     }
                 }
     
                 // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
                 for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
-                    result[write_offset++] = '0';
+                    result[write_position++] = '0';
                 }
             }
         }
@@ -1189,9 +1174,9 @@ namespace utils {
     
     // StringFormatter
     template <typename T>
-    StringFormatter<T>::StringFormatter() : m_justification(Justification::Left),
-                                            m_width(0u),
-                                            m_fill(0) {
+    StringFormatter<T>::StringFormatter() : justification(Justification::Left),
+                                            width(0u),
+                                            fill_character(' ') {
         static_assert(is_string_type<T>::value, "value must be a string type");
     }
     
@@ -1200,52 +1185,88 @@ namespace utils {
     
     template <typename T>
     void StringFormatter<T>::parse(const FormatString::Specification& spec) {
+        if (spec.type() == FormatString::Specification::Type::FormattingGroupList) {
+            throw FormattedError("format specification for floating point values must be a list of specifiers");
+        }
+        
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.one_of("justification", "justify", "alignment", "align").value);
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+        
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width").value);
+            
+            unsigned w;
+            std::size_t num_characters_read = from_string(value, w);
+            
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = w;
+            }
+        }
+        
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.one_of("fill", "fill_character", "fillcharacter").value);
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
     }
     
     template <typename T>
     std::string StringFormatter<T>::format(const T& value) const {
-        std::size_t length = 0u;
+        std::size_t capacity = format_to(value, nullptr);
         
-        if constexpr (std::is_same<typename std::decay<T>::type, const char*>::value) {
-            length = strlen(value);
-        }
-        else {
-            // std::string_view, std::string
-            length = value.length();
-        }
+        std::string result;
+        result.resize(capacity);
         
-        if (m_width < length) {
-            // Justification is a noop
-            return std::string(value);
-        }
-        else {
-            std::size_t write_offset;
-            switch (m_justification) {
-                case Justification::Left:
-                    write_offset = 0u; // Default is left-justified
-                    break;
-                case Justification::Right:
-                    write_offset = m_width - length;
-                    break;
-                case Justification::Center:
-                    write_offset = (m_width - length) / 2;
-                    break;
-            }
-
-            char fill_character = ' ';
-            if (m_fill) {
-                fill_character = m_fill;
-            }
-
-            std::string result;
-            result.resize(m_width, fill_character);
-
+        FormattingContext context { capacity, &result[0] };
+        format_to(value, &context);
+        
+        return std::move(result);
+    }
+    
+    template <typename T>
+    std::size_t StringFormatter<T>::reserve(const T& value) const {
+        return format_to(value, nullptr);
+    }
+    
+    template <typename T>
+    void StringFormatter<T>::format_to(const T& value, FormattingContext& context) const {
+        format_to(value, &context);
+    }
+    
+    template <typename T>
+    std::size_t StringFormatter<T>::format_to(const T& value, FormattingContext* context) const {
+        std::size_t length = std::string_view(value).length();
+        
+        if (context) {
+            FormattingContext& result = *context;
+            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<StringFormatter<T>::Justification>::type>(justification), fill_character, length, result);
+            
             for (std::size_t i = 0u; i < length; ++i) {
-                result[write_offset + i] = value[i];
+                result[write_position + i] = value[i];
             }
-
-            return std::move(result);
         }
+        
+        return std::max(length, (std::size_t) width);
     }
     
 }

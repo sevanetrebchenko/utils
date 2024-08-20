@@ -78,8 +78,19 @@ int main() {
     
     // std::cout << from_string<unsigned>("12344123123123123123") << std::endl;
 
-    std::cout << utils::format("example format string '{:precision=[14]}'", 5.4).string() << std::endl;
+    // std::cout << utils::format("example format string '{:representation=[scientific],precision=[1]}'", std::numeric_limits<double>::max() - 1) << std::endl;
     
+    std::string str = "this is a string";
+    std::string_view strv = "this is a string view";
+    const char* ccp = "ccp";
+    char ca[6] = "hello";
+    const char cca[6] = "hello";
+    
+    std::cout << utils::format("example format string '{}'", str) << std::endl;
+    std::cout << utils::format("example format string '{}'", strv) << std::endl;
+    std::cout << utils::format("example format string '{}'", ccp) << std::endl;
+    std::cout << utils::format("example format string '{}'", ca) << std::endl;
+    std::cout << utils::format("example format string '{}'", cca) << std::endl;
     
 //    std::size_t amount = 1000000;
 //

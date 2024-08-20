@@ -11,6 +11,7 @@
 #include <source_location> // std::source_location
 #include <variant> // std::variant
 #include <stdexcept> // std::runtime_error
+#include <ostream> // std::ostream
 
 namespace utils {
 
@@ -193,6 +194,8 @@ namespace utils {
             std::vector<Placeholder> m_placeholders;
     };
     
+    std::ostream& operator<<(std::ostream& os, const FormatString& fmt);
+    
     template <typename T>
     struct NamedArgument {
         NamedArgument(std::string_view name, const T& value);
@@ -348,17 +351,24 @@ namespace utils {
             
             void parse(const FormatString::Specification& spec);
             std::string format(const T& value) const;
+            
+            std::size_t reserve(const T& value) const;
+            void format_to(const T& value, FormattingContext& context) const;
         
-        private:
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            } m_justification;
+            } justification;
             
-            std::uint32_t m_width;
-            char m_fill;
+            unsigned width;
+            char fill_character;
+            
+        private:
+            inline std::size_t format_to(const T& value, FormattingContext* context) const;
     };
+    
+
     
     // Character types
     

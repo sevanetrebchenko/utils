@@ -23,7 +23,7 @@ namespace utils {
             return value + multiple - remainder;
         }
         
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, unsigned length, FormattingContext& context) {
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext& context) {
             std::size_t capacity = context.length();
             std::size_t start = 0u;
     
@@ -941,6 +941,11 @@ namespace utils {
     
     bool FormatString::Specification::Specifier::operator!=(const FormatString::Specification::Specifier& other) const {
         return !(*this == other);
+    }
+    
+    std::ostream& operator<<(std::ostream& stream, const FormatString& fmt) {
+        stream << fmt.string();
+        return stream;
     }
     
 }
