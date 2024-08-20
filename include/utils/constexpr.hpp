@@ -189,29 +189,138 @@ namespace utils {
     
     // fundamental type categories
     
+    // integer types
+    
     template <typename T>
-    struct is_integer_type {
-        using Type = std::decay<T>::type;
-        static constexpr bool value = std::is_same<Type, unsigned char>::value ||
-                                      std::is_same<Type, short>::value || std::is_same<Type, unsigned short>::value ||
-                                      std::is_same<Type, int>::value || std::is_same<Type, unsigned int>::value ||
-                                      std::is_same<Type, long>::value || std::is_same<Type, unsigned long>::value ||
-                                      std::is_same<Type, long long>::value || std::is_same<Type, unsigned long long>::value;
+    struct is_integer_type : std::false_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned char> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<short> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned short> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<int> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned int> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<long> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned long> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<long long> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned long long> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned char&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<short&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned short&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<int&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned int&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<long&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned long&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<long long&> : std::true_type {
+    };
+    
+    template <>
+    struct is_integer_type<unsigned long long&> : std::true_type {
     };
     
     template <typename T>
-    struct is_floating_point_type {
-        using Type = std::decay<T>::type;
-        static constexpr bool value = std::is_same<Type, float>::value || std::is_same<Type, double>::value || std::is_same<Type, long double>::value;
+    inline constexpr bool is_integer_type_v = is_integer_type<T>::value;
+    
+    // floating point types
+    
+    template <typename T>
+    struct is_floating_point_type : std::false_type {
     };
     
-    // TODO: handle volatile?
+    template <>
+    struct is_floating_point_type<float> : std::true_type {
+    };
+    
+    template <>
+    struct is_floating_point_type<double> : std::true_type {
+    };
+    
+    template <>
+    struct is_floating_point_type<long double> : std::true_type {
+    };
+    
+    template <>
+    struct is_floating_point_type<float&> : std::true_type {
+    };
+    
+    template <>
+    struct is_floating_point_type<double&> : std::true_type {
+    };
+    
+    template <>
+    struct is_floating_point_type<long double&> : std::true_type {
+    };
+    
+    template <typename T>
+    inline constexpr bool is_floating_point_type_v = is_floating_point_type<T>::value;
+    
+    // character types
+    
+    template <typename T>
+    struct is_character_type : std::false_type {
+    };
+    
+    template <>
+    struct is_character_type<char> : std::true_type {
+    };
+    
+    template <typename T>
+    inline constexpr bool is_character_type_v = is_character_type<T>::value;
+    
+    // string types
     
     template <typename T>
     struct is_string_type : std::false_type {
     };
-    
-    // Specializations of is_string_type for string types
     
     // char*
     template <>

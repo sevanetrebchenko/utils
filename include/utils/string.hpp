@@ -219,11 +219,6 @@ namespace utils {
     
     template <typename T>
     struct Formatter {
-        enum class Justification : std::uint8_t {
-            Left,
-            Right,
-            Center
-        };
     };
     
     class FormattingContext {
@@ -373,26 +368,7 @@ namespace utils {
     // Character types
     
     template <>
-    class Formatter<char> {
-        public:
-            enum class Justification : std::uint8_t {
-                Left,
-                Right,
-                Center
-            };
-            
-            Formatter() {}
-            ~Formatter() {}
-            
-            void parse(const FormatString::Specification& spec) {}
-            std::string format(char value) {
-                return "";
-            }
-            
-        private:
-            Justification m_justification;
-            std::uint32_t m_width;
-            char m_fill;
+    struct Formatter<char> : StringFormatter<char> {
     };
     
     // Integer types
@@ -454,7 +430,15 @@ namespace utils {
     };
     
     template <>
+    struct Formatter<char[]> : StringFormatter<char[]> {
+    };
+    
+    template <>
     struct Formatter<const char*> : StringFormatter<const char*> {
+    };
+    
+    template <>
+    struct Formatter<const char[]> : StringFormatter<const char[]> {
     };
     
     template <>
@@ -509,15 +493,7 @@ namespace utils {
     // User-defined / custom types
     
     template <typename T>
-    class Formatter<NamedArgument<T>> {
-        public:
-            void parse(const FormatString::Specification& spec) {}
-            std::string format(const NamedArgument<T>& value) const {
-                return m_formatter.format(value.value);
-            }
-            
-        private:
-            Formatter<T> m_formatter;
+    struct Formatter<NamedArgument<T>> : Formatter<T> {
     };
     
 }

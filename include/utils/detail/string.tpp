@@ -1177,7 +1177,7 @@ namespace utils {
     StringFormatter<T>::StringFormatter() : justification(Justification::Left),
                                             width(0u),
                                             fill_character(' ') {
-        static_assert(is_string_type<T>::value, "value must be a string type");
+        static_assert(is_string_type<T>::value || is_character_type<T>::value, "value must be a string / character type");
     }
     
     template <typename T>
@@ -1255,14 +1255,25 @@ namespace utils {
     
     template <typename T>
     std::size_t StringFormatter<T>::format_to(const T& value, FormattingContext* context) const {
-        std::size_t length = std::string_view(value).length();
+        std::size_t length;
+        if constexpr (is_character_type<T>::value) {
+            length = 1u;
+        }
+        else {
+            length = std::string_view(value).length();
+        }
         
         if (context) {
             FormattingContext& result = *context;
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<StringFormatter<T>::Justification>::type>(justification), fill_character, length, result);
             
-            for (std::size_t i = 0u; i < length; ++i) {
-                result[write_position + i] = value[i];
+            if constexpr (is_character_type<T>::value) {
+                result[write_position] = value; // Write char directly
+            }
+            else {
+                for (std::size_t i = 0u; i < length; ++i) {
+                    result[write_position + i] = value[i];
+                }
             }
         }
         

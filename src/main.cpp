@@ -85,12 +85,14 @@ int main() {
     const char* ccp = "ccp";
     char ca[6] = "hello";
     const char cca[6] = "hello";
+    char c = 'a';
     
     std::cout << utils::format("example format string '{}'", str) << std::endl;
     std::cout << utils::format("example format string '{}'", strv) << std::endl;
     std::cout << utils::format("example format string '{}'", ccp) << std::endl;
     std::cout << utils::format("example format string '{}'", ca) << std::endl;
     std::cout << utils::format("example format string '{}'", cca) << std::endl;
+    std::cout << utils::format("example format string '{}'", c) << std::endl;
     
 //    std::size_t amount = 1000000;
 //
