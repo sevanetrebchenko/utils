@@ -3,7 +3,6 @@
 #define TUPLE_HPP
 
 #include "utils/concepts.hpp"
-#include "utils/format.hpp"
 
 #include <cstddef> // std::size_t
 #include <tuple> // std::tuple

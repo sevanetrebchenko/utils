@@ -5,7 +5,6 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
-#include "utils/logging/logging.hpp"
 #include "utils/logging/adapter.hpp"
 #include <source_location>
 

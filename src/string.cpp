@@ -556,8 +556,8 @@ namespace utils {
                         return ParseResponse<FormatString>::NOT_OK(r.offset() + i, r.error());
                     }
                     
-                    const FormatString::Specification::Specifier& specifier = r.result();
-                    spec[group][specifier.first] = specifier.second;
+                    FormatString::Specification::Specifier& specifier = r.result();
+                    spec[group][specifier.name] = std::move(specifier.value);
                     
                     i += r.offset();
                     
@@ -672,110 +672,6 @@ namespace utils {
     
     FormatString::Specification::~Specification()= default;
     
-    const FormatString::Specification& FormatString::Specification::operator[](std::size_t index) const {
-        if (m_type == Type::SpecifierList) {
-            throw FormattedError("bad format specification access - formatting group {} contains a mapping of specifier name/value pairs and cannot be accessed by index", index);
-        }
-        
-        const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
-        if (index >= groups.size()) {
-            throw FormattedError("bad format specification access - formatting group {} does not exist (out of bounds)", index);
-        }
-        
-        return *groups[index];
-    }
-    
-    FormatString::Specification& FormatString::Specification::operator[](std::size_t index) {
-        // Try not to incur extra memory / performance overhead when the formatting specification only contains a specifier list
-        // Use a specifier list in line in place of a formatting group list there is only one active group
-        if (m_type == Type::SpecifierList) {
-            if (index == 0u) {
-                // Continue treating this as a specifier list and not a formatting group list
-                return *this;
-            }
-            else {
-                // When an additional group is requested, convert internal structure to a formatting group list
-                // This first requires the conversion of this (specifier list) to the first formatting group
-                m_spec = FormattingGroupList { new Specification(std::move(std::get<SpecifierList>(m_spec))) };
-                m_type = Type::FormattingGroupList;
-            }
-        }
-        
-        FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
-        
-        while (index >= groups.size()) {
-            // Allow a sparse vector of formatting groups to save on memory use
-            groups.emplace_back(nullptr);
-        }
-        
-        if (!groups[index]) {
-            groups[index] = new Specification();
-        }
-        return *groups[index];
-    }
-    
-    std::string_view FormatString::Specification::operator[](std::string_view key) const {
-        if (m_type == Type::FormattingGroupList) {
-            throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
-        }
-        
-        for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
-            if (icasecmp(specifier.first, key)) {
-                return specifier.second;
-            }
-        }
-        
-        // Specifier not found
-        throw FormattedError("bad format specification access - specifier with name '{}' not found", key);
-    }
-
-    std::string& FormatString::Specification::operator[](std::string_view key) {
-        if (m_type == Type::FormattingGroupList) {
-            // While formatting groups initialized to specifier lists can be converted to formatting group lists, the opposite of this operation is purposefully not supported
-            // Initializing a nested formatting specification to a formatting group can only be done through an intentional operation
-            throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
-        }
-        
-        SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
-        for (Specifier& specifier : specifiers) {
-            if (icasecmp(specifier.first, key)) {
-                return specifier.second;
-            }
-        }
-        
-        // Specifier was not found, create a new entry
-        return specifiers.emplace_back(std::make_pair(std::string(key), "")).second;
-    }
-    
-    FormatString::Specification::Type FormatString::Specification::type() const {
-        return m_type;
-    }
-    
-    std::size_t FormatString::Specification::size() const {
-        // All internal types (std::vector) support the size operation
-        static const auto visitor = []<typename T>(const T& data) -> std::size_t {
-            return data.size();
-        };
-        return std::visit(visitor, m_spec);
-    }
-    
-    bool FormatString::Specification::empty() const {
-        // All internal types (std::vector) support the empty operation
-        static const auto visitor = []<typename T>(const T& data) -> bool {
-            return data.empty();
-        };
-        return std::visit(visitor, m_spec);
-    }
-    
-    bool FormatString::Specification::has_group(std::size_t index) const {
-        if (std::holds_alternative<SpecifierList>(m_spec)) {
-            // TODO: calling has_group on a specifier list makes no sense, throw exception?
-            return false;
-        }
-        
-        return index < std::get<FormattingGroupList>(m_spec).size();
-    }
-    
     bool FormatString::Specification::operator==(const FormatString::Specification& other) const {
         if (m_type != other.m_type) {
             return false;
@@ -828,6 +724,176 @@ namespace utils {
     }
     
     bool FormatString::Specification::operator!=(const FormatString::Specification& other) const {
+        return !(*this == other);
+    }
+    
+    FormatString::Specification::Type FormatString::Specification::type() const {
+        return m_type;
+    }
+    
+    std::size_t FormatString::Specification::size() const {
+        // All internal types (std::vector) support the size operation
+        static const auto visitor = []<typename T>(const T& data) -> std::size_t {
+            return data.size();
+        };
+        return std::visit(visitor, m_spec);
+    }
+    
+    bool FormatString::Specification::empty() const {
+        // All internal types (std::vector) support the empty operation
+        static const auto visitor = []<typename T>(const T& data) -> bool {
+            return data.empty();
+        };
+        return std::visit(visitor, m_spec);
+    }
+    
+    void FormatString::Specification::set_specifier(std::string_view key, std::string value) {
+        if (m_type == Type::FormattingGroupList) {
+            throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
+        }
+        
+        SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
+        for (Specifier& specifier : specifiers) {
+            if (icasecmp(specifier.name, key)) {
+                specifier.value = std::move(value);
+                return;
+            }
+        }
+        
+        // Specifier not found, create a new entry
+        specifiers.emplace_back(std::string(key), std::move(value));
+    }
+    
+    FormatString::Specification::Specifier& FormatString::Specification::operator[](std::string_view key) {
+        return get_specifier(key);
+    }
+    
+    const FormatString::Specification::Specifier& FormatString::Specification::operator[](std::string_view key) const {
+        return get_specifier(key);
+    }
+    
+    FormatString::Specification::Specifier& FormatString::Specification::get_specifier(std::string_view key) {
+        if (m_type == Type::FormattingGroupList) {
+            // While formatting groups initialized to specifier lists can be converted to formatting group lists, the opposite of this operation is purposefully not supported
+            // Initializing a nested formatting specification to a formatting group can only be done through an intentional operation
+            throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
+        }
+        
+        SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
+        for (Specifier& specifier : specifiers) {
+            if (icasecmp(specifier.name, key)) {
+                return specifier;
+            }
+        }
+        
+        // Specifier was not found, create a new entry
+        return specifiers.emplace_back(std::string(key), "");
+    }
+    
+    const FormatString::Specification::Specifier& FormatString::Specification::get_specifier(std::string_view key) const {
+        if (m_type == Type::FormattingGroupList) {
+            throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
+        }
+        
+        for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
+            if (icasecmp(specifier.name, key)) {
+                return specifier;
+            }
+        }
+        
+        // Specifier not found
+        throw FormattedError("bad format specification access - specifier with name '{}' not found", key);
+    }
+    
+    FormatString::Specification& FormatString::Specification::operator[](std::size_t index) {
+        return get_formatting_group(index);
+    }
+    
+    const FormatString::Specification& FormatString::Specification::operator[](std::size_t index) const {
+        return get_formatting_group(index);
+    }
+    
+    FormatString::Specification& FormatString::Specification::get_formatting_group(std::size_t index) {
+        // Try not to incur extra memory / performance overhead when the formatting specification only contains a specifier list
+        // Use a specifier list in line in place of a formatting group list there is only one active group
+        if (m_type == Type::SpecifierList) {
+            if (index == 0u) {
+                // Continue treating this as a specifier list and not a formatting group list
+                return *this;
+            }
+            else {
+                // When an additional group is requested, convert internal structure to a formatting group list
+                // This first requires the conversion of this (specifier list) to the first formatting group
+                m_spec = FormattingGroupList { new Specification(std::move(std::get<SpecifierList>(m_spec))) };
+                m_type = Type::FormattingGroupList;
+            }
+        }
+        
+        FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
+        while (index >= groups.size()) {
+            // Allow a sparse vector of formatting groups to save on memory use
+            groups.emplace_back(nullptr);
+        }
+        
+        if (!groups[index]) {
+            groups[index] = new Specification();
+        }
+        return *groups[index];
+    }
+    
+    const FormatString::Specification& FormatString::Specification::get_formatting_group(std::size_t index) const {
+        if (m_type == Type::SpecifierList) {
+            throw FormattedError("bad format specification access - formatting group {} contains a mapping of specifier name/value pairs and cannot be accessed by index", index);
+        }
+        
+        const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
+        if (index < groups.size()) {
+            return *groups[index];
+        }
+        
+        throw FormattedError("bad format specification access - formatting group {} does not exist (out of bounds)", index);
+    }
+    
+    bool FormatString::Specification::has_group(std::size_t index) const {
+        if (std::holds_alternative<SpecifierList>(m_spec)) {
+            // TODO: calling has_group on a specifier list makes no sense, throw exception?
+            return false;
+        }
+        
+        return index < std::get<FormattingGroupList>(m_spec).size();
+    }
+    
+    bool FormatString::Specification::has_specifier(std::string_view key) const {
+        if (std::holds_alternative<FormattingGroupList>(m_spec)) {
+            // TODO: calling has_group on a formatting group list makes no sense, throw exception?
+            return false;
+        }
+        
+        for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
+            if (icasecmp(specifier.name, key)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    FormatString::Specification::Specifier::Specifier(std::string name, std::string value) : name(std::move(name)),
+                                                                                             value(std::move(value)) {
+    }
+    
+    FormatString::Specification::Specifier::~Specifier() = default;
+    
+    FormatString::Specification::Specifier& FormatString::Specification::Specifier::operator=(std::string other) {
+        value = std::move(other);
+        return *this;
+    }
+    
+    bool FormatString::Specification::Specifier::operator==(const FormatString::Specification::Specifier& other) const {
+        return icasecmp(name, other.name) && icasecmp(value, other.value);
+    }
+    
+    bool FormatString::Specification::Specifier::operator!=(const FormatString::Specification::Specifier& other) const {
         return !(*this == other);
     }
     

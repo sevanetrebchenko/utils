@@ -90,11 +90,6 @@ namespace utils {
         return has_specifier;
     }
     
-    template <typename T, typename ...Ts>
-    FormatString::Specification::SpecifierView FormatString::Specification::one_of(const T& first, const Ts&... rest) const {
-    
-    }
-    
     template <typename T>
     NamedArgument<T>::NamedArgument(std::string name, const T& value) : name(std::move(name)),
                                                                         value(value) {

@@ -2,7 +2,6 @@
 #pragma once
 
 #include "utils/logging/level.hpp"
-#include "utils/format.hpp"
 
 #include <source_location> // std::source_location
 

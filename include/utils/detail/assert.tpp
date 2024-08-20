@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "utils/format.hpp"
+#include "utils/string.hpp"
 
 namespace utils {
     namespace internal {

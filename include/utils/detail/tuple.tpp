@@ -2,7 +2,6 @@
 #ifndef TUPLE_TPP
 #define TUPLE_TPP
 
-#include "utils/format.hpp"
 
 #define GENERATE_APPLY_DEFINITIONS_FOR(TUPLE)                                                                                                                                                    \
 namespace utils {                                                                                                                                                                                \

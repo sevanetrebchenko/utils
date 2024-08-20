@@ -10,6 +10,7 @@
 #include <string_view> // std::string_view
 #include <source_location> // std::source_location
 #include <variant> // std::variant
+#include <stdexcept> // std::runtime_error
 
 namespace utils {
 
@@ -86,7 +87,7 @@ namespace utils {
                     struct Specifier {
                         Specifier(std::string name, std::string value = "");
                         ~Specifier();
-                        
+
                         Specifier& operator=(std::string other);
                         
                         [[nodiscard]] bool operator==(const Specifier& other) const;
@@ -95,12 +96,7 @@ namespace utils {
                         std::string name;
                         std::string value;
                     };
-                    
-                    struct SpecifierView {
-                        std::string_view name;
-                        std::string_view value;
-                    };
-                    
+
                     Specification();
                     ~Specification();
                     
@@ -116,27 +112,27 @@ namespace utils {
                     
                     // Methods for specifier lists
                     
-                    void set_specifier(std::string_view key, std::string value);
+                    void set_specifier(std::string_view specifier, std::string value);
                     
-                    Specifier& operator[](std::string_view key);
-                    SpecifierView operator[](std::string_view key) const;
+                    Specifier& operator[](std::string_view specifier);
+                    const Specifier& operator[](std::string_view specifier) const;
 
                     Specifier& get_specifier(std::string_view specifier);
-                    SpecifierView get_specifier(std::string_view specifier) const;
+                    const Specifier& get_specifier(std::string_view specifier) const;
                     
                     template <String T, String ...Ts>
-                    SpecifierView one_of(const T& first, const Ts&... rest) const;
+                    const Specifier& one_of(const T& first, const Ts&... rest) const;
                     
                     template <String ...Ts>
                     bool has_specifier(const Ts&... specifiers) const;
                     
                     // Methods for formatting group lists
                     
-                    const Specification& get_formatting_group(std::size_t index) const;
+                    Specification& operator[](std::size_t index);
                     const Specification& operator[](std::size_t index) const;
                     
                     Specification& get_formatting_group(std::size_t index);
-                    Specification& operator[](std::size_t index);
+                    const Specification& get_formatting_group(std::size_t index) const;
                     
                     bool has_group(std::size_t index) const;
                     
@@ -145,7 +141,7 @@ namespace utils {
                     using FormattingGroupList = std::vector<Specification*>;
                     
                     // Conversion from specifier list to formatting group list
-                    Specification(SpecifierList&& specifiers);
+                    explicit Specification(SpecifierList&& specifiers);
                     
                     [[nodiscard]] bool has_specifier(std::string_view specifier) const;
                     
@@ -469,18 +465,19 @@ namespace utils {
         public:
             void parse(const FormatString::Specification& spec) {}
             std::string format(const std::source_location& value) const {
-                return "";
+//                return "";
             }
             
             std::size_t reserve(const std::source_location& value) const {
-                return std::strlen(value.file_name());
+                // return std::strlen(value.file_name());
+                return 0;
             }
             
             void format_to(const std::source_location& value, FormattingContext& context) const {
-                const char* filename = value.file_name();
-                for (std::size_t i = 0u; i < strlen(filename); ++i) {
-                    context[i] = filename[i];
-                }
+//                const char* filename = value.file_name();
+//                for (std::size_t i = 0u; i < strlen(filename); ++i) {
+//                    context[i] = filename[i];
+//                }
             }
             
         private:

@@ -70,7 +70,20 @@ namespace utils {
     
     template <String T, String U>
     [[nodiscard]] bool icasecmp(const T& first, const U& second) {
-        return false;
+        std::string_view a = first;
+        std::string_view b = second;
+        
+        if (a.length() != b.length()) {
+            return false;
+        }
+        
+        for (std::size_t i = 0u; i < a.length(); ++i) {
+            if (std::tolower(a[i]) != std::tolower(b[i])) {
+                return false;
+            }
+        }
+        
+        return true;
     }
     
     template <String T, String U>
@@ -383,20 +396,23 @@ namespace utils {
     }
     
     template <String T, String ...Ts>
-    FormatString::Specification::SpecifierView FormatString::Specification::one_of(const T& first, const Ts&... rest) const {
+    const FormatString::Specification::Specifier& FormatString::Specification::one_of(const T& first, const Ts&... rest) const {
         if (sizeof...(Ts) == 1u) {
             return get_specifier(first);
         }
         
         constexpr std::size_t argument_count = sizeof...(Ts) + 1u;
         
-        SpecifierView specifier_views[argument_count];
+        // Stored as a pointer to avoid copying specifiers
+        std::pair<std::string_view, const Specifier*> specifiers[argument_count];
+        
         // Index of the first valid specifier
         std::size_t index = argument_count; // Invalid index
         std::size_t valid_specifier_count = 0u;
         
-        utils::apply([this, &specifier_views, &index, &valid_specifier_count, argument_count](std::string_view name, std::size_t i) {
-            specifier_views[i].name = name;
+        utils::apply([this, &specifiers, &index, &valid_specifier_count](std::string_view name, std::size_t i) {
+            specifiers[i].first = name;
+            
             if (has_specifier(name)) {
                 if (index == argument_count) {
                     // Found the first valid specifier
@@ -404,7 +420,7 @@ namespace utils {
                     index = i;
                 }
                 
-                specifier_views[i].value = get_specifier(name);
+                specifiers[i].second = &get_specifier(name);
                 ++valid_specifier_count;
             }
         }, make_string_view_tuple(first, rest...));
@@ -414,8 +430,8 @@ namespace utils {
             // Error message format:
             //   bad format specification access - no specifier values found for any of the following specifiers: {} (97 characters, not including placeholder braces)
             std::size_t capacity = 97u + (argument_count - 1u) * 2u;
-            for (const SpecifierView& specifier : specifier_views) {
-                capacity += specifier.name.length();
+            for (const auto& specifier : specifiers) {
+                capacity += specifier.first.length();
             }
 
             std::string error;
@@ -424,8 +440,8 @@ namespace utils {
             error += "bad format specification access - no specifier values found for any of the following specifiers: ";
             
             for (std::size_t i = 0u; i < argument_count; ++i) {
-                const SpecifierView& specifier = specifier_views[i];
-                error += specifier.name;
+                const auto& specifier = specifiers[i];
+                error += specifier.first;
                 
                 // Do not add a trailing comma
                 if (i != argument_count) {
@@ -440,9 +456,9 @@ namespace utils {
             // Error message format:
             //   ambiguous format specification access - specification contains values for more than one of the following specifiers: {} (not found: {}) (131 characters, not including placeholder braces)
             std::size_t capacity = 131u + (argument_count - 1u) * 2u;
-            for (const SpecifierView& specifier : specifier_views) {
-                if (!specifier.value.empty()) {
-                    capacity += specifier.name.length();
+            for (const auto& specifier : specifiers) {
+                if (specifier.second) {
+                    capacity += specifier.first.length();
                 }
             }
             
@@ -453,9 +469,9 @@ namespace utils {
 
             // Append comma-separated list of valid specifiers
             unsigned count = 0u;
-            for (const SpecifierView& specifier : specifier_views) {
-                if (!specifier.value.empty()) {
-                    error += specifier.name;
+            for (const auto& specifier : specifiers) {
+                if (specifier.second) {
+                    error += specifier.first;
                     ++count;
                     
                     // Do not add a trailing comma
@@ -469,9 +485,9 @@ namespace utils {
             
             // Append comma-separated list of separators for which definitions were not found
             error += "(not found: ";
-            for (const SpecifierView& specifier : specifier_views) {
-                if (specifier.value.empty()) {
-                    error += specifier.name;
+            for (const auto& specifier : specifiers) {
+                if (!specifier.second) {
+                    error += specifier.first;
                     ++count;
                     
                     // Do not add a trailing comma
@@ -485,7 +501,7 @@ namespace utils {
             throw FormattedError(error);
         }
 
-        return specifier_views[index];
+        return *specifiers[index].second;
     }
     
     template <String ...Ts>
@@ -505,6 +521,11 @@ namespace utils {
     FormattedError::FormattedError(FormatString fmt, const Ts&... args) : std::runtime_error(fmt.format(args...)) {
     }
 
+    template <typename ...Ts>
+    FormatString format(FormatString fmt, const Ts&... args) {
+        return fmt.format(args...);
+    }
+    
     // Section: IntegerFormatter
     
     template <typename T>
@@ -866,7 +887,6 @@ namespace utils {
             case Representation::Decimal:
                 return 10;
             case Representation::Binary:
-            case Representation::Bitset:
                 return 2;
             case Representation::Hexadecimal:
                 return 16;
