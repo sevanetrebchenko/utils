@@ -78,31 +78,34 @@ int main() {
     
     // std::cout << from_string<unsigned>("12344123123123123123") << std::endl;
 
-    std::size_t amount = 1000000;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (std::size_t i = 0u; i < amount; ++i) {
-        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "time to format " << amount << ": " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
-
-    std::vector<std::size_t> durations;
-    durations.reserve(amount);
-
-    for (std::size_t i = 0u; i < amount; ++i) {
-        start = std::chrono::high_resolution_clock::now();
-        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
-        // std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
-        end = std::chrono::high_resolution_clock::now();
-        durations.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
-    }
-
-    std::size_t total = 0;
-    for (auto duration : durations) {
-        total += duration;
-    }
-    std::cout << "average time per format: " << total / amount << std::endl;
+    std::cout << utils::format("example format string '{}'", "test string").string() << std::endl;
+    
+    
+//    std::size_t amount = 1000000;
+//
+//    auto start = std::chrono::high_resolution_clock::now();
+//    for (std::size_t i = 0u; i < amount; ++i) {
+//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+//    }
+//    auto end = std::chrono::high_resolution_clock::now();
+//    std::cout << "time to format " << amount << ": " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
+//
+//    std::vector<std::size_t> durations;
+//    durations.reserve(amount);
+//
+//    for (std::size_t i = 0u; i < amount; ++i) {
+//        start = std::chrono::high_resolution_clock::now();
+//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+//        // std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+//        end = std::chrono::high_resolution_clock::now();
+//        durations.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+//    }
+//
+//    std::size_t total = 0;
+//    for (auto duration : durations) {
+//        total += duration;
+//    }
+//    std::cout << "average time per format: " << total / amount << std::endl;
     
     return 0;
 }

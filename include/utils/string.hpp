@@ -437,6 +437,10 @@ namespace utils {
     };
     
     template <>
+    struct Formatter<const char*> : StringFormatter<const char*> {
+    };
+    
+    template <>
     struct Formatter<std::string_view> : StringFormatter<std::string_view> {
     };
     

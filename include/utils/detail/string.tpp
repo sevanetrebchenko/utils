@@ -108,7 +108,7 @@ namespace utils {
         }
         else {
             std::size_t argument_count = sizeof...(args);
-            std::tuple<Ts...> tuple = std::make_tuple(args...);
+            std::tuple<typename std::decay<const Ts>::type...> tuple = std::make_tuple(args...);
             
             std::size_t placeholder_count = m_placeholders.size();
             
@@ -122,7 +122,7 @@ namespace utils {
                         }
                     }, tuple);
                     
-                    std::tuple<detail::PlaceholderFormatter<Ts>...> formatters { };
+                    std::tuple<detail::PlaceholderFormatter<typename std::decay<const Ts>::type>...> formatters { };
                     std::size_t capacity = m_format.size();
                     
                     // Initialize formatters
@@ -168,7 +168,7 @@ namespace utils {
                             else if constexpr (detail::is_formattable<T>) {
                                 // The Formatter<T>::format function serves as a quick and dirty solution
                                 // For optimal performance, Formatters should provide reserve / format_to, so write a log message to remind the user :)
-                                logging::warning("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback");
+                                logging::warning(FormatString("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback", m_source));
                                 
                                 std::string result = std::move(formatter.format(value));
                                 length = result.length();
@@ -264,7 +264,7 @@ namespace utils {
                     // A placeholder can be referenced multiple times in the same format string with different format specifications
                     // Key into 'formatters' tuple is the argument index as provided to format(...)
                     // Key into the Formatter vector is the index of the Formatter to use (described below)
-                    std::tuple<std::vector<detail::PlaceholderFormatter<Ts>>...> formatters { };
+                    std::tuple<std::vector<detail::PlaceholderFormatter<typename std::decay<const Ts>::type>>...> formatters { };
                     
                     // "this is a format string example: {0:representation=[binary]}, {0:[representation=[hexadecimal]}, {0:representation=[binary]}"
                     // The above format string requires two unique Formatters for positional placeholder 0
