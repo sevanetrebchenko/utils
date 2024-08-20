@@ -344,7 +344,7 @@ namespace utils {
             StringFormatter();
             ~StringFormatter();
             
-            void parse(const FormatString::Specification& spec);
+            virtual void parse(const FormatString::Specification& spec);
             std::string format(const T& value) const;
             
             std::size_t reserve(const T& value) const;
@@ -446,7 +446,7 @@ namespace utils {
     };
     
     template <>
-    struct Formatter<std::string> : StringFormatter<std::string> {
+    struct Formatter<std::string> : public StringFormatter<std::string> {
     };
     
     // Container types
@@ -489,11 +489,32 @@ namespace utils {
             Formatter<std::uint64_t> m_line_formatter;
             Formatter<const char*> m_filename_formatter;
     };
-
+    
     // User-defined / custom types
     
     template <typename T>
+    concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
+        { formatter.parse(spec) };
+        { formatter.format(value) } -> std::same_as<std::string>;
+    };
+    
+    template <typename T>
+    concept is_formattable_to = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value, FormattingContext& context) {
+        { formatter.parse(spec) };
+        { formatter.reserve(value) } -> std::same_as<std::size_t>;
+        { formatter.format_to(value, context) };
+    };
+    
+    template <typename T>
     struct Formatter<NamedArgument<T>> : Formatter<T> {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatString::Specification& spec);
+        std::string format(const NamedArgument<T>& value) const requires is_formattable<T>;
+        
+        std::size_t reserve(const NamedArgument<T>& value) const requires is_formattable_to<T>;
+        void format_to(const NamedArgument<T>& value, FormattingContext& context) const requires is_formattable_to<T>;
     };
     
 }

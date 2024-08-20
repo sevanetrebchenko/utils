@@ -87,7 +87,7 @@ int main() {
     const char cca[6] = "hello";
     char c = 'a';
     
-    std::cout << utils::format("example format string '{}'", str) << std::endl;
+    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", 67)) << std::endl;
     std::cout << utils::format("example format string '{}'", strv) << std::endl;
     std::cout << utils::format("example format string '{}'", ccp) << std::endl;
     std::cout << utils::format("example format string '{}'", ca) << std::endl;

@@ -25,7 +25,7 @@ namespace utils {
         };
         
         template <typename T>
-        struct PlaceholderFormatter : public Formatter<typename std::decay<T>::type> {
+        struct PlaceholderFormatter : public Formatter<T> {
             PlaceholderFormatter() : length(0u),
                                      specification_index(0u),
                                      start(std::numeric_limits<std::size_t>::max()) {
@@ -50,17 +50,7 @@ namespace utils {
             std::size_t formatter_index;
         };
         
-        template <typename T>
-        concept is_formattable = requires(Formatter<T> formatter, const FormatString::Specification& spec, const T& value) {
-            { formatter.parse(spec) };
-            { formatter.format(value) } -> std::same_as<std::string>;
-        };
-        
-        template <typename T>
-        concept is_formattable_to = requires(Formatter<T> formatter, const T& value, FormattingContext context) {
-            { formatter.reserve(value) } -> std::same_as<std::size_t>;
-            { formatter.format_to(value, context) };
-        };
+
         
         int round_up_to_multiple(int value, int multiple);
         
@@ -138,7 +128,7 @@ namespace utils {
                         utils::apply([&capacity, &formatters, &spec]<typename T, std::size_t I>(const T& value) {
                             detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
                             formatter.parse(spec);
-                            if constexpr (detail::is_formattable_to<T>) {
+                            if constexpr (is_formattable_to<T>) {
                                 formatter.length = formatter.reserve(value);
                                 capacity += formatter.length;
                             }
@@ -159,7 +149,7 @@ namespace utils {
                             detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
                             
                             std::size_t length;
-                            if constexpr (detail::is_formattable_to<T>) {
+                            if constexpr (is_formattable_to<T>) {
                                 length = formatter.length;
                                 if (length > 0u) {
                                     // If a Formatter returns a valid capacity, adequate space for it will be reserved in the output string
@@ -170,7 +160,7 @@ namespace utils {
                                 // Skip over formatting values for which the expected capacity is 0 characters
                                 // else { ... }
                             }
-                            else if constexpr (detail::is_formattable<T>) {
+                            else if constexpr (is_formattable<T>) {
                                 // The Formatter<T>::format function serves as a quick and dirty solution
                                 // For optimal performance, Formatters should provide reserve / format_to, so write a log message to remind the user :)
                                 logging::warning(FormatString("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback", m_source));
@@ -221,7 +211,7 @@ namespace utils {
                         ASSERT(detail::is_named_argument<T>::value, "argument is not of type NamedArgument<T>");
                         
                         if constexpr (detail::is_named_argument<T>::value) {
-                            utils::apply_for([&tuple, &outer, i]<typename U>(const U& inner, std::size_t j) {
+                            utils::apply_for([&outer, i]<typename U>(const U& inner, std::size_t j) {
                                 ASSERT(detail::is_named_argument<U>::value, "argument is not of type NamedArgument<U>");
                                 
                                 if constexpr (detail::is_named_argument<U>::value) {
@@ -306,7 +296,7 @@ namespace utils {
                             // Initialize new formatter
                             detail::PlaceholderFormatter<T>& formatter = placeholder_formatters.emplace_back(specification_index);
                             formatter.parse(spec);
-                            if constexpr (detail::is_formattable_to<T>) {
+                            if constexpr (is_formattable_to<T>) {
                                 formatter.length = formatter.reserve(value);
                                 capacity += formatter.length;
                             }
@@ -334,7 +324,7 @@ namespace utils {
                             std::vector<detail::PlaceholderFormatter<T>>& placeholder_formatters = std::get<I>(formatters);
                             detail::PlaceholderFormatter<T>& formatter = placeholder_formatters[formatter_index];
                             
-                            if constexpr (detail::is_formattable_to<T>) {
+                            if constexpr (is_formattable_to<T>) {
                                 if (formatter.length > 0u) {
                                     if (formatter.initialized()) {
                                         // Use cached result to avoid re-formatting, which is a potentially expensive operation
@@ -354,7 +344,7 @@ namespace utils {
                                 // Skip over formatting values for which the expected capacity is 0 characters
                                 // else { ... }
                             }
-                            else if constexpr (detail::is_formattable<T>){
+                            else if constexpr (is_formattable<T>){
                                 // The Formatter<T>::format function serves as a quick and dirty solution
                                 // For optimal performance, Formatters should provide reserve / format_to (write a log message to remind the user :) )
                                 logging::warning("performance implication: cannot find reserve(...) / format_to(...) functions that match the expected syntax, using format(...) as a fallback");
@@ -1278,6 +1268,33 @@ namespace utils {
         }
         
         return std::max(length, (std::size_t) width);
+    }
+    
+    template <typename T>
+    Formatter<NamedArgument<T>>::Formatter() : Formatter<T>() {
+    }
+    
+    template <typename T>
+    Formatter<NamedArgument<T>>::~Formatter() = default;
+    
+    template <typename T>
+    void Formatter<NamedArgument<T>>::parse(const FormatString::Specification& spec) {
+        Formatter<T>::parse(spec);
+    }
+    
+    template <typename T>
+    std::string Formatter<NamedArgument<T>>::format(const NamedArgument<T>& value) const requires is_formattable<T> {
+        return Formatter<T>::format(value.value);
+    }
+    
+    template <typename T>
+    std::size_t Formatter<NamedArgument<T>>::reserve(const NamedArgument<T>& value) const requires is_formattable_to<T> {
+        return Formatter<T>::reserve(value.value);
+    }
+    
+    template <typename T>
+    void Formatter<NamedArgument<T>>::format_to(const NamedArgument<T>& value, FormattingContext& context) const requires is_formattable_to<T> {
+        return Formatter<T>::format_to(value.value, context);
     }
     
 }
