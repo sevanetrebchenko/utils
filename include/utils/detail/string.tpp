@@ -64,6 +64,11 @@ namespace utils {
         
         int round_up_to_multiple(int value, int multiple);
         
+        // 0 - left
+        // 1 - right
+        // 2 - center
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, unsigned length, FormattingContext& context);
+        
     }
 
     
@@ -533,7 +538,7 @@ namespace utils {
                                               sign(Sign::NegativeOnly),
                                               justification(Justification::Left),
                                               width(0u),
-                                              fill_character(0),
+                                              fill_character(' '),
                                               padding_character(0),
                                               separator_character(0),
                                               use_base_prefix(false),
@@ -689,29 +694,29 @@ namespace utils {
     std::string IntegerFormatter<T>::format(T value) const {
         int base = get_base();
         
-        std::size_t capacity = to_base(value, base, nullptr);
+        std::size_t capacity = format_to(value, base, nullptr);
         
         std::string result;
         result.resize(capacity);
         
         FormattingContext context { capacity, &result[0] };
-        to_base(value, get_base(), &context);
+        format_to(value, get_base(), &context);
         
         return std::move(result);
     }
 
     template <typename T>
     std::size_t IntegerFormatter<T>::reserve(T value) const {
-        return to_base(value, get_base(), nullptr);
+        return format_to(value, get_base(), nullptr);
     }
     
     template <typename T>
     void IntegerFormatter<T>::format_to(T value, FormattingContext& context) const {
-        to_base(value, get_base(), &context);
+        format_to(value, get_base(), &context);
     }
     
     template <typename T>
-    std::size_t IntegerFormatter<T>::to_base(T value, int base, FormattingContext* context) const {
+    std::size_t IntegerFormatter<T>::format_to(T value, int base, FormattingContext* context) const {
         std::size_t capacity = 0u;
         std::size_t read_position = 0u;
         
@@ -736,14 +741,14 @@ namespace utils {
             }
         }
         
-        // Architecture + space for negative sign
+        // System architecture + space for negative sign
         char buffer[sizeof(unsigned long long) * 8 + 1] { 0 };
         char* start = buffer;
         char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
 
         const auto& [ptr, error_code] = std::to_chars(start, end, value, base);
         if (error_code == std::errc::value_too_large) {
-            throw FormattedError("value too large to serialize (integer overflow)");
+            throw FormattedError("integer value too large to serialize (overflow)");
         }
 
         std::size_t num_characters_written = ptr - (start + read_position);
@@ -759,7 +764,7 @@ namespace utils {
             // Resulting formatted string should only be generated if a valid context is provided
             if (context) {
                 FormattingContext& result = *context;
-                std::size_t write_position = apply_justification(capacity, result);
+                std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
                 
                 if (sign_character) {
                     result[write_position++] = sign_character;
@@ -817,7 +822,7 @@ namespace utils {
             
             if (context) {
                 FormattingContext& result = *context;
-                std::size_t write_position = apply_justification(capacity, result);
+                std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
                 
                 char padding = '.';
                 if (padding_character) {
@@ -896,55 +901,13 @@ namespace utils {
     }
     
     template <typename T>
-    std::size_t IntegerFormatter<T>::apply_justification(std::size_t capacity, FormattingContext& context) const {
-        std::size_t start = 0u;
-
-        char fill = ' ';
-        if (fill_character) {
-            fill = fill_character;
-        }
-        
-        if (capacity < width) {
-            switch (justification) {
-                case Justification::Left:
-                    for (std::size_t i = capacity; i < width; ++i) {
-                        context[i] = fill;
-                    }
-                    break;
-                case Justification::Right:
-                    start = (width - 1u) - capacity;
-                    for (std::size_t i = 0u; i < start; ++i) {
-                        context[i] = fill;
-                    }
-                    break;
-                case Justification::Center:
-                    start = (width - capacity) / 2;
-                    
-                    // Left side
-                    for (std::size_t i = 0u; i < start; ++i) {
-                        context[i] = fill;
-                    }
-                    
-                    // Right side (account for additional character in the case that width is odd)
-                    std::size_t last = context.length() - 1u;
-                    for (std::size_t i = 0u; i < start + ((width - capacity) % 2); ++i) {
-                        context[last - i] = fill;
-                    }
-                    break;
-            }
-        }
-        
-        return start;
-    }
-    
-    template <typename T>
-    FloatingPointFormatter<T>::FloatingPointFormatter() : m_representation(Representation::Fixed),
-                                                          m_sign(Sign::NegativeOnly),
-                                                          m_justification(Justification::Left),
-                                                          m_width(0u),
-                                                          m_fill(0),
-                                                          m_precision(0u),
-                                                          m_separator(0) {
+    FloatingPointFormatter<T>::FloatingPointFormatter() : representation(Representation::Fixed),
+                                                          sign(Sign::NegativeOnly),
+                                                          justification(Justification::Left),
+                                                          width(0u),
+                                                          fill_character(' '),
+                                                          precision(0u),
+                                                          separator_character(0) {
         static_assert(is_floating_point_type<T>::value, "value must be a floating point type");
     }
     
@@ -953,30 +916,147 @@ namespace utils {
     
     template <typename T>
     void FloatingPointFormatter<T>::parse(const FormatString::Specification& spec) {
+        if (spec.type() == FormatString::Specification::Type::FormattingGroupList) {
+            throw FormattedError("format specification for floating point values must be a list of specifiers");
+        }
+        
+        if (spec.has_specifier("representation")) {
+            std::string_view value = trim(spec.get_specifier("representation").value);
+            if (icasecmp(value, "fixed")) {
+                representation = Representation::Fixed;
+            }
+            else if (icasecmp(value, "scientific")) {
+                representation = Representation::Scientific;
+            }
+            else {
+                logging::warning("ignoring unknown representation specifier value: '{}' - expecting one of: fixed, scientific (case-insensitive)", value);
+            }
+        }
+        
+        
+        if (spec.has_specifier("sign")) {
+            std::string_view value = trim(spec.get_specifier("sign").value);
+            if (icasecmp(value, "negative only") || icasecmp(value, "negative_only") || icasecmp(value, "negativeonly")) {
+                sign = Sign::NegativeOnly;
+            }
+            else if (icasecmp(value, "aligned")) {
+                sign = Sign::Aligned;
+            }
+            else if (icasecmp(value, "both")) {
+                sign = Sign::Both;
+            }
+            else {
+                logging::warning("ignoring unknown sign specifier value: '{}' - expecting one of: negative only (variants: negative_only, negativeonly), aligned, or both (case-insensitive)", value);
+            }
+        }
+        
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.one_of("justification", "justify", "alignment", "align").value);
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+        
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width").value);
+            
+            unsigned w;
+            std::size_t num_characters_read = from_string(value, w);
+            
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = w;
+            }
+        }
+        
+        if (spec.has_specifier("precision")) {
+            std::string_view value = trim(spec.get_specifier("precision").value);
+            
+            unsigned p;
+            std::size_t num_characters_read = from_string(value, p);
+            
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid precision specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                precision = p;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.one_of("fill", "fill_character", "fillcharacter").value);
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+        
+        if (spec.has_specifier("separator", "separator_character", "separatorcharacter")) {
+            std::string_view value = trim(spec.one_of("separator", "separator_character", "separatorcharacter").value);
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid separator character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                separator_character = value[0];
+            }
+        }
     }
 
     template <typename T>
     std::string FloatingPointFormatter<T>::format(T value) {
+        std::size_t capacity = format_to(value, nullptr);
+        
+        std::string result;
+        result.resize(capacity);
+        
+        FormattingContext context { capacity, &result[0] };
+        format_to(value, &context);
+        
+        return std::move(result);
+    }
+    
+    template <typename T>
+    std::size_t FloatingPointFormatter<T>::reserve(T value) const {
+        return format_to(value, nullptr);
+    }
+    
+    template <typename T>
+    void FloatingPointFormatter<T>::format_to(T value, FormattingContext& context) const {
+        format_to(value, &context);
+    }
+    
+    template <typename T>
+    std::size_t FloatingPointFormatter<T>::format_to(T value, FormattingContext* context) const {
         std::size_t capacity = 0u;
         std::size_t read_offset = 0u;
 
-        const char* sign = nullptr;
+        const char* sign_character = nullptr;
         if (value < 0) {
             read_offset = 1u; // Do not read negative sign in resulting buffer
-
-            if (m_sign != Sign::None) {
-                sign = "-";
-                ++capacity;
-            }
+            sign_character = "-";
+            ++capacity;
         }
         else {
-            switch (m_sign) {
+            switch (sign) {
                 case Sign::Aligned:
-                    sign = " ";
+                    sign_character = " ";
                     ++capacity;
                     break;
                 case Sign::Both:
-                    sign = "+";
+                    sign_character = "+";
                     ++capacity;
                     break;
                 default:
@@ -984,13 +1064,13 @@ namespace utils {
             }
         }
 
-        int precision = 6;
-        if (m_precision) {
-            precision = m_precision;
+        int num_significant_figures = 6;
+        if (precision) {
+            num_significant_figures = precision;
         }
 
         std::chars_format format_flags = std::chars_format::fixed;
-        if (m_representation == Representation::Scientific) {
+        if (representation == Representation::Scientific) {
             format_flags = std::chars_format::scientific;
         }
 
@@ -1004,21 +1084,21 @@ namespace utils {
 
         // std::numeric_limits<T>::digits10 represents the number of decimal places that are guaranteed to be preserved when converted to text
         // Note: last decimal place will be rounded
-        int conversion_precision = std::clamp(precision, 0, std::numeric_limits<T>::digits10);
+        int conversion_precision = std::clamp(num_significant_figures, 0, std::numeric_limits<T>::digits10);
         const auto& [ptr, error_code] = std::to_chars(start, end, value, format_flags, conversion_precision);
 
         if (error_code == std::errc::value_too_large) {
-            return "too large";
+            throw FormattedError("floating point value is too large to serialize (overflow)");
         }
 
         std::size_t num_characters_written = ptr - (start + read_offset);
         capacity += num_characters_written;
 
         // Additional precision
-        capacity += std::max(0, precision - conversion_precision);
+        capacity += std::max(0, num_significant_figures - conversion_precision);
 
         std::size_t decimal_position = num_characters_written;
-        if (m_separator) {
+        if (separator_character) {
             char* decimal = std::find(start + read_offset, ptr, '.');
             decimal_position = decimal - (start + read_offset);
 
@@ -1026,83 +1106,85 @@ namespace utils {
             capacity += (decimal_position - 1) / 3;
         }
 
-        char fill_character = ' ';
-        if (m_fill) {
-            fill_character = m_fill;
-        }
-
         std::size_t write_offset = 0u;
-        if (capacity < m_width) {
-            switch (m_justification) {
+        if (capacity < width) {
+            switch (justification) {
                 case Justification::Right:
-                    write_offset = m_width - capacity;
+                    write_offset = width - capacity;
                     break;
                 case Justification::Center:
-                    write_offset = (m_width - capacity) / 2;
+                    write_offset = (width - capacity) / 2;
                     break;
                 default:
                     break;
             }
 
-            capacity = m_width;
+            capacity = width;
         }
-
-        std::string result;
-        result.resize(capacity, fill_character);
-
-        if (sign) {
-            result[write_offset++] = sign[0];
-        }
-
-        if (m_representation == Representation::Scientific) {
-            char* e = std::find(buffer, ptr, 'e');
-            std::size_t e_position = e - (start + read_offset);
-
-            for (std::size_t i = 0u; i < e_position; ++i) {
-                result[write_offset++] = *(buffer + read_offset + i);
+        
+        if (context) {
+            FormattingContext& result = *context;
+            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<FloatingPointFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
+            
+            if (sign_character) {
+                result[write_offset++] = sign_character[0];
             }
-
-            // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
-            for (std::size_t i = conversion_precision; i < precision; ++i) {
-                result[write_offset++] = '0';
-            }
-
-            for (start = buffer + read_offset + e_position; start != ptr; ++start) {
-                result[write_offset++] = *start;
-            }
-        }
-        else {
-            // Separator character only makes sense for fixed floating point values
-            char separator_character = ' ';
-            if (m_separator) {
-                separator_character = m_separator;
-
-                // Separators get inserted every 3 characters up until the position of the decimal point
-                std::size_t group_size = 3;
-                std::size_t counter = group_size - (decimal_position % group_size);
-
-                // Write the number portion, up until the decimal point (with separators)
-                for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
-                    if (i && counter % group_size == 0u) {
-                        result[write_offset++] = separator_character;
-                    }
-
+    
+            if (representation == Representation::Scientific) {
+                char* e = std::find(buffer, ptr, 'e');
+                std::size_t e_position = e - (start + read_offset);
+    
+                for (std::size_t i = 0u; i < e_position; ++i) {
                     result[write_offset++] = *(buffer + read_offset + i);
                 }
-
-                // Write decimal portion
-                for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
+    
+                // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
+                for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
+                    result[write_offset++] = '0';
+                }
+    
+                for (start = buffer + read_offset + e_position; start != ptr; ++start) {
                     result[write_offset++] = *start;
                 }
             }
-
-            // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
-            for (std::size_t i = conversion_precision; i < precision; ++i) {
-                result[write_offset++] = '0';
+            else {
+                // Separator character only makes sense for fixed floating point values
+                char separator = ' ';
+                if (separator_character) {
+                    separator = separator_character;
+    
+                    // Separators get inserted every 3 characters up until the position of the decimal point
+                    std::size_t group_size = 3;
+                    std::size_t counter = group_size - (decimal_position % group_size);
+    
+                    // Write the number portion, up until the decimal point (with separators)
+                    for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
+                        if (i && counter % group_size == 0u) {
+                            result[write_offset++] = separator;
+                        }
+    
+                        result[write_offset++] = *(buffer + read_offset + i);
+                    }
+    
+                    // Write decimal portion
+                    for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
+                        result[write_offset++] = *start;
+                    }
+                }
+                else {
+                    for (start = buffer + read_offset; start != ptr; ++start) {
+                        result[write_offset++] = *start;
+                    }
+                }
+    
+                // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
+                for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
+                    result[write_offset++] = '0';
+                }
             }
         }
-
-        return std::move(result);
+        
+        return std::max(capacity, (std::size_t) width);
     }
     
     // StringFormatter

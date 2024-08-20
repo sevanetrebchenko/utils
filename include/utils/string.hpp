@@ -216,6 +216,11 @@ namespace utils {
     
     template <typename T>
     struct Formatter {
+        enum class Justification : std::uint8_t {
+            Left,
+            Right,
+            Center
+        };
     };
     
     class FormattingContext {
@@ -293,9 +298,7 @@ namespace utils {
             
         private:
             inline int get_base() const;
-            
-            inline std::size_t to_base(T value, int base, FormattingContext* context) const;
-            inline std::size_t apply_justification(std::size_t capacity, FormattingContext& context) const;
+            inline std::size_t format_to(T value, int base, FormattingContext* context) const;
     };
     
     template <typename T>
@@ -306,31 +309,35 @@ namespace utils {
             
             void parse(const FormatString::Specification& spec);
             std::string format(T value);
+            
+            std::size_t reserve(T value) const;
+            void format_to(T value, FormattingContext& context) const;
 
-        private:
             enum class Representation : std::uint8_t {
                 Fixed,
                 Scientific,
-            } m_representation;
+            } representation;
             
             enum class Sign : std::uint8_t {
                 NegativeOnly,
                 Aligned,
-                Both,
-                None
-            } m_sign;
+                Both
+            } sign;
             
             enum class Justification : std::uint8_t {
                 Left,
                 Right,
                 Center
-            } m_justification;
+            } justification;
             
-            std::uint32_t m_width;
-            char m_fill;
+            unsigned width;
+            char fill_character;
             
-            std::uint8_t m_precision;
-            char m_separator;
+            std::uint8_t precision;
+            char separator_character;
+            
+        private:
+            inline std::size_t format_to(T value, FormattingContext* context) const;
     };
     
     template <typename T>

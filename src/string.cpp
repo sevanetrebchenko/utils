@@ -23,6 +23,52 @@ namespace utils {
             return value + multiple - remainder;
         }
         
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, unsigned length, FormattingContext& context) {
+            std::size_t capacity = context.length();
+            std::size_t start = 0u;
+    
+            char fill = ' ';
+            if (fill_character) {
+                fill = fill_character;
+            }
+            
+            if (length < capacity) {
+                // Formatted string
+                switch (justification) {
+                    case 0:
+                        // Justify left (append fill character from the right)
+                        for (std::size_t i = length; i < capacity; ++i) {
+                            context[i] = fill;
+                        }
+                        break;
+                    case 1:
+                        // Justify right (append fill character from the left)
+                        start = (capacity - 1u) - length;
+                        for (std::size_t i = 0u; i < start; ++i) {
+                            context[i] = fill;
+                        }
+                        break;
+                    case 2:
+                        // Justify center (append fill character on both sides equally)
+                        start = (capacity - length) / 2;
+                        
+                        // Left side
+                        for (std::size_t i = 0u; i < start; ++i) {
+                            context[i] = fill;
+                        }
+                        
+                        // Right side (account for additional character in the case that width is odd)
+                        std::size_t last = context.length() - 1u;
+                        for (std::size_t i = 0u; i < start + ((capacity - length) % 2); ++i) {
+                            context[last - i] = fill;
+                        }
+                        break;
+                }
+            }
+            
+            return start;
+        }
+        
     }
     
     template <typename T>

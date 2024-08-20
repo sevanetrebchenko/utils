@@ -78,7 +78,7 @@ int main() {
     
     // std::cout << from_string<unsigned>("12344123123123123123") << std::endl;
 
-    std::cout << utils::format("example format string '{}'", "test string").string() << std::endl;
+    std::cout << utils::format("example format string '{:precision=[14]}'", 5.4).string() << std::endl;
     
     
 //    std::size_t amount = 1000000;
