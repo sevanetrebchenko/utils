@@ -1036,7 +1036,7 @@ namespace utils {
                 break;
         }
     }
-
+    
     std::string Formatter<std::source_location>::format(const std::source_location& value) const {
         unsigned line = value.line();
         std::size_t formatted_line_number_length = m_line_formatter.reserve(line);

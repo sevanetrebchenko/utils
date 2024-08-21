@@ -19,7 +19,7 @@ namespace utils {
     template <typename C>
     concept Container = requires(const C container) {
         // Check container iterator
-        requires std::is_pointer_v<decltype(std::begin(container).operator->())>;
+        requires std::is_pointer<decltype(std::begin(container).operator->())>::value;
         // 1. must have valid begin / end function definitions
         { std::begin(container) } -> std::same_as<decltype(std::end(container))>;
         // 2. must be incrementable

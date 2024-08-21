@@ -476,6 +476,27 @@ namespace utils {
         private:
             // Formatter<T> m_formatter;
     };
+
+    template <typename Key, typename Value, typename Hash, typename Predicate, typename Allocator>
+    class Formatter<std::unordered_map<Key, Value, Hash, Predicate, Allocator>> {
+        public:
+            using T = std::unordered_map<Key, Value, Hash, Predicate, Allocator>;
+            
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatString::Specification& spec);
+            std::string format(const T& value) const;
+            
+            std::size_t reserve(const T& value) const;
+            void format_to(const T& value, FormattingContext context) const;
+            
+        private:
+
+            
+            Formatter<Key> m_key_formatter;
+            Formatter<Value> m_value_formatter;
+    };
     
     // Standard types
     

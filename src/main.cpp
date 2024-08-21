@@ -87,12 +87,23 @@ int main() {
     const char cca[6] = "hello";
     char c = 'a';
     
-    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
-    std::cout << utils::format("example format string '{}'", strv) << std::endl;
-    std::cout << utils::format("example format string '{}'", ccp) << std::endl;
-    std::cout << utils::format("example format string '{}'", ca) << std::endl;
-    std::cout << utils::format("example format string '{}'", cca) << std::endl;
-    std::cout << utils::format("example format string '{}'", c) << std::endl;
+    std::unordered_map<int, std::string> map = {
+        { 1, "one" },
+        { 2, "two two" },
+        { 3, "three three three" },
+    };
+    
+    Formatter<std::unordered_map<int, std::string>> formatter { };
+    std::cout << formatter.format(map) << std::endl;
+    
+    // std::cout << utils::format("example format string '{}'", map) << std::endl;
+    
+//    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
+//    std::cout << utils::format("example format string '{}'", strv) << std::endl;
+//    std::cout << utils::format("example format string '{}'", ccp) << std::endl;
+//    std::cout << utils::format("example format string '{}'", ca) << std::endl;
+//    std::cout << utils::format("example format string '{}'", cca) << std::endl;
+//    std::cout << utils::format("example format string '{}'", c) << std::endl;
     
 //    std::size_t amount = 1000000;
 //
