@@ -1298,6 +1298,8 @@ namespace utils {
         // Example format:
         // { 'key': 'value', 'key': 'value', 'key': 'value' }
         
+        // TODO: no quotes for integer types
+        
         // 2 characters for opening / closing braces { }
         // 2 characters for leading space before the first element and trailing space after the last element
         capacity += 4u;
