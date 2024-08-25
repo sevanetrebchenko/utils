@@ -584,19 +584,6 @@ namespace utils {
             }
         }
         
-        if (spec.has_specifier("use_base_prefix", "usebaseprefix")) {
-            std::string_view value = trim(spec.one_of("use_base_prefix", "usebaseprefix").value);
-            if (icasecmp(value, "true") || icasecmp(value, "1")) {
-                use_base_prefix = true;
-            }
-            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
-                use_base_prefix = false;
-            }
-            else {
-                logging::warning("ignoring unknown use_base_prefix specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
-            }
-        }
-        
         if (spec.has_specifier("width")) {
             std::string_view value = trim(spec.get_specifier("width").value);
             
@@ -608,6 +595,29 @@ namespace utils {
             }
             else {
                 width = w;
+            }
+        }
+        
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.one_of("fill", "fill_character", "fillcharacter").value);
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+        
+        if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
+            std::string_view value = trim(spec.one_of("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter").value);
+            if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                use_separator_character = true;
+            }
+            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
+                use_separator_character = false;
+            }
+            else {
+                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
             }
         }
         
@@ -625,6 +635,19 @@ namespace utils {
             }
         }
         
+        if (spec.has_specifier("use_base_prefix", "usebaseprefix")) {
+            std::string_view value = trim(spec.one_of("use_base_prefix", "usebaseprefix").value);
+            if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                use_base_prefix = true;
+            }
+            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
+                use_base_prefix = false;
+            }
+            else {
+                logging::warning("ignoring unknown use_base_prefix specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
+            }
+        }
+        
         if (spec.has_specifier("digits")) {
             std::string_view value = trim(spec.get_specifier("digits").value);
             
@@ -636,16 +659,6 @@ namespace utils {
             }
             else {
                 digits = d;
-            }
-        }
-
-        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
-            std::string_view value = trim(spec.one_of("fill", "fill_character", "fillcharacter").value);
-            if (value.length() > 1u) {
-                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
-            }
-            else {
-                fill_character = value[0];
             }
         }
     }
@@ -721,7 +734,7 @@ namespace utils {
         // If the desired number of digits is larger than the required number of digits, append digits to the front (1 for negative integers, 0 for positive integers)
         std::size_t num_padding_characters = 0u;
         
-        if (group_size) {
+        if (use_separator_character && group_size) {
             // Append characters to the last group, as it may not be the same size as the other groups
             num_padding_characters += group_size - (num_characters % group_size);
             
@@ -762,7 +775,7 @@ namespace utils {
                 result[write_position++] = 'b';
             }
             
-            if (group_size) {
+            if (use_separator_character && group_size) {
                 std::size_t current = 0u;
 
                 for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {

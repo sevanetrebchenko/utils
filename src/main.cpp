@@ -102,7 +102,7 @@ int main() {
 //
 //     std::cout << utils::format("example format string '{}'", map) << std::endl;
 
-    std::cout << utils::format("{:representation=[binary],digits=[5],group_size=[4],use_separator=[0]}", 1) << std::endl;
+    std::cout << utils::format("{:representation=[binary],digits=[5],group_size=[4],use_separator_character=[true]}", 1) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
 //    std::cout << utils::format("example format string '{}'", strv) << std::endl;
