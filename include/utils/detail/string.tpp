@@ -733,18 +733,36 @@ namespace utils {
         // If the desired number of digits is smaller than the required number of digits, remove digits starting from the front (most significant) bits
         // If the desired number of digits is larger than the required number of digits, append digits to the front (1 for negative integers, 0 for positive integers)
         std::size_t num_padding_characters = 0u;
+
+        bool _use_separator_character = false;
+        std::uint8_t _group_size = 0u;
         
-        if (use_separator_character && group_size) {
+        if (use_separator_character) {
+            if (*use_separator_character) {
+                _group_size = group_size ? group_size : 4u; // Group size is 4 by default (if not specified)
+                _use_separator_character = true;
+            }
+            else {
+                // Use of separator character explicitly disabled
+                _use_separator_character = false;
+            }
+        }
+        else {
+            // Use of separator character is disabled by default
+            _use_separator_character = false;
+        }
+        
+        if (_use_separator_character) {
             // Append characters to the last group, as it may not be the same size as the other groups
-            num_padding_characters += group_size - (num_characters % group_size);
+            num_padding_characters += _group_size - (num_characters % _group_size);
             
             // Add padding characters to reach the desired number of digits
             if (num_characters + num_padding_characters < digits) {
-                num_padding_characters += (std::size_t) detail::round_up_to_multiple(digits - (std::size_t) (num_characters + num_padding_characters), group_size);
+                num_padding_characters += (std::size_t) detail::round_up_to_multiple(digits - (std::size_t) (num_characters + num_padding_characters), _group_size);
             }
             
             // Reserve capacity for separator characters (inserted between two groups)
-            capacity += (num_characters + num_padding_characters) / group_size - 1u;
+            capacity += (num_characters + num_padding_characters) / _group_size - 1u;
         }
         else {
             if (num_characters < digits) {
@@ -775,18 +793,18 @@ namespace utils {
                 result[write_position++] = 'b';
             }
             
-            if (use_separator_character && group_size) {
+            if (_use_separator_character) {
                 std::size_t current = 0u;
 
                 for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
-                    if (current && current % group_size == 0u) {
+                    if (current && current % _group_size == 0u) {
                         result[write_position++] = '\'';
                     }
                     result[write_position++] = '0';
                 }
                 
                 for (char* start = buffer; start != end; ++start, ++current) {
-                    if (current && current % group_size == 0u) {
+                    if (current && current % _group_size == 0u) {
                         result[write_position++] = '\'';
                     }
 

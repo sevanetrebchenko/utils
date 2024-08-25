@@ -12,6 +12,7 @@
 #include <variant> // std::variant
 #include <stdexcept> // std::runtime_error
 #include <ostream> // std::ostream
+#include <optional> // std::optional
 
 namespace utils {
 
@@ -308,7 +309,8 @@ namespace utils {
             
             // For decimal representations, separates every 3 characters with a comma
             // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote (default: 4)
-            bool use_separator_character = false;
+            // Note: disabled (false) by default
+            std::optional<bool> use_separator_character;
             
             // Specifies how many characters are in a single group
             // Appends leading zeroes so that all groups contain the same number of bits
