@@ -80,23 +80,29 @@ int main() {
 
     // std::cout << utils::format("example format string '{:representation=[scientific],precision=[1]}'", std::numeric_limits<double>::max() - 1) << std::endl;
     
-    std::string str = "this is a string";
-    std::string_view strv = "this is a string view";
-    const char* ccp = "ccp";
-    char ca[6] = "hello";
-    const char cca[6] = "hello";
-    char c = 'a';
-    
-    std::unordered_map<int, std::string> map = {
-        { 1, "one" },
-        { 2, "two two" },
-        { 3, "three three three" },
-    };
-    
-    Formatter<std::unordered_map<int, std::string>> formatter { };
-    std::cout << formatter.format(map) << std::endl;
-    
-    // std::cout << utils::format("example format string '{}'", map) << std::endl;
+//    std::string str = "this is a string";
+//    std::string_view strv = "this is a string view";
+//    const char* ccp = "ccp";
+//    char ca[6] = "hello";
+//    const char cca[6] = "hello";
+//    char c = 'a';
+//
+//    std::unordered_map<int, std::string> map = {
+//        { 1234, "one" },
+//        { 2, "two two" },
+//        { 3, "three three three" },
+//    };
+////
+//    Formatter<std::unordered_map<int, std::string>> formatter { };
+//    FormatString::Specification spec { };
+//    spec[0]["use_base_prefix"] = "1";
+//    spec[1]["width"] = "10";
+//    formatter.parse(spec);
+//    std::cout << formatter.format(map) << std::endl;
+//
+//     std::cout << utils::format("example format string '{}'", map) << std::endl;
+
+    std::cout << utils::format("{:representation=[binary],digits=[5],group_size=[4],use_separator=[0]}", 1) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
 //    std::cout << utils::format("example format string '{}'", strv) << std::endl;

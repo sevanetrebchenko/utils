@@ -229,6 +229,7 @@ namespace utils {
         public:
             // Formatting context allocates a block of length 'length' if a source buffer 'src' is not provided
             FormattingContext(std::size_t length, char* src = nullptr);
+            FormattingContext(const std::string& buffer);
             ~FormattingContext();
 
             [[nodiscard]] char& operator[](std::size_t index);
@@ -271,46 +272,63 @@ namespace utils {
     template <typename T>
     class IntegerFormatter {
         public:
+            enum class Representation : std::uint8_t {
+                Decimal = 0,
+                Binary,
+                Hexadecimal
+            };
+            
+            enum class Sign : std::uint8_t {
+                NegativeOnly = 0,
+                Aligned,
+                Both
+            };
+            
+            enum class Justification : std::uint8_t {
+                Left = 0,
+                Right,
+                Center
+            };
+            
             IntegerFormatter();
             ~IntegerFormatter();
             
             void parse(const FormatString::Specification& spec);
-            std::string format(T value) const;
+            [[nodiscard]] std::string format(T value) const;
             
-            std::size_t reserve(T value) const;
+            [[nodiscard]] std::size_t reserve(T value) const;
             void format_to(T value, FormattingContext context) const;
             
-            enum class Representation : std::uint8_t {
-                Decimal,
-                Binary,
-                Hexadecimal
-            } representation;
+            Representation representation = Representation::Decimal;
+            Sign sign = Sign::NegativeOnly;
+            Justification justification = Justification::Left;
             
-            enum class Sign : std::uint8_t {
-                NegativeOnly,
-                Aligned,
-                Both
-            } sign;
+            unsigned width = 0u;
+            char fill_character = ' ';
             
-            enum class Justification : std::uint8_t {
-                Left,
-                Right,
-                Center
-            } justification;
+            // For decimal representations, separates every 3 characters with a comma
+            // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote (default: 4)
+            bool use_separator_character = false;
             
-            unsigned width;
-            char fill_character;
+            // Specifies how many characters are in a single group
+            // Appends leading zeroes so that all groups contain the same number of bits
+            // Note: only applicable for binary / hexadecimal representations
+            std::uint8_t group_size = 0u;
             
-            // Optional specifiers for alternate representations
-            char separator_character;
-            char padding_character;
-            bool use_base_prefix;
-            std::uint8_t group_size;
-            std::size_t precision;
+            // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
+            // Note: only applicable for binary / hexadecimal representations
+            bool use_base_prefix = true;
+            
+            // Specifies the total number of digits to use when formatting
+            // Appends leading zeroes if the number of digits required is less than the requested value
+            // Rounds up to the nearest multiple of 'group_size', if specified and/or > 0
+            // Note: only applicable for binary / hexadecimal representations
+            std::uint8_t digits = 0u;
             
         private:
-            inline int get_base() const;
-            inline std::size_t format_to(T value, int base, FormattingContext* context) const;
+            [[nodiscard]] inline std::size_t to_decimal(T value, FormattingContext* context) const;
+            [[nodiscard]] inline std::size_t to_binary(T value, FormattingContext* context) const;
+            [[nodiscard]] inline std::size_t to_hexadecimal(T value, FormattingContext* context) const;
     };
     
     template <typename T>
@@ -346,7 +364,7 @@ namespace utils {
             char fill_character;
             
             std::uint8_t precision;
-            char separator_character;
+            bool use_separator_character;
             
         private:
             inline std::size_t format_to(T value, FormattingContext* context) const;
