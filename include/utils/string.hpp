@@ -309,13 +309,12 @@ namespace utils {
             
             // For decimal representations, separates every 3 characters with a comma
             // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote (default: 4)
-            // Note: disabled (false) by default
-            std::optional<bool> use_separator_character;
+            std::optional<bool> use_separator_character; // = false
             
             // Specifies how many characters are in a single group
-            // Appends leading zeroes so that all groups contain the same number of bits
+            // Works in conjunction with 'use_separator_character'
             // Note: only applicable for binary / hexadecimal representations
-            std::uint8_t group_size = 0u;
+            std::optional<std::uint8_t> group_size; // = 4u;
             
             // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
             // Note: only applicable for binary / hexadecimal representations
