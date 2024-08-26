@@ -51,15 +51,13 @@ namespace utils {
             std::size_t formatter_index;
         };
         
-
-        
-        int round_up_to_multiple(int value, int multiple);
-        
         // 0 - left
         // 1 - right
         // 2 - center
         std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext context);
         
+        int round_up_to_multiple(int value, int multiple);
+        char nibble_to_hexadecimal(const char nibble[4]);
     }
 
     
@@ -676,6 +674,7 @@ namespace utils {
                 to_binary(value, result);
                 break;
             case Representation::Hexadecimal:
+                to_hexadecimal(value, result);
                 break;
         }
         
@@ -689,9 +688,8 @@ namespace utils {
                 break;
             case Representation::Binary:
                 return to_binary(value, nullptr);
-                break;
             case Representation::Hexadecimal:
-                break;
+                return to_hexadecimal(value, nullptr);
         }
     }
     
@@ -704,6 +702,7 @@ namespace utils {
                 to_binary(value, &context);
                 break;
             case Representation::Hexadecimal:
+                to_hexadecimal(value, &context);
                 break;
         }
     }
@@ -732,12 +731,14 @@ namespace utils {
         // The number of characters can be overridden by a user-specified 'digits' value
         // If the desired number of digits is smaller than the required number of digits, remove digits starting from the front (most significant) bits
         // If the desired number of digits is larger than the required number of digits, append digits to the front (1 for negative integers, 0 for positive integers)
-        if (num_characters >= digits) {
-            num_characters = digits;
-        }
-        else {
-            // Append leading padding characters to reach the desired number of digits
-            num_padding_characters = digits - num_characters;
+        if (digits) {
+            if (num_characters >= digits) {
+                num_characters = digits;
+            }
+            else {
+                // Append leading padding characters to reach the desired number of digits
+                num_padding_characters = digits - num_characters;
+            }
         }
         
         bool _use_separator_character = false;
@@ -843,7 +844,195 @@ namespace utils {
     
     template <typename T>
     std::size_t IntegerFormatter<T>::to_hexadecimal(T value, FormattingContext* context) const {
-    
+        std::size_t num_characters;
+        
+        // Compute the minimum number of characters to hold the formatted value
+        if (value < 0) {
+            // Twos complement is used for formatting negative values, which by default uses as many digits as required by the system architecture
+            num_characters = sizeof(T) * CHAR_BIT / 4;
+        }
+        else {
+            // The minimum number of digits required to format a binary number is log2(n) + 1
+            // Each hexadecimal character represents 4 bits
+            num_characters = std::floor(std::log2(value) / 4) + 1u;
+        }
+        
+        std::size_t num_padding_characters = 0u;
+        
+        // The number of characters can be overridden by a user-specified 'digits' value
+        // If the desired number of digits is smaller than the required number of digits, remove digits starting from the front (most significant) bits
+        // If the desired number of digits is larger than the required number of digits, append digits to the front (1 for negative integers, 0 for positive integers)
+        if (digits) {
+            if (num_characters >= digits) {
+                num_characters = digits;
+            }
+            else {
+                // Append leading padding characters to reach the desired number of digits
+                num_padding_characters = digits - num_characters;
+            }
+        }
+        
+        bool _use_separator_character = false;
+        std::uint8_t _group_size = 0u;
+        
+        if (use_separator_character) {
+            if (*use_separator_character) {
+                if (group_size) {
+                    _group_size = *group_size;
+                    
+                    if (*group_size) {
+                        _use_separator_character = true;
+                    }
+                    else {
+                        // Group size explicitly provided as 0, use of separator character is disabled
+                        _use_separator_character = false;
+                    }
+                }
+                else {
+                    // Group size is 4 by default (if not specified)
+                    _group_size = 4u;
+                    _use_separator_character = true;
+                }
+            }
+            else {
+                // Use of separator character explicitly disabled
+                _use_separator_character = false;
+            }
+        }
+        else {
+            // Use of separator character is disabled by default
+            _use_separator_character = false;
+        }
+        
+        // Reserve capacity for separator characters (inserted between two groups)
+        std::size_t num_separator_characters = 0u;
+        if (_use_separator_character) {
+            num_separator_characters = num_characters / _group_size;
+            
+            // Do not include a leading separator character if the number of characters is an even multiple of the group size
+            // Example: 0b'0000 should be 0b0000
+            if (num_characters && num_characters % _group_size == 0) {
+                num_separator_characters -= 1u;
+            }
+        }
+        
+        std::size_t capacity = num_characters + num_padding_characters + num_separator_characters;
+        
+        if (use_base_prefix) {
+            // +2 characters for base prefix '0b'
+            capacity += 2u;
+        }
+
+        if (context) {
+            FormattingContext result = *context;
+            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
+
+            // Convert value to binary
+            std::size_t num_characters_binary;
+            
+            // Compute the minimum number of characters to hold the formatted value
+            if (value < 0) {
+                // Twos complement is used for formatting negative values, which by default uses as many digits as required by the system architecture
+                num_characters_binary = sizeof(T) * CHAR_BIT;
+            }
+            else {
+                // The minimum number of digits required to format a binary number is log2(n) + 1
+                // Each hexadecimal character represents 4 bits
+                num_characters_binary = std::floor(std::log2(value)) + 1u;
+            }
+            
+            char buffer[sizeof(T) * CHAR_BIT] { '0' };
+            char* end = buffer;
+            for (int i = 0; i < (int) num_characters_binary; ++i, ++end) {
+                int bit = (value >> (num_characters_binary - 1 - i)) & 1;
+                *end = (char) (48 + bit); // 48 is the ASCII code for '0'
+            }
+            
+            if (use_base_prefix) {
+                result[write_position++] = '0';
+                result[write_position++] = 'x';
+            }
+            
+            char nibble[4] = { '0' };
+            
+            // Convert binary representation to hexadecimal
+            // Pad first group binary representation if necessary, as this group might not be the same size as the rest
+            // Example: 0b01001 has two groups (000)1 and 1001
+            unsigned num_groups = num_characters_binary / 4u;
+            unsigned remainder = num_characters_binary % 4u;
+            unsigned num_padding_characters_binary = 0u;
+            
+            if (remainder) {
+                // Number of binary characters does not equally divide into a hexadecimal representation, first group will require padding characters
+                num_groups += 1u;
+                num_padding_characters_binary = 4u - remainder;
+            }
+            
+            if (_use_separator_character) {
+                std::size_t current = 0u;
+
+                // Append any extra padding characters
+                for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
+                    if (current && (num_characters - current) % _group_size == 0u) {
+                        result[write_position++] = '\'';
+                    }
+                    
+                    result[write_position++] = value < 0 ? 'F' : '0';
+                }
+                
+                char* ptr = buffer;
+                for (int group = 0; group < num_groups; ++group, ++current) {
+                    // Insert separator
+                    if (current && (num_characters - current) % _group_size == 0u) {
+                        result[write_position++] = '\'';
+                    }
+
+                    // Convert binary to hexadecimal
+                    int i = 0;
+                    
+                    // Append any necessary padding characters to the front of the nibble
+                    if (num_padding_characters_binary) {
+                        for (; i < num_padding_characters_binary; ++i) {
+                            nibble[i] = value < 0 ? '1' : '0';
+                        }
+                        // Padding is only applicable to the first group
+                        num_padding_characters_binary = 0u;
+                    }
+                    
+                    while (i != 4) {
+                        nibble[i++] = *ptr++;
+                    }
+                    result[write_position++] = detail::nibble_to_hexadecimal(nibble);
+                }
+            }
+            else {
+                for (std::size_t i = 0u; i < num_padding_characters; ++i) {
+                    result[write_position++] = value < 0 ? 'F' : '0';
+                }
+                
+                char* ptr = buffer;
+                for (int group = 0; group < num_groups; ++group) {
+                    // Convert binary to hexadecimal
+                    int i = 0;
+                    
+                    // Append any necessary padding characters to the front of the nibble
+                    if (num_padding_characters_binary) {
+                        for (; i < num_padding_characters_binary; ++i) {
+                            nibble[i] = value < 0 ? '1' : '0';
+                        }
+                        // Padding is only applicable to the first group
+                        num_padding_characters_binary = 0u;
+                    }
+                    
+                    while (i != 4) {
+                        nibble[i++] = *ptr++;
+                    }
+                    result[write_position++] = detail::nibble_to_hexadecimal(nibble);
+                }
+            }
+        }
+        
+        return std::max(capacity, (std::size_t) width);
     }
 //
 //    template <typename T>

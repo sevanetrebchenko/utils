@@ -2,6 +2,8 @@
 #include "utils/string.hpp"
 #include "utils/result.hpp"
 #include "utils/assert.hpp"
+#include "utils/detail/string.tpp"
+
 
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
@@ -10,19 +12,6 @@
 namespace utils {
     
     namespace detail {
-        
-        int round_up_to_multiple(int value, int multiple) {
-            if (multiple == 0) {
-                return value;
-            }
-
-            int remainder = value % multiple;
-            if (remainder == 0) {
-                return value;
-            }
-
-            return value + multiple - remainder;
-        }
         
         std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext context) {
             std::size_t capacity = context.length();
@@ -68,6 +57,127 @@ namespace utils {
             }
             
             return start;
+        }
+        
+        int round_up_to_multiple(int value, int multiple) {
+            if (multiple == 0) {
+                return value;
+            }
+
+            int remainder = value % multiple;
+            if (remainder == 0) {
+                return value;
+            }
+
+            return value + multiple - remainder;
+        }
+        
+        char nibble_to_hexadecimal(const char* nibble) {
+            if (nibble[0] == '0') {
+                // 0---
+                if (nibble[1] == '0') {
+                    // 00--
+                    if (nibble[2] == '0') {
+                        // 000-
+                        if (nibble[3] == '0') {
+                            // 0000 (0)
+                            return '0';
+                        }
+                        else {
+                            // 0001 (1)
+                            return '1';
+                        }
+                    }
+                    else {
+                        // 001-
+                        if (nibble[3] == '0') {
+                            // 0010 (2)
+                            return '2';
+                        }
+                        else {
+                            // 0011 (3)
+                            return '3';
+                        }
+                    }
+                }
+                else {
+                    // 01--
+                    if (nibble[2] == '0') {
+                        // 010-
+                        if (nibble[3] == '0') {
+                            // 0100 (4)
+                            return '4';
+                        }
+                        else {
+                            // 0101 (5)
+                            return '5';
+                        }
+                    }
+                    else {
+                        // 011-
+                        if (nibble[3] == '0') {
+                            // 0110 (6)
+                            return '6';
+                        }
+                        else {
+                            // 0111 (7)
+                            return '7';
+                        }
+                    }
+                }
+            }
+            else {
+                // 1---
+                if (nibble[1] == '0') {
+                    // 10--
+                    if (nibble[2] == '0') {
+                        // 100-
+                        if (nibble[3] == '0') {
+                            // 1000 (8)
+                            return '8';
+                        }
+                        else {
+                            // 1001 (9)
+                            return '9';
+                        }
+                    }
+                    else {
+                        if (nibble[3] == '0') {
+                            // 1010 (10)
+                            return 'A';
+                        }
+                        else {
+                            // 1011 (11)
+                            return 'B';
+                        }
+                    }
+                }
+                else {
+                    // 11--
+                    if (nibble[2] == '0') {
+                        // 110-
+                        if (nibble[3] == '0') {
+                            // 1100 (12)
+                            return 'C';
+                        }
+                        else {
+                            // 1101 (13)
+                            return 'D';
+                        }
+                    }
+                    else {
+                        // 111-
+                        if (nibble[3] == '0') {
+                            // 1110 (14)
+                            return 'E';
+                        }
+                        else {
+                            // 1111 (15)
+                            return 'F';
+                        }
+                    }
+                }
+            }
         }
         
     }

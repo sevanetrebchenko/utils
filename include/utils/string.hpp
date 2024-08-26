@@ -332,6 +332,8 @@ namespace utils {
             [[nodiscard]] inline std::size_t to_hexadecimal(T value, FormattingContext* context) const;
     };
     
+
+    
     template <typename T>
     class FloatingPointFormatter {
         public:
