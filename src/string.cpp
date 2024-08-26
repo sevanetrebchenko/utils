@@ -1157,11 +1157,15 @@ namespace utils {
         // Account for joining ':' in format string 'filename:line'
         std::size_t capacity = formatted_line_number_length + 1u + formatted_filename_length;
 
-        FormattingContext context { capacity };
+        std::string result;
+        result.resize(capacity);
+        
+        FormattingContext context { capacity, result.data() };
         m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
         context[formatted_filename_length] = ':';
         m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
-        return std::move(context.string());
+        
+        return std::move(result);
     }
 
     std::size_t Formatter<std::source_location>::reserve(const std::source_location& value) const {

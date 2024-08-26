@@ -1393,9 +1393,15 @@ namespace utils {
     template <typename T>
     std::string FloatingPointFormatter<T>::format(T value) {
         std::size_t capacity = format_to(value, nullptr);
-        FormattingContext context { capacity };
+        
+        std::string result;
+        result.resize(capacity);
+        
+        // Format indirectly to std::string to avoid double allocations
+        FormattingContext context { capacity, result.data() };
         format_to(value, &context);
-        return std::move(context.string());
+        
+        return std::move(result);
     }
     
     template <typename T>
@@ -1603,9 +1609,15 @@ namespace utils {
     template <typename T>
     std::string StringFormatter<T>::format(const T& value) const {
         std::size_t capacity = format_to(value, nullptr);
-        FormattingContext context { capacity };
+        
+        std::string result;
+        result.resize(capacity);
+        
+        // Format indirectly to std::string to avoid double allocations
+        FormattingContext context { capacity, result.data() };
         format_to(value, &context);
-        return std::move(context.string());
+        
+        return std::move(result);
     }
     
     template <typename T>
