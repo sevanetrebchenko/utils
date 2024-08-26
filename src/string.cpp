@@ -1059,9 +1059,14 @@ namespace utils {
         return stream;
     }
     
-    FormattingContext::FormattingContext(std::size_t length, char* src) : m_buffer(src ? src : new char[length]),
+    FormattingContext::FormattingContext(std::size_t length, char* src) : m_buffer(nullptr),
                                                                           m_owner(src == nullptr),
                                                                           m_length(length) {
+        if (!length) {
+            throw std::runtime_error("buffer of size 0 is invalid");
+        }
+        
+        m_buffer = src ? src : new char[length];
     }
     
     FormattingContext::~FormattingContext() {
@@ -1072,28 +1077,33 @@ namespace utils {
     
     char& FormattingContext::operator[](std::size_t index) {
         if (index >= m_length) {
-            throw std::out_of_range(utils::format("FormattingContext::operator[]: index {} exceeds the formatting context length ({})", index, m_length));
+            throw std::out_of_range(utils::format("FormattingContext::operator[]: index {} exceeds the length of the underlying buffer ({})", index, m_length));
         }
         return m_buffer[index];
     }
     
     char& FormattingContext::at(std::size_t index) {
         if (index >= m_length) {
-            throw std::out_of_range(utils::format("FormattingContext::at: index {} exceeds the formatting context length ({})", index, m_length));
+            throw std::out_of_range(utils::format("FormattingContext::at: index {} exceeds the the length of the underlying buffer ({})", index, m_length));
         }
         return m_buffer[index];
     }
     
     void FormattingContext::insert(std::size_t offset, const char* src, std::size_t length) {
-        if (offset + length >= m_length) {
-            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the formatting context length ({})", length, offset, m_length));
+        if (!length) {
+            length = strlen(src);
         }
+        
+        if (offset + length >= m_length) {
+            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the length of the underlying buffer ({})", length, offset, m_length));
+        }
+        
         std::memcpy(m_buffer + offset, src, length);
     }
     
     void FormattingContext::insert(std::size_t offset, char c, std::size_t count) {
         if (offset + count >= m_length) {
-            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the formatting context length ({})", count, offset, m_length));
+            throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the length of the underlying buffer ({})", count, offset, m_length));
         }
         for (std::size_t i = 0u; i < count; ++i) {
             m_buffer[offset + i] = c;
@@ -1101,8 +1111,23 @@ namespace utils {
     }
     
     FormattingContext FormattingContext::slice(std::size_t offset, std::size_t length) {
-        if (offset + length >= m_length) {
-            throw std::out_of_range(utils::format("FormattingContext::slice: a subcontext of length {} at offset {} exceeds the length of the underlying formatting context ({})", length, offset, m_length));
+        bool valid = true;
+        
+        if (length == std::string::npos) {
+            if (offset >= m_length) {
+                valid = false;
+            }
+            else {
+                // Read all characters up until the end of the buffer
+                length = m_length - offset;
+            }
+        }
+        else if (offset + length >= m_length) {
+            valid = false;
+        }
+        
+        if (!valid) {
+            throw std::out_of_range(utils::format("FormattingContext::slice: a subcontext of length {} at offset {} exceeds the length of the underlying buffer ({})", length, offset, m_length));
         }
         
         // Specifying std::string::npos returns a slice until the end of the buffer
