@@ -1088,7 +1088,7 @@ namespace utils {
         if (offset + length >= m_length) {
             throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the formatting context length ({})", length, offset, m_length));
         }
-        std::memcpy(m_buffer, src, length);
+        std::memcpy(m_buffer + offset, src, length);
     }
     
     void FormattingContext::insert(std::size_t offset, char c, std::size_t count) {

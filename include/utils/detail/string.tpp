@@ -665,10 +665,11 @@ namespace utils {
     std::string IntegerFormatter<T>::format(T value) const {
         std::size_t capacity = to_binary(value, nullptr);
         std::string result;
-        result.resize(capacity, '\0');
+        result.resize(capacity);
         
         switch (representation) {
             case Representation::Decimal:
+                to_decimal(value, result);
                 break;
             case Representation::Binary:
                 to_binary(value, result);
@@ -685,7 +686,7 @@ namespace utils {
     std::size_t IntegerFormatter<T>::reserve(T value) const {
         switch (representation) {
             case Representation::Decimal:
-                break;
+                return to_decimal(value, nullptr);
             case Representation::Binary:
                 return to_binary(value, nullptr);
             case Representation::Hexadecimal:
@@ -697,6 +698,7 @@ namespace utils {
     void IntegerFormatter<T>::format_to(T value, FormattingContext context) const {
         switch (representation) {
             case Representation::Decimal:
+                to_decimal(value, &context);
                 break;
             case Representation::Binary:
                 to_binary(value, &context);
@@ -709,7 +711,79 @@ namespace utils {
     
     template <typename T>
     std::size_t IntegerFormatter<T>::to_decimal(T value, FormattingContext* context) const {
-    
+        // Compute the minimum number of characters to hold the formatted value
+        std::size_t num_characters;
+        
+        // +1 character for sign
+        if (value < 0) {
+            num_characters = (std::log10(-value) + 1u) + 1u;
+        }
+        else {
+            num_characters = (std::log10(value) + 1u) + int(sign != Sign::NegativeOnly);
+        }
+        
+        bool _use_separator_character = use_separator_character && *use_separator_character;
+        std::uint8_t _group_size = 3u;
+        
+        // Reserve capacity for separator characters (inserted between two groups)
+        std::size_t num_separator_characters = 0u;
+        if (_use_separator_character) {
+            num_separator_characters = num_characters / _group_size;
+            
+            // Do not include a leading separator character if the number of characters is an even multiple of the group size
+            if (num_characters && num_characters % _group_size == 0) {
+                num_separator_characters -= 1u;
+            }
+        }
+        
+        std::size_t capacity = num_characters + num_separator_characters;
+        
+        if (context) {
+            FormattingContext result = *context;
+            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
+            
+            char buffer[std::numeric_limits<T>::digits10 + (std::is_signed<T>::value ? 1 : 0)];
+            char* start = buffer;
+            char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
+            const auto& [ptr, error_code] = std::to_chars(start, end, value, 10);
+            
+            if (value < 0) {
+                result[write_position++] = '-';
+                ++start; // Do not read negative sign from buffer
+            }
+            else {
+                switch (sign) {
+                    case Sign::Aligned:
+                        result[write_position++] = ' ';
+                        break;
+                    case Sign::Both:
+                        result[write_position++] = '+';
+                        break;
+                    case Sign::NegativeOnly:
+                    default:
+                        break;
+                }
+            }
+            
+            std::size_t num_characters_written = ptr - start;
+            
+            if (_use_separator_character) {
+                std::size_t current = 3 - (num_characters_written % 3);
+                for (std::size_t i = 0u; i < num_characters_written; ++i, ++current) {
+                    if (i && (current % 3) == 0u) {
+                        result[write_position++] = ',';
+                    }
+
+                    result[write_position++] = *(start + i);
+                }
+            }
+            else {
+                // Copy formatted contents directly
+                result.insert(write_position, start, num_characters_written);
+            }
+        }
+        
+        return std::max(capacity, (std::size_t) width);
     }
     
     template <typename T>
@@ -786,7 +860,6 @@ namespace utils {
         }
         
         std::size_t capacity = num_characters + num_padding_characters + num_separator_characters;
-        
         if (use_base_prefix) {
             // +2 characters for base prefix '0b'
             capacity += 2u;
