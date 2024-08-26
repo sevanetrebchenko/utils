@@ -907,11 +907,11 @@ namespace utils {
         // Reserve capacity for separator characters (inserted between two groups)
         std::size_t num_separator_characters = 0u;
         if (_use_separator_character) {
-            num_separator_characters = num_characters / _group_size;
+            num_separator_characters = (num_characters + num_padding_characters) / _group_size;
             
             // Do not include a leading separator character if the number of characters is an even multiple of the group size
             // Example: 0b'0000 should be 0b0000
-            if (num_characters && num_characters % _group_size == 0) {
+            if ((num_characters + num_padding_characters) % _group_size == 0) {
                 num_separator_characters -= 1u;
             }
         }
@@ -928,19 +928,7 @@ namespace utils {
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
 
             // Convert value to binary
-            std::size_t num_characters_binary;
-            
-            // Compute the minimum number of characters to hold the formatted value
-            if (value < 0) {
-                // Twos complement is used for formatting negative values, which by default uses as many digits as required by the system architecture
-                num_characters_binary = sizeof(T) * CHAR_BIT;
-            }
-            else {
-                // The minimum number of digits required to format a binary number is log2(n) + 1
-                // Each hexadecimal character represents 4 bits
-                num_characters_binary = std::floor(std::log2(value)) + 1u;
-            }
-            
+            std::size_t num_characters_binary = num_characters * 4u;
             char buffer[sizeof(T) * CHAR_BIT] { '0' };
             char* end = buffer;
             for (int i = 0; i < (int) num_characters_binary; ++i, ++end) {

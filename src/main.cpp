@@ -102,7 +102,7 @@ int main() {
 //
 //     std::cout << utils::format("example format string '{}'", map) << std::endl;
 
-    std::cout << utils::format("{:representation=[hexadecimal],digits=[1],group_size=[2],use_separator_character=[1],use_base_prefix=[1]}", 4230) << std::endl;
+    std::cout << utils::format("{:representation=[hexadecimal],digits=[7],group_size=[2],use_separator_character=[1],use_base_prefix=[1]}", -4230) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
 //    std::cout << utils::format("example format string '{}'", strv) << std::endl;
