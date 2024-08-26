@@ -230,7 +230,6 @@ namespace utils {
         public:
             // Formatting context allocates a block of length 'length' if a source buffer 'src' is not provided
             FormattingContext(std::size_t length, char* src = nullptr);
-            FormattingContext(const std::string& buffer);
             ~FormattingContext();
 
             [[nodiscard]] char& operator[](std::size_t index);

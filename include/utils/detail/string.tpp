@@ -664,18 +664,22 @@ namespace utils {
     template <typename T>
     std::string IntegerFormatter<T>::format(T value) const {
         std::size_t capacity = to_binary(value, nullptr);
+        
         std::string result;
         result.resize(capacity);
         
+        // Format indirectly to std::string to avoid double allocations
+        FormattingContext context { capacity, result.data() };
+        
         switch (representation) {
             case Representation::Decimal:
-                to_decimal(value, result);
+                to_decimal(value, &context);
                 break;
             case Representation::Binary:
-                to_binary(value, result);
+                to_binary(value, &context);
                 break;
             case Representation::Hexadecimal:
-                to_hexadecimal(value, result);
+                to_hexadecimal(value, &context);
                 break;
         }
         

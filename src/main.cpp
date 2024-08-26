@@ -102,6 +102,10 @@ int main() {
 //
 //     std::cout << utils::format("example format string '{}'", map) << std::endl;
 
+    Formatter<int> formatter { };
+    std::string r = formatter.format(42);
+    std::cout << r << std::endl;
+
     std::cout << utils::format("{:representation=[decimal],use_separator_character=[1]}", 4230) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
