@@ -336,6 +336,23 @@ namespace utils {
     template <typename T>
     class FloatingPointFormatter {
         public:
+            enum class Representation : std::uint8_t {
+                Fixed,
+                Scientific,
+            };
+            
+            enum class Sign : std::uint8_t {
+                NegativeOnly,
+                Aligned,
+                Both
+            };
+            
+            enum class Justification : std::uint8_t {
+                Left,
+                Right,
+                Center
+            };
+            
             FloatingPointFormatter();
             ~FloatingPointFormatter();
             
@@ -345,28 +362,15 @@ namespace utils {
             std::size_t reserve(T value) const;
             void format_to(T value, FormattingContext context) const;
 
-            enum class Representation : std::uint8_t {
-                Fixed,
-                Scientific,
-            } representation;
+            Representation representation = Representation::Fixed;
+            Sign sign = Sign::NegativeOnly;
+            Justification justification = Justification::Left;
             
-            enum class Sign : std::uint8_t {
-                NegativeOnly,
-                Aligned,
-                Both
-            } sign;
+            unsigned width = 0u;
+            char fill_character = ' ';
             
-            enum class Justification : std::uint8_t {
-                Left,
-                Right,
-                Center
-            } justification;
-            
-            unsigned width;
-            char fill_character;
-            
-            std::uint8_t precision;
-            bool use_separator_character;
+            std::uint8_t precision = 6u;
+            bool use_separator_character = false;
             
         private:
             inline std::size_t format_to(T value, FormattingContext* context) const;

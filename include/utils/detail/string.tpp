@@ -58,9 +58,13 @@ namespace utils {
         
         int round_up_to_multiple(int value, int multiple);
         char nibble_to_hexadecimal(const char nibble[4]);
+        
+        template <typename T>
+        constexpr std::size_t count_digits(T num) {
+            return (num < 10) ? 1 : 1 + count_digits(num / 10);
+        }
+        
     }
-
-    
     
     template <String T, String U>
     [[nodiscard]] bool icasecmp(const T& first, const U& second) {
@@ -1168,31 +1172,17 @@ namespace utils {
         if (spec.has_specifier("width")) {
             std::string_view value = trim(spec.get_specifier("width").value);
             
-            unsigned w;
-            std::size_t num_characters_read = from_string(value, w);
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
             
             if (num_characters_read < value.length()) {
                 logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
             }
             else {
-                width = w;
+                width = _width;
             }
         }
         
-        if (spec.has_specifier("precision")) {
-            std::string_view value = trim(spec.get_specifier("precision").value);
-            
-            unsigned p;
-            std::size_t num_characters_read = from_string(value, p);
-            
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid precision specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
-                precision = p;
-            }
-        }
-
         if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
             std::string_view value = trim(spec.one_of("fill", "fill_character", "fillcharacter").value);
             if (value.length() > 1u) {
@@ -1203,12 +1193,30 @@ namespace utils {
             }
         }
         
-        if (spec.has_specifier("separator", "separator_character", "separatorcharacter")) {
-            std::string_view value = trim(spec.one_of("separator", "separator_character", "separatorcharacter").value);
-            if (value.length() > 1u) {
-                logging::warning("ignoring invalid separator character specifier value: '{}' - specifier value must be a single character", value);
+        if (spec.has_specifier("precision")) {
+            std::string_view value = trim(spec.get_specifier("precision").value);
+            
+            unsigned _precision;
+            std::size_t num_characters_read = from_string(value, _precision);
+            
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid precision specifier value: '{}' - specifier value must be an integer", value);
             }
             else {
+                precision = _precision;
+            }
+        }
+        
+        if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
+            std::string_view value = trim(spec.one_of("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter").value);
+            if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                use_separator_character = true;
+            }
+            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
+                use_separator_character = false;
+            }
+            else {
+                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
             }
         }
     }
@@ -1242,28 +1250,10 @@ namespace utils {
         std::size_t capacity = 0u;
         std::size_t read_offset = 0u;
 
-        const char* sign_character = nullptr;
-        if (value < 0) {
-            read_offset = 1u; // Do not read negative sign in resulting buffer
-            sign_character = "-";
-            ++capacity;
-        }
-        else {
-            switch (sign) {
-                case Sign::Aligned:
-                    sign_character = " ";
-                    ++capacity;
-                    break;
-                case Sign::Both:
-                    sign_character = "+";
-                    ++capacity;
-                    break;
-                default:
-                    break;
-            }
-        }
+        // Sign character
+        capacity += value < 0 ? 1u : unsigned(sign != Sign::NegativeOnly);
 
-        int num_significant_figures = 6;
+        int num_significant_figures = std::numeric_limits<T>::digits10 + 1;
         if (precision) {
             num_significant_figures = precision;
         }
@@ -1272,23 +1262,21 @@ namespace utils {
         if (representation == Representation::Scientific) {
             format_flags = std::chars_format::scientific;
         }
-
-        // Buffer must be large enough to store:
-        //  - the number of digits in the largest representable number (max_exponent10)
-        //  - decimal point
-        //  - highest supported precision for the given type (max_digits10)
-        char buffer[std::numeric_limits<T>::max_exponent10 + 1 + std::numeric_limits<T>::max_digits10];
+        constexpr int num_significant_digits = std::numeric_limits<T>::max_digits10; // Max number of significant digits
+        constexpr int sign_character = 1; // 1 character for sign
+        constexpr int decimal_character = 1; // 1 character for the decimal point
+        constexpr int exponent_character = 1; // 'e' character
+        constexpr int exponent_sign = 1; // '+' or '-' sign for exponent
+        constexpr int exponent_digits = std::numeric_limits<T>::max_exponent10; // Max number of digits in the exponent
+        
+        char buffer[sign_character + num_significant_digits + decimal_character + exponent_character + exponent_sign + exponent_digits];
         char* start = buffer;
         char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
 
         // std::numeric_limits<T>::digits10 represents the number of decimal places that are guaranteed to be preserved when converted to text
         // Note: last decimal place will be rounded
-        int conversion_precision = std::clamp(num_significant_figures, 0, std::numeric_limits<T>::digits10);
+        int conversion_precision = std::clamp(num_significant_figures, 0, std::numeric_limits<T>::digits10 + 1);
         const auto& [ptr, error_code] = std::to_chars(start, end, value, format_flags, conversion_precision);
-
-        if (error_code == std::errc::value_too_large) {
-            throw FormattedError("floating point value is too large to serialize (overflow)");
-        }
 
         std::size_t num_characters_written = ptr - (start + read_offset);
         capacity += num_characters_written;
@@ -1304,14 +1292,26 @@ namespace utils {
             // Separators get inserted every 3 characters up until the position of the decimal point
             capacity += (decimal_position - 1) / 3;
         }
-
         
         if (context) {
             FormattingContext result = *context;
             std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<FloatingPointFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
             
-            if (sign_character) {
-                result[write_position++] = sign_character[0];
+            if (value < 0) {
+                result[write_position++] = '-';
+            }
+            else {
+                switch (sign) {
+                    case Sign::Aligned:
+                        result[write_position++] = ' ';
+                        break;
+                    case Sign::Both:
+                        result[write_position++] = '+';
+                        break;
+                    case Sign::NegativeOnly:
+                    default:
+                        break;
+                }
             }
     
             if (representation == Representation::Scientific) {
@@ -1326,17 +1326,14 @@ namespace utils {
                 for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
                     result[write_position++] = '0';
                 }
-    
+
                 for (start = buffer + read_offset + e_position; start != ptr; ++start) {
                     result[write_position++] = *start;
                 }
             }
             else {
                 // Separator character only makes sense for fixed floating point values
-                char separator = ' ';
                 if (use_separator_character) {
-                    separator = use_separator_character;
-    
                     // Separators get inserted every 3 characters up until the position of the decimal point
                     std::size_t group_size = 3;
                     std::size_t counter = group_size - (decimal_position % group_size);
@@ -1344,7 +1341,7 @@ namespace utils {
                     // Write the number portion, up until the decimal point (with separators)
                     for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
                         if (i && counter % group_size == 0u) {
-                            result[write_position++] = separator;
+                            result[write_position++] = ',';
                         }
     
                         result[write_position++] = *(buffer + read_offset + i);

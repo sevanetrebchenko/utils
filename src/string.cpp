@@ -182,11 +182,6 @@ namespace utils {
         
     }
     
-    template <typename T>
-    constexpr std::size_t count_digits(T num) {
-        return (num < 10) ? 1 : 1 + count_digits(num / 10);
-    }
-    
     [[nodiscard]] std::vector<std::string> split(std::string_view in, std::string_view delimiter) {
         std::vector<std::string> components { };
 
@@ -358,7 +353,7 @@ namespace utils {
                     break;
                 case Identifier::Type::Position:
                     // Can also use Formatter<T>::reserve for this, but this is evaluated at compile time, so it's faster
-                    capacity += count_digits(identifier.position);
+                    capacity += detail::count_digits(identifier.position);
                     break;
                 case Identifier::Type::Name:
                     capacity += identifier.name.length();
@@ -383,7 +378,7 @@ namespace utils {
             const Identifier& identifier = m_identifiers[placeholder.identifier_index];
             switch (identifier.type) {
                 case Identifier::Type::Position: {
-                    length = count_digits(placeholder.position);
+                    length = detail::count_digits(placeholder.position);
                     FormattingContext context { length, &result[write_position] };
                     position_formatter.format_to(identifier.position, context);
                     break;
