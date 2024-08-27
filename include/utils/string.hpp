@@ -326,9 +326,9 @@ namespace utils {
             std::uint8_t digits = 0u;
             
         private:
-            [[nodiscard]] inline std::size_t to_decimal(T value, FormattingContext* context) const;
-            [[nodiscard]] inline std::size_t to_binary(T value, FormattingContext* context) const;
-            [[nodiscard]] inline std::size_t to_hexadecimal(T value, FormattingContext* context) const;
+            inline std::size_t to_decimal(T value, FormattingContext* context) const;
+            inline std::size_t to_binary(T value, FormattingContext* context) const;
+            inline std::size_t to_hexadecimal(T value, FormattingContext* context) const;
     };
     
 
@@ -369,7 +369,7 @@ namespace utils {
             unsigned width = 0u;
             char fill_character = ' ';
             
-            std::uint8_t precision = 6u;
+            std::uint8_t precision = std::numeric_limits<T>::digits10;
             bool use_separator_character = false;
             
         private:
@@ -379,6 +379,12 @@ namespace utils {
     template <typename T>
     class StringFormatter {
         public:
+            enum class Justification : std::uint8_t {
+                Left,
+                Right,
+                Center
+            };
+            
             StringFormatter();
             ~StringFormatter();
             
@@ -388,20 +394,14 @@ namespace utils {
             std::size_t reserve(const T& value) const;
             void format_to(const T& value, FormattingContext context) const;
         
-            enum class Justification : std::uint8_t {
-                Left,
-                Right,
-                Center
-            } justification;
+            Justification justification = Justification::Left;
             
-            unsigned width;
-            char fill_character;
+            unsigned width = 0u;
+            char fill_character = ' ';
             
         private:
             inline std::size_t format_to(const T& value, FormattingContext* context) const;
     };
-    
-
     
     // Character types
     
