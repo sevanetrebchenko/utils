@@ -180,6 +180,27 @@ namespace utils {
             }
         }
         
+        std::unordered_map<std::type_index, const char*> formats { };
+        
+        void set_format(std::type_index type, const char* format) {
+            formats[type] = format;
+        }
+        
+        inline const char* get_format(std::type_index type) {
+            auto iter = formats.find(type);
+            if (iter != formats.end()) {
+                return iter->second;
+            }
+            return nullptr;
+        }
+        
+        void clear_format(std::type_index type) {
+            auto iter = formats.find(type);
+            if (iter != formats.end()) {
+                iter->second = nullptr;
+            }
+        }
+        
     }
     
     [[nodiscard]] std::vector<std::string> split(std::string_view in, std::string_view delimiter) {

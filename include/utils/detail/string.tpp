@@ -12,6 +12,7 @@
 #include <limits> // std::numeric_limits
 #include <charconv> // std::to_chars
 #include <cmath> // std::log2, std::floor
+#include <typeindex> // std::type_index
 
 namespace utils {
     
@@ -62,6 +63,16 @@ namespace utils {
         template <typename T>
         constexpr std::size_t count_digits(T num) {
             return (num < 10) ? 1 : 1 + count_digits(num / 10);
+        }
+        
+        // Interface for global format strings
+        void set_format(std::type_index type, const char* format);
+        inline const char* get_format(std::type_index type);
+        void clear_format(std::type_index type);
+        
+        template <typename T>
+        const char* get_format() {
+            return get_format(typeid(T));
         }
         
     }
@@ -522,6 +533,16 @@ namespace utils {
     template <typename ...Ts>
     FormatString format(FormatString fmt, const Ts&... args) {
         return fmt.format(args...);
+    }
+    
+    template <typename T>
+    void set_format(const char* format) {
+        detail::set_format(typeid(std::decay<T>::type), format);
+    }
+    
+    template <typename T>
+    void clear_format() {
+        detail::clear_format(typeid(std::decay<T>::type));
     }
     
     // Section: IntegerFormatter
@@ -1511,16 +1532,11 @@ namespace utils {
         if (value.empty()) {
             return "{ }";
         }
-
+        
         std::string result;
         
         std::size_t num_elements = value.size();
         std::size_t capacity = 0u;
-        
-        // Example format:
-        // { 102: 'value', 1101: 'value', '1.75e65': 'value' }
-        
-        // ( 1.5, 3.4, 1.4 )
         
         // 2 characters for opening / closing braces { }
         // 2 characters for leading space before the first element and trailing space after the last element
@@ -1529,35 +1545,29 @@ namespace utils {
         // 2 characters for comma + space between two elements
         capacity += (num_elements - 1u) * 2u;
         
-        // 4 characters for quotes for element key and value, per element
-        // Note: decimal representations of integer / floating point numbers are not surrounded by quotes
-        capacity += 4u * num_elements;
+        // String types should be printed with quotes around them
+        if constexpr (is_string_type<K>::value) {
+            capacity += 2u * num_elements;
+        }
+        if constexpr (is_string_type<V>::value) {
+            capacity += 2u * num_elements;
+        }
         
-        // Only string-types should be printed with quotes around them
-        // Integers, floating point, boolean (custom representations ok, but not with separators)
-        // container types
-        // custom types
-        
-        
-        
-        // 2 characters for colon + space between element key and value, per element
+        // 2 characters for colon + space between key-value pair, per element
         capacity += 2u * num_elements;
         
         if constexpr (is_formattable_to<K>) {
             if constexpr (is_formattable_to<V>) {
-                std::vector<std::pair<std::size_t, std::size_t>> formatted_lengths;
-                formatted_lengths.reserve(num_elements);
-                
                 // Both key and value types support the reserve() / format_to() suite of functions
                 for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
-                    const std::pair<std::size_t, std::size_t>& formatted = formatted_lengths.emplace_back(std::make_pair(m_key_formatter.reserve(iter->first), m_value_formatter.reserve(iter->second)));
-                    capacity += formatted.first;
-                    capacity += formatted.second;
+                    capacity += m_key_formatter.reserve(iter->first);
+                    capacity += m_value_formatter.reserve(iter->second);
                 }
                 
                 result.resize(capacity);
                 
                 std::size_t offset = 0u;
+                std::size_t quote_position;
                 FormattingContext context { capacity, &result[0] };
                 
                 result[offset++] = '{';
@@ -1565,11 +1575,23 @@ namespace utils {
                 
                 auto iter = std::begin(value);
                 for (std::size_t i = 0u; i < num_elements; ++i, ++iter) {
-                    // Key
-                    result[offset++] = '\'';
-                    m_key_formatter.format_to(iter->first, context.slice(offset, formatted_lengths[i].first));
-                    offset += formatted_lengths[i].first;
-                    result[offset++] = '\'';
+                    // Format key
+                    
+                    if constexpr (is_string_type<K>::value) {
+                        result[offset++] = '\"';
+                    }
+                    
+                    std::size_t length = m_key_formatter.reserve(iter->first);
+                    FormattingContext slice = context.slice(offset, length);
+                    m_key_formatter.format_to(iter->first, slice);
+                    
+                    // { { key: value }, { key: value } }
+                    
+                    offset += length;
+
+                    if constexpr (is_string_type<K>::value) {
+                        result[offset++] = '\"';
+                    }
                     
                     result[offset++] = ':';
                     result[offset++] = ' ';

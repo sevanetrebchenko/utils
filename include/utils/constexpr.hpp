@@ -347,6 +347,7 @@ namespace utils {
     struct is_string_type<std::string> : std::true_type {
     };
     
+    // std::string_view
     template <>
     struct is_string_type<std::string_view> : std::true_type {
     };

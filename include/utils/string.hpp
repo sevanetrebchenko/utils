@@ -226,6 +226,15 @@ namespace utils {
     struct Formatter {
     };
     
+    // Formatters (may) expose placeholder names that can be used to create custom type format strings
+    // These are set globally and apply to all formatters of the given type
+    // Refer to the given Formatter implementation for valid variable names
+    template <typename T>
+    void set_format(const char* format);
+    
+    template <typename T>
+    void clear_format();
+    
     class FormattingContext {
         public:
             // Formatting context allocates a block of length 'length' if a source buffer 'src' is not provided
@@ -506,6 +515,10 @@ namespace utils {
         public:
             using T = std::unordered_map<Key, Value, Hash, Predicate, Allocator>;
             
+            // Exposed variables: key, value
+            void set_format(const char* format);
+            void clear_format();
+            
             Formatter();
             ~Formatter();
             
@@ -516,10 +529,8 @@ namespace utils {
             void format_to(const T& value, FormattingContext context) const;
             
         private:
-
-            
-            Formatter<Key> m_key_formatter;
-            Formatter<Value> m_value_formatter;
+            const char* m_local_format;
+            Formatter<std::pair<Key, Value>> m_formatter;
     };
     
     // Standard types
@@ -540,6 +551,22 @@ namespace utils {
         private:
             Formatter<unsigned> m_line_formatter;
             Formatter<const char*> m_filename_formatter;
+    };
+    
+    template <typename T, typename U>
+    class Formatter<std::pair<T, U>> {
+        public:
+        
+        private:
+        
+    };
+    
+    template <typename ...Ts>
+    class Formatter<std::tuple<Ts...>> {
+        public:
+        
+        private:
+            std::tuple<Ts...> m_formatters;
     };
     
     // User-defined / custom types

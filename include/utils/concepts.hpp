@@ -32,9 +32,7 @@ namespace utils {
     };
     
     template <typename T>
-    concept String = requires(T str) {
-        { is_string_type<T>::value };
-    };
+    concept String = is_string_type<T>::value;
     
     template <typename Fn, typename T>
     concept returns_type = requires(const Fn& predicate) {
