@@ -535,16 +535,6 @@ namespace utils {
         return fmt.format(args...);
     }
     
-    template <typename T>
-    void set_format(const char* format) {
-        detail::set_format(typeid(std::decay<T>::type), format);
-    }
-    
-    template <typename T>
-    void clear_format() {
-        detail::clear_format(typeid(std::decay<T>::type));
-    }
-    
     // Section: IntegerFormatter
     
     template <typename T>
@@ -1501,17 +1491,7 @@ namespace utils {
     // Section: standard containers
     
     template <typename K, typename V, typename H, typename P, typename A>
-    Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : m_key_formatter(),
-                                                                m_value_formatter() {
-        static_assert(is_formattable<K> || is_formattable_to<K>, "std::unordered_map key type must (at least) provide implementations for parse() and format()");
-        static_assert(is_formattable<V> || is_formattable_to<V>, "std::unordered_map value type must (at least) provide implementations for parse() and format()");
-        
-        if constexpr (!is_formattable_to<K>) {
-            // TODO: performance log message
-        }
-        if constexpr (!is_formattable_to<V>) {
-            // TODO: performance log message
-        }
+    Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : m_formatter() {
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
@@ -1519,12 +1499,7 @@ namespace utils {
     
     template <typename K, typename V, typename H, typename P, typename A>
     void Formatter<std::unordered_map<K, V, H, P, A>>::parse(const FormatString::Specification& spec) {
-        if (spec.type() == FormatString::Specification::Type::FormattingGroupList) {
-            if (spec.size() >= 2u) {
-                m_key_formatter.parse(spec.get_formatting_group(0));
-                m_value_formatter.parse(spec.get_formatting_group(1));
-            }
-        }
+        m_formatter.parse(spec);
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
@@ -1533,136 +1508,186 @@ namespace utils {
             return "{ }";
         }
         
+        std::size_t capacity = reserve(value);
+        
         std::string result;
+        result.resize(capacity);
         
-        std::size_t num_elements = value.size();
-        std::size_t capacity = 0u;
-        
-        // 2 characters for opening / closing braces { }
-        // 2 characters for leading space before the first element and trailing space after the last element
-        capacity += 4u;
-        
-        // 2 characters for comma + space between two elements
-        capacity += (num_elements - 1u) * 2u;
-        
-        // String types should be printed with quotes around them
-        if constexpr (is_string_type<K>::value) {
-            capacity += 2u * num_elements;
-        }
-        if constexpr (is_string_type<V>::value) {
-            capacity += 2u * num_elements;
-        }
-        
-        // 2 characters for colon + space between key-value pair, per element
-        capacity += 2u * num_elements;
-        
-        if constexpr (is_formattable_to<K>) {
-            if constexpr (is_formattable_to<V>) {
-                // Both key and value types support the reserve() / format_to() suite of functions
-                for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
-                    capacity += m_key_formatter.reserve(iter->first);
-                    capacity += m_value_formatter.reserve(iter->second);
-                }
-                
-                result.resize(capacity);
-                
-                std::size_t offset = 0u;
-                std::size_t quote_position;
-                FormattingContext context { capacity, &result[0] };
-                
-                result[offset++] = '{';
-                result[offset++] = ' ';
-                
-                auto iter = std::begin(value);
-                for (std::size_t i = 0u; i < num_elements; ++i, ++iter) {
-                    // Format key
-                    
-                    if constexpr (is_string_type<K>::value) {
-                        result[offset++] = '\"';
-                    }
-                    
-                    std::size_t length = m_key_formatter.reserve(iter->first);
-                    FormattingContext slice = context.slice(offset, length);
-                    m_key_formatter.format_to(iter->first, slice);
-                    
-                    // { { key: value }, { key: value } }
-                    
-                    offset += length;
-
-                    if constexpr (is_string_type<K>::value) {
-                        result[offset++] = '\"';
-                    }
-                    
-                    result[offset++] = ':';
-                    result[offset++] = ' ';
-                    
-                    // Value
-                    result[offset++] = '\'';
-                    m_value_formatter.format_to(iter->second, context.slice(offset, formatted_lengths[i].second));
-                    offset += formatted_lengths[i].second;
-                    result[offset++] = '\'';
-                    
-                    result[offset++] = ',';
-                    result[offset++] = ' ';
-                }
-                
-                // Overwrite the last two characters to avoid having a trailing comma
-                result[offset - 2u] = ' ';
-                result[offset - 1u] = '}';
-            }
-            else {
-                // Key type supports reserve() / format_to() suite of functions, but value type does not
-                // Cache the formatted value types once to avoid redundant formatting operations / memory allocations
-                std::vector<std::string> formatted_values;
-                formatted_values.reserve(num_elements);
-                
-                for (const auto iter = std::begin(value); iter != std::end(value); ++iter) {
-                    capacity += m_key_formatter.reserve(iter->first);
-                    
-                    const std::string& formatted = formatted_values.emplace_back(m_value_formatter.format(iter->second));
-                    capacity += formatted.length(); // Allocate space for the formatted value as it is going to be copied into the resulting string
-                }
-            }
-        }
-        else if constexpr (is_formattable_to<V>) {
-            // Value type supports reserve() / format_to() suite of functions, but key type does not
-            // Cache the formatted key types once to avoid redundant formatting operations / memory allocations
-            std::vector<std::string> formatted_keys;
-            formatted_keys.reserve(num_elements);
-            
-            for (const auto iter = std::begin(value); iter != std::end(value); ++iter) {
-                const std::string& formatted = formatted_keys.emplace_back(m_key_formatter.format(iter->second));
-                capacity += formatted.length(); // Allocate space for the formatted key as it is going to be copied into the resulting string
-                
-                capacity += m_value_formatter.reserve(iter->first);
-            }
-        }
-        else {
-            // Neither the key nor value type supports the reserve() / format_to() suite of functions
-            // Cache both the formatted keys and values separately and then copy over into the resulting string
-            // An alternative approach would be to insert the result of formatting a key / value pair directly into the string, but this approach incurs more memory re-allocations and is hence slower
-            std::vector<std::pair<std::string, std::string>> formatted_pairs;
-            formatted_pairs.reserve(num_elements);
-            
-            for (const auto iter = std::begin(value); iter != std::end(value); ++iter) {
-                const std::pair<std::string, std::string>& formatted = formatted_pairs.emplace_back(std::make_pair(m_key_formatter.format(iter->first), m_value_formatter.format(iter->second)));
-                
-                // Allocate space for the formatted key / value pair as it is going to be copied into the resulting string
-                capacity += formatted.first.length();
-                capacity += formatted.second.length();
-            }
-        }
+        FormattingContext context { capacity, result.data() };
+        format_to(value, context);
         
         return std::move(result);
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
     std::size_t Formatter<std::unordered_map<K, V, H, P, A>>::reserve(const T& value) const {
-        return 0;
+        if (value.empty()) {
+            // Empty std::unordered_map format: "{ }"
+            return 3u;
+        }
+        
+        // Format: { { key: value }, { key: value }, { key: value }, { key: value } }
+        
+        std::size_t num_elements = value.size();
+        std::size_t capacity = 0u;
+        
+        // 2 characters for container opening / closing braces { }
+        // 2 characters for leading space before the first element and trailing space after the last element
+        capacity += 4u;
+        
+        // 2 characters for comma + space between two elements
+        capacity += (num_elements - 1u) * 2u;
+        
+        for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
+            capacity += m_formatter.reserve(*iter); // std::unordered_map already points to a std::pair
+        }
+        
+        return capacity;
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
     void Formatter<std::unordered_map<K, V, H, P, A>>::format_to(const T& value, FormattingContext context) const {
+        if (value.empty()) {
+            context.insert(0, "{ }", 3);
+        }
+        else {
+            std::size_t offset = 0u;
+            
+            // Opening brace
+            context[offset++] = '{';
+            context[offset++] = ' ';
+            
+            for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
+                std::size_t length = m_formatter.reserve(*iter);
+                
+                FormattingContext slice { length, &context[offset] };
+                m_formatter.format_to(*iter, slice);
+                
+                offset += length;
+                
+                context[offset++] = ',';
+                context[offset++] = ' ';
+            }
+            
+            // Overwrite the last two characters to avoid having a trailing comma
+            context[offset - 2u] = ' ';
+            context[offset - 1u] = '}';
+        }
+    }
+    
+    template <typename T, typename U>
+    Formatter<std::pair<T, U>>::Formatter() : m_formatters() {
+        static_assert(is_formattable<T> || is_formattable_to<T>, "std::pair<T, U>: T must (at least) provide implementations for parse() and format()");
+        static_assert(is_formattable<U> || is_formattable_to<U>, "std::pair<T, U>: U must (at least) provide implementations for parse() and format()");
+
+        if constexpr (!is_formattable_to<T>) {
+            // TODO: performance log message
+        }
+        if constexpr (!is_formattable_to<T>) {
+            // TODO: performance log message
+        }
+    }
+    
+    template <typename T, typename U>
+    Formatter<std::pair<T, U>>::~Formatter() = default;
+    
+    template <typename T, typename U>
+    void Formatter<std::pair<T, U>>::parse(const FormatString::Specification& spec) {
+        if (spec.type() == FormatString::Specification::Type::FormattingGroupList) {
+            if (spec.size() >= 2u) {
+                m_formatters.first.parse(spec.get_formatting_group(0));
+                m_formatters.second.parse(spec.get_formatting_group(1));
+            }
+        }
+        else {
+            // TODO: log message
+        }
+    }
+    
+    template <typename T, typename U>
+    std::string Formatter<std::pair<T, U>>::format(const std::pair<T, U>& value) const {
+        std::size_t capacity = reserve(value);
+        
+        std::string result;
+        result.resize(capacity);
+        
+        FormattingContext context { capacity, result.data() };
+        format_to(value, context);
+        
+        return std::move(result);
+    }
+    
+    template <typename T, typename U>
+    std::size_t Formatter<std::pair<T, U>>::reserve(const std::pair<T, U>& value) const {
+        // Format: { first, second }
+        std::size_t capacity = 0u;
+        
+        // 2 characters for opening / closing braces { }
+        // 2 characters for leading space before the first element and trailing space after the last element
+        capacity += 4u;
+        
+        // String types should be printed with quotes around them
+        if constexpr (is_string_type<T>::value) {
+            capacity += 2u;
+        }
+        if constexpr (is_string_type<U>::value) {
+            capacity += 2u;
+        }
+        
+        // 2 characters for comma + space
+        capacity += 2u;
+        
+        // TODO: cache to avoid double allocations? would need to modify function to not be const
+        if constexpr (is_formattable_to<T>) {
+            capacity += m_formatters.first.reserve(value.first);
+        }
+        else {
+            capacity += m_formatters.first.format(value.first).length();
+        }
+        
+        if constexpr (is_formattable_to<U>) {
+            capacity += m_formatters.second.reserve(value.second);
+        }
+        else {
+            capacity += m_formatters.second.format(value.second).length();
+        }
+        
+        return capacity;
+    }
+    
+    template <typename T, typename U>
+    void Formatter<std::pair<T, U>>::format_to(const std::pair<T, U>& value, FormattingContext context) const {
+        std::size_t offset = 0u;
+        
+        // Opening brace
+        context[offset++] = '{';
+        context[offset++] = ' ';
+        
+        // Format first value
+        {
+            std::size_t length = m_formatters.first.reserve(value.first);
+            
+            FormattingContext slice { length, &context[offset] };
+            m_formatters.first.format_to(value.first, slice);
+            
+            offset += length;
+        }
+        
+        context[offset++] = ',';
+        context[offset++] = ' ';
+        
+        // Format second value
+        {
+            std::size_t length = m_formatters.second.reserve(value.second);
+            
+            FormattingContext slice { length, &context[offset] };
+            m_formatters.second.format_to(value.second, slice);
+            
+            offset += length;
+        }
+        
+        context[offset++] = ' ';
+        context[offset++] = '}';
     }
     
     template <typename T>

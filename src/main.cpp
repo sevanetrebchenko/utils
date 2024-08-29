@@ -106,16 +106,16 @@ int main() {
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
 
-    // Set the output to fixed-point notation
-    std::cout << std::fixed;
-
-    // Set precision to maximum number of significant decimal digits for long double
-    std::cout << std::setprecision(std::numeric_limits<long double>::digits10 + 1);
-
-    // Print the maximum value for long double without scientific notation
-    std::cout << std::numeric_limits<long double>::max() << std::endl;
-
-    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
+    std::unordered_map<int, float> a {
+        { 1, 1.1f },
+        { 2, 2.2f },
+        { 3, 3.3f },
+        { 4, 4.4f },
+    };
+    
+    std::cout << utils::format("'{::precision=[2]}'", a) << std::endl;
+    
+//    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
 //    std::cout << utils::format("example format string '{}'", strv) << std::endl;

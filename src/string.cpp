@@ -4,10 +4,10 @@
 #include "utils/assert.hpp"
 #include "utils/detail/string.tpp"
 
-
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
-#include <cstring> // std::memcpy, strlen
+#include <cstring> // std::memcpy, std::strlen
+#include <shared_mutex> // std::shared_mutex, std::shared_lock, std::unique_lock
 
 namespace utils {
     
@@ -180,26 +180,30 @@ namespace utils {
             }
         }
         
-        std::unordered_map<std::type_index, const char*> formats { };
-        
-        void set_format(std::type_index type, const char* format) {
-            formats[type] = format;
-        }
-        
-        inline const char* get_format(std::type_index type) {
-            auto iter = formats.find(type);
-            if (iter != formats.end()) {
-                return iter->second;
-            }
-            return nullptr;
-        }
-        
-        void clear_format(std::type_index type) {
-            auto iter = formats.find(type);
-            if (iter != formats.end()) {
-                iter->second = nullptr;
-            }
-        }
+//        std::unordered_map<std::type_index, const char*> formats { };
+//        std::shared_mutex formats_mutex;
+//
+//        void set_format(std::type_index type, const char* format) {
+//            std::unique_lock<std::shared_mutex> lock(formats_mutex);
+//            formats[type] = format;
+//        }
+//
+//        void clear_format(std::type_index type) {
+//            std::unique_lock<std::shared_mutex> lock(formats_mutex);
+//            auto iter = formats.find(type);
+//            if (iter != formats.end()) {
+//                iter->second = nullptr;
+//            }
+//        }
+//
+//        inline const char* get_format(std::type_index type) {
+//            std::shared_lock<std::shared_mutex> lock(formats_mutex);
+//            auto iter = formats.find(type);
+//            if (iter != formats.end()) {
+//                return iter->second;
+//            }
+//            return nullptr;
+//        }
         
     }
     
@@ -1110,7 +1114,7 @@ namespace utils {
             length = strlen(src);
         }
         
-        if (offset + length >= m_length) {
+        if (offset + length > m_length) {
             throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the length of the underlying buffer ({})", length, offset, m_length));
         }
         
@@ -1118,7 +1122,7 @@ namespace utils {
     }
     
     void FormattingContext::insert(std::size_t offset, char c, std::size_t count) {
-        if (offset + count >= m_length) {
+        if (offset + count > m_length) {
             throw std::out_of_range(utils::format("FormattingContext::insert: inserting {} character(s) at offset {} exceeds the length of the underlying buffer ({})", count, offset, m_length));
         }
         for (std::size_t i = 0u; i < count; ++i) {
@@ -1166,63 +1170,63 @@ namespace utils {
         return m_length;
     }
     
-    Formatter<std::source_location>::Formatter() : m_line_formatter(),
-                                                   m_filename_formatter() {
-    }
-    
-    Formatter<std::source_location>::~Formatter() = default;
-    
-    void Formatter<std::source_location>::parse(const FormatString::Specification& spec) {
-        switch (spec.type()) {
-            case FormatString::Specification::Type::FormattingGroupList:
-                if (spec.has_group(0)) {
-                    m_line_formatter.parse(spec.get_formatting_group(0));
-                }
-                if (spec.has_group(1)) {
-                    m_filename_formatter.parse(spec.get_formatting_group(1));
-                }
-                break;
-            case FormatString::Specification::Type::SpecifierList:
-                logging::warning(""); // TODO:
-                break;
-        }
-    }
-    
-    std::string Formatter<std::source_location>::format(const std::source_location& value) const {
-        unsigned line = value.line();
-        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
-
-        const char* filename = value.file_name();
-        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
-
-        // Account for joining ':' in format string 'filename:line'
-        std::size_t capacity = formatted_line_number_length + 1u + formatted_filename_length;
-
-        std::string result;
-        result.resize(capacity);
-        
-        FormattingContext context { capacity, result.data() };
-        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
-        context[formatted_filename_length] = ':';
-        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
-        
-        return std::move(result);
-    }
-
-    std::size_t Formatter<std::source_location>::reserve(const std::source_location& value) const {
-        return m_line_formatter.reserve(value.line()) + 1u + m_filename_formatter.reserve(value.file_name());
-    }
-
-    void Formatter<std::source_location>::format_to(const std::source_location& value, FormattingContext context) const {
-        unsigned line = value.line();
-        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
-
-        const char* filename = value.file_name();
-        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
-        
-        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
-        context[formatted_filename_length] = ':';
-        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
-    }
+//    Formatter<std::source_location>::Formatter() : m_line_formatter(),
+//                                                   m_filename_formatter() {
+//    }
+//
+//    Formatter<std::source_location>::~Formatter() = default;
+//
+//    void Formatter<std::source_location>::parse(const FormatString::Specification& spec) {
+//        switch (spec.type()) {
+//            case FormatString::Specification::Type::FormattingGroupList:
+//                if (spec.has_group(0)) {
+//                    m_line_formatter.parse(spec.get_formatting_group(0));
+//                }
+//                if (spec.has_group(1)) {
+//                    m_filename_formatter.parse(spec.get_formatting_group(1));
+//                }
+//                break;
+//            case FormatString::Specification::Type::SpecifierList:
+//                logging::warning(""); // TODO:
+//                break;
+//        }
+//    }
+//
+//    std::string Formatter<std::source_location>::format(const std::source_location& value) const {
+//        unsigned line = value.line();
+//        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
+//
+//        const char* filename = value.file_name();
+//        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
+//
+//        // Account for joining ':' in format string 'filename:line'
+//        std::size_t capacity = formatted_line_number_length + 1u + formatted_filename_length;
+//
+//        std::string result;
+//        result.resize(capacity);
+//
+//        FormattingContext context { capacity, result.data() };
+//        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
+//        context[formatted_filename_length] = ':';
+//        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
+//
+//        return std::move(result);
+//    }
+//
+//    std::size_t Formatter<std::source_location>::reserve(const std::source_location& value) const {
+//        return m_line_formatter.reserve(value.line()) + 1u + m_filename_formatter.reserve(value.file_name());
+//    }
+//
+//    void Formatter<std::source_location>::format_to(const std::source_location& value, FormattingContext context) const {
+//        unsigned line = value.line();
+//        std::size_t formatted_line_number_length = m_line_formatter.reserve(line);
+//
+//        const char* filename = value.file_name();
+//        std::size_t formatted_filename_length = m_filename_formatter.reserve(filename);
+//
+//        m_filename_formatter.format_to(filename, context.slice(0, formatted_filename_length));
+//        context[formatted_filename_length] = ':';
+//        m_line_formatter.format_to(line, context.slice(formatted_filename_length + 1));
+//    }
     
 }

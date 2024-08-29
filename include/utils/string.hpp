@@ -397,7 +397,7 @@ namespace utils {
             StringFormatter();
             ~StringFormatter();
             
-            virtual void parse(const FormatString::Specification& spec);
+            void parse(const FormatString::Specification& spec);
             std::string format(const T& value) const;
             
             std::size_t reserve(const T& value) const;
@@ -515,10 +515,6 @@ namespace utils {
         public:
             using T = std::unordered_map<Key, Value, Hash, Predicate, Allocator>;
             
-            // Exposed variables: key, value
-            void set_format(const char* format);
-            void clear_format();
-            
             Formatter();
             ~Formatter();
             
@@ -529,7 +525,6 @@ namespace utils {
             void format_to(const T& value, FormattingContext context) const;
             
         private:
-            const char* m_local_format;
             Formatter<std::pair<Key, Value>> m_formatter;
     };
     
@@ -549,16 +544,23 @@ namespace utils {
             void format_to(const std::source_location& value, FormattingContext context) const;
             
         private:
-            Formatter<unsigned> m_line_formatter;
-            Formatter<const char*> m_filename_formatter;
+            Formatter<std::pair<unsigned, const char*>> m_formatters;
     };
     
     template <typename T, typename U>
     class Formatter<std::pair<T, U>> {
         public:
-        
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatString::Specification& spec);
+            std::string format(const std::pair<T, U>& value) const;
+            
+            std::size_t reserve(const std::pair<T, U>& value) const;
+            void format_to(const std::pair<T, U>& value, FormattingContext context) const;
+            
         private:
-        
+            std::pair<Formatter<T>, Formatter<U>> m_formatters;
     };
     
     template <typename ...Ts>
