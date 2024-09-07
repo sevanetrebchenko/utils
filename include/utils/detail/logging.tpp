@@ -9,32 +9,43 @@ namespace utils::logging {
     
     namespace detail {
         
-        void log(MessageLevel level, const std::string& message, std::source_location source);
+        void log(const Message& message);
         
     }
     
     template <typename ...Ts>
-    void info(FormatString fmt, const Ts&... args) {
-        detail::log(MessageLevel::Info, fmt.format(args...), fmt.source());
+    void info(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Info;
+        detail::log(message);
     }
     
     template <typename ...Ts>
-    void debug(FormatString fmt, const Ts&... args) {
-        detail::log(MessageLevel::Debug, fmt.format(args...), fmt.source());
+    void debug(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Debug;
+        detail::log(message);
     }
     
     template <typename ...Ts>
-    void warning(FormatString fmt, const Ts&... args) {
-        detail::log(MessageLevel::Warning, fmt.format(args...), fmt.source());
+    void warning(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Warning;
+        detail::log(message);
     }
     
     template <typename ...Ts>
-    void error(FormatString fmt, const Ts&... args) {
-        detail::log(MessageLevel::Error, fmt.format(args...), fmt.source());
+    void error(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Error;
+        detail::log(message);
     }
     
     template <typename ...Ts>
-    void fatal(FormatString fmt, const Ts&... args) {
-        detail::log(MessageLevel::Fatal, fmt.format(args...), fmt.source());
+    void fatal(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Fatal;
+        detail::log(message);
     }
+    
 }

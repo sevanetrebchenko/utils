@@ -59,23 +59,23 @@ namespace utils {
                 [[nodiscard]] std::string_view name() const;
                 [[nodiscard]] std::string_view format_string() const;
 
-                template <typename ...Ts>
-                void info(const FormatString& fmt, const Ts&... args);
-                
-                template <typename ...Ts>
-                void debug(const FormatString& fmt, const Ts&... args);
-                
-                template <typename ...Ts>
-                void warning(const FormatString& fmt, const Ts&... args);
-                
-                template <typename ...Ts>
-                void error(const FormatString& fmt, const Ts&... args);
-                
-                template <typename ...Ts>
-                void fatal(const FormatString& fmt, const Ts&... args);
+//                template <typename ...Ts>
+//                void info(const FormatString& fmt, const Ts&... args);
+//
+//                template <typename ...Ts>
+//                void debug(const FormatString& fmt, const Ts&... args);
+//
+//                template <typename ...Ts>
+//                void warning(const FormatString& fmt, const Ts&... args);
+//
+//                template <typename ...Ts>
+//                void error(const FormatString& fmt, const Ts&... args);
+//
+//                template <typename ...Ts>
+//                void fatal(const FormatString& fmt, const Ts&... args);
                 
             protected:
-                virtual void operator<<(const Log& log) = 0;
+//                virtual void operator<<(const Log& log) = 0;
                 
                 std::string m_name;
                 
@@ -93,7 +93,7 @@ namespace utils {
                 ~StandardOutput();
             
             private:
-                void operator<<(const Log& log) override;
+//                void operator<<(const Log& log) override;
         };
         
         struct StandardError final : public Adapter {
@@ -102,7 +102,7 @@ namespace utils {
                 ~StandardError();
                 
             private:
-                void operator<<(const Log& log) override;
+//                void operator<<(const Log& log) override;
         };
         
         class FileAdapter final : public Adapter {
@@ -111,7 +111,7 @@ namespace utils {
                 ~FileAdapter() override;
                 
             private:
-                void operator<<(const Log& log) override;
+//                void operator<<(const Log& log) override;
                 
                 std::ofstream m_file;
         };
@@ -124,7 +124,7 @@ namespace utils {
                 ~CallbackAdapter() override;
                 
             private:
-                void operator<<(const Log& log) override;
+//                void operator<<(const Log& log) override;
                 
                 CallbackType m_callback;
         };

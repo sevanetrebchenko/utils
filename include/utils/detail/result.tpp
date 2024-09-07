@@ -12,18 +12,6 @@
 #include <regex>
 
 namespace utils {
-
-    namespace detail {
-        
-        template <typename T>
-        constexpr bool is_format_string = std::is_same<typename std::decay<T>::type, FormatString>::value;
-        
-        template <typename T, typename ...Ts>
-        inline FormatString to_format_string(T&& fmt, Ts&&... args) {
-            return FormatString(fmt).format(std::move(args)...);
-        }
-        
-    }
     
     // Response implementation
     
@@ -38,14 +26,9 @@ namespace utils {
     template <typename E>
     template <typename ...Ts>
     Response<E> Response<E>::NOT_OK(Ts&& ...args) {
-        if constexpr (detail::is_format_string<E>) {
-            return detail::to_format_string(std::move(args)...);
-        }
-        else {
-            Response<E> e { };
-            e.m_error = { std::move(args)... };
-            return std::move(e);
-        }
+        Response<E> e { };
+        e.m_error = { std::move(args)... };
+        return std::move(e);
     }
     
     template <typename E>
@@ -71,14 +54,7 @@ namespace utils {
     template <typename ...Ts>
     Result<T, E> Result<T, E>::OK(Ts&&... args) {
         Result<T, E> r { };
-        
-        if constexpr (detail::is_format_string<T>) {
-            r.m_result = detail::to_format_string(std::move(args)...);
-        }
-        else {
-            r.m_result = { std::move(args)... };
-        }
-        
+        r.m_result = { std::move(args)... };
         return std::move(r);
     }
     
@@ -86,14 +62,7 @@ namespace utils {
     template <typename ...Ts>
     Result<T, E> Result<T, E>::NOT_OK(Ts&&... args) {
         Result<T, E> e { };
-        
-        if constexpr (detail::is_format_string<E>) {
-            e.m_error = detail::to_format_string(std::move(args)...);
-        }
-        else {
-            e.m_error = { std::move(args)... };
-        }
-        
+        e.m_error = { std::move(args)... };
         return std::move(e);
     }
     
@@ -139,14 +108,7 @@ namespace utils {
     ParseResponse<E> ParseResponse<E>::NOT_OK(std::size_t error_position, Ts&&... args) {
         ParseResponse<E> e { };
         e.m_offset = error_position;
-        
-        if constexpr (detail::is_format_string<E>) {
-            e.Response<E>::m_error = detail::to_format_string(std::move(args)...);
-        }
-        else {
-            e.Response<E>::m_error = { std::move(args)... };
-        }
-        
+        e.Response<E>::m_error = { std::move(args)... };
         return std::move(e);
     }
     
@@ -167,14 +129,7 @@ namespace utils {
     ParseResult<T, E> ParseResult<T, E>::OK(std::size_t num_characters_parsed, Ts&& ...args) {
         ParseResult<T, E> r { };
         r.m_offset = num_characters_parsed;
-        
-        if constexpr (detail::is_format_string<T>) {
-            r.Result<T, E>::m_result = detail::to_format_string(std::move(args)...);
-        }
-        else {
-            r.Result<T, E>::m_result = { std::move(args)... };
-        }
-        
+        r.Result<T, E>::m_result = { std::move(args)... };
         return std::move(r);
     }
     
@@ -183,14 +138,7 @@ namespace utils {
     ParseResult<T, E> ParseResult<T, E>::NOT_OK(std::size_t error_position, Ts&& ... args) {
         ParseResult<T, E> e { };
         e.m_offset = error_position;
-        
-        if constexpr (detail::is_format_string<E>) {
-            e.Result<T, E>::m_error = detail::to_format_string(std::move(args)...);
-        }
-        else {
-            e.Result<T, E>::m_error = { std::move(args)... };
-        }
-        
+        e.Result<T, E>::m_error = { std::move(args)... };
         return std::move(e);
     }
 

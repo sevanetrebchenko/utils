@@ -9,7 +9,7 @@ namespace utils {
     
     struct FormattedError : public std::runtime_error {
         template <typename ...Ts>
-        FormattedError(Message error, const Ts&... args);
+        FormattedError(std::string_view fmt, const Ts&... args);
     };
     
 }
