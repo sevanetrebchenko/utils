@@ -105,7 +105,7 @@ int main() {
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
     
-    utils::format("asdf {}", "adsf");
+//    utils::format("asdf {}", "adsf");
 
     std::unordered_map<int, float> a {
         { 1, 1.1f },
@@ -114,7 +114,7 @@ int main() {
         { 4, 4.4f },
     };
     
-    std::cout << utils::format("'{::precision=[2]}'", a) << std::endl;
+//    std::cout << utils::format("'{::precision=[2]}'", a) << std::endl;
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     

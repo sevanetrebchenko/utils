@@ -1956,7 +1956,15 @@ namespace utils {
     namespace detail {
         
         template <typename T>
-        IntegerFormatter<T>::IntegerFormatter() {
+        IntegerFormatter<T>::IntegerFormatter() : representation(Representation::Decimal),
+                                                  sign(Sign::NegativeOnly),
+                                                  justification(Justification::Left),
+                                                  width(0u),
+                                                  fill_character(' '),
+                                                  use_separator_character(),
+                                                  group_size(),
+                                                  use_base_prefix(false),
+                                                  digits(4u) {
             static_assert(is_integer_type<T>::value, "value must be an integer type");
         }
     
@@ -1998,25 +2006,6 @@ namespace utils {
                     logging::warning("ignoring unknown sign specifier value: '{}' - expecting one of: negative only (variants: negative_only, negativeonly), aligned, or both (case-insensitive)", value);
                 }
             }
-    
-            std::uint8_t _justification = 0;
-            if (spec.has_specifier("justification")) {
-                _justification |= (1 << 0u);
-            }
-            if (spec.has_specifier("justify")) {
-                _justification |= (1 << 1u);
-            }
-            if (spec.has_specifier("alignment")) {
-                _justification |= (1 << 2u);
-            }
-            if (spec.has_specifier("align")) {
-                _justification |= (1 << 3u);
-            }
-            
-            if (_justification % 2) {
-                // Multiple justification specifiers provided
-                throw std::runtime_error("");
-            }
             
             if (spec.has_specifier("justification", "justify", "alignment", "align")) {
                 std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
@@ -2037,14 +2026,14 @@ namespace utils {
             if (spec.has_specifier("width")) {
                 std::string_view value = trim(spec.get_specifier("width"));
     
-                unsigned w;
-                std::size_t num_characters_read = from_string(value, w);
+                unsigned _width;
+                std::size_t num_characters_read = from_string(value, _width);
     
                 if (num_characters_read < value.length()) {
                     logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
                 }
                 else {
-                    width = w;
+                    width = _width;
                 }
             }
     
@@ -2074,14 +2063,14 @@ namespace utils {
             if (spec.has_specifier("group_size", "groupsize")) {
                 std::string_view value = trim(spec.get_specifier("group_size", "groupsize"));
     
-                unsigned gs;
-                std::size_t num_characters_read = from_string(value, gs);
+                unsigned _group_size;
+                std::size_t num_characters_read = from_string(value, _group_size);
     
                 if (num_characters_read < value.length()) {
                     logging::warning("ignoring invalid group_size specifier value: '{}' - specifier value must be an integer", value);
                 }
                 else {
-                    group_size = gs;
+                    group_size = _group_size;
                 }
             }
     
@@ -2101,14 +2090,14 @@ namespace utils {
             if (spec.has_specifier("digits")) {
                 std::string_view value = trim(spec.get_specifier("digits"));
     
-                unsigned d;
-                std::size_t num_characters_read = from_string(value, d);
+                unsigned _digits;
+                std::size_t num_characters_read = from_string(value, _digits);
     
                 if (num_characters_read < value.length()) {
                     logging::warning("ignoring invalid digits specifier value: '{}' - specifier value must be an integer", value);
                 }
                 else {
-                    digits = d;
+                    digits = _digits;
                 }
             }
         }
@@ -2208,7 +2197,7 @@ namespace utils {
             }
             else {
                 // Copy contents directly
-                result.replace(write_position, num_characters_written, start);
+                result.replace(write_position, num_characters_written, start, 0, num_characters_written);
             }
             
             return std::move(result);
@@ -2347,7 +2336,8 @@ namespace utils {
                 }
     
                 // Copy contents directly
-                result.replace(write_position, end - buffer, buffer);
+                std::size_t num_characters_written = end - buffer;
+                result.replace(write_position, num_characters_written, buffer, 0, num_characters_written);
             }
     
             return std::move(result);
@@ -2551,7 +2541,7 @@ namespace utils {
                                                               justification(Justification::Left),
                                                               width(0u),
                                                               fill_character(' '),
-                                                              precision(0u){
+                                                              precision(std::numeric_limits<T>::digits10) {
             static_assert(is_floating_point_type<T>::value, "value must be a floating point type");
         }
     
