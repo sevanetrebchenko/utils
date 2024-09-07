@@ -10,6 +10,19 @@ namespace utils {
     
     namespace logging {
 
+        struct Log {
+            template <String T>
+            Log(T fmt, std::source_location source = std::source_location::current());
+            ~Log();
+            
+            std::string format;
+            
+            std::string message;
+            MessageLevel level;
+            datetime::Timestamp timestamp;
+            std::source_location source;
+        };
+        
         template <typename ...Ts>
         void info(FormatString fmt, const Ts&... args);
         

@@ -13,8 +13,8 @@ namespace utils {
     
     namespace detail {
         
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, FormattingContext context) {
-            std::size_t capacity = context.length();
+        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, std::string& out) {
+            std::size_t capacity = out.length();
             std::size_t start = 0u;
     
             char fill = ' ';
@@ -28,14 +28,14 @@ namespace utils {
                     case 0:
                         // Justify left (append fill character from the right)
                         for (std::size_t i = length; i < capacity; ++i) {
-                            context[i] = fill;
+                            out[i] = fill;
                         }
                         break;
                     case 1:
                         // Justify right (append fill character from the left)
                         start = (capacity - 1u) - length;
                         for (std::size_t i = 0u; i < start; ++i) {
-                            context[i] = fill;
+                            out[i] = fill;
                         }
                         break;
                     case 2:
@@ -44,13 +44,13 @@ namespace utils {
                         
                         // Left side
                         for (std::size_t i = 0u; i < start; ++i) {
-                            context[i] = fill;
+                            out[i] = fill;
                         }
                         
                         // Right side (account for additional character in the case that width is odd)
-                        std::size_t last = context.length() - 1u;
+                        std::size_t last = capacity - 1u;
                         for (std::size_t i = 0u; i < start + ((capacity - length) % 2); ++i) {
-                            context[last - i] = fill;
+                            out[last - i] = fill;
                         }
                         break;
                 }
@@ -590,96 +590,7 @@ namespace utils {
         }
     }
     
-    ParseResult<FormatString::Specification::Specifier, FormatString> FormatString::parse_specifier(std::string_view in) {
-        std::size_t length = in.length();
-        std::size_t i = 0u;
-        
-        // Identifiers can contain letters, digits, or underscores, and must begin with a letter or an underscore
-        while (std::isalpha(in[i]) || (in[i] == '_') || (i && std::isdigit(in[i]))) {
-            ++i;
-        }
-        
-        if (i == 0u) {
-            return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "empty format specifiers are not allowed");
-        }
-        
-        if (in[i] != '=') {
-            return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "invalid character '{0}' at index {index} - format specifier separator must be '='", in[i]);
-        }
-        
-        std::string specifier = std::string(in.substr(0, i));
-        
-        // Skip separator '='
-        ++i;
-        
-        if (in[i] != '[') {
-            return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "invalid character '{0}' at index {index} - format specifier value must be contained within square braces: [ ... ]", in[i]);
-        }
-        
-        // Skip specifier value opening brace '['
-        std::size_t specifier_value_start = ++i;
-        std::size_t escaped_brace_count = 0u;
-        
-        // Determine specifier value length
-        while (i < length) {
-            if (in[i] == '[') {
-                if (i + 1u == length) {
-                    // Unterminated specifier value opening brace '['
-                    break;
-                }
-                
-                if (in[i + 1u] != '[') {
-                    return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(i, "unescaped '[' at index {index} - opening formatting brace literals must be escaped as '[[' inside specifier values");
-                }
-                
-                // Escaped opening specifier value brace '[['
-                ++escaped_brace_count;
-                i += 2u;
-            }
-            else if (in[i] == ']') {
-                if (i + 1u < length && in[i + 1u] == ']') {
-                    // Escaped closing specifier value brace ']]'
-                    ++escaped_brace_count;
-                    i += 2u;
-                }
-                else {
-                    // Closing specifier value brace ']'
-                    break;
-                }
-            }
-            else {
-                ++i;
-            }
-        }
-        
-        if (in[i] != ']') {
-            return ParseResult<FormatString::Specification::Specifier, FormatString>::NOT_OK(specifier_value_start, "unterminated formatting specifier value at index {index}");
-        }
-        
-        // Build specifier value
-        std::string value;
-        std::size_t specifier_value_length = i - specifier_value_start - escaped_brace_count;
-        value.reserve(specifier_value_length);
-        
-        std::size_t last_insert_position = specifier_value_start;
-        for (std::size_t j = specifier_value_start; j < i; ++j) {
-            bool escaped_brace = (in[j] == '[' && in[j + 1u] == '[') ||
-                                 (in[j] == ']' && in[j + 1u] == ']');
-            
-            if (escaped_brace) {
-                // Insert everything up until the first escaped brace
-                value.append(in, last_insert_position, j - last_insert_position);
-                last_insert_position = ++j; // SKip second escaped brace
-            }
-        }
-        
-        value.append(in, last_insert_position, i - last_insert_position);
-        
-        // Skip specifier value closing brace ']'
-        ++i;
-        
-        return ParseResult<FormatString::Specification::Specifier, FormatString>::OK(i, std::move(specifier), std::move(value));
-    }
+    
     
     ParseResponse<FormatString> FormatString::parse_specification(std::string_view in, FormatString::Specification& spec, bool nested) {
         // Note: function assumes input string does not contain a leading formatting group separator ':'
@@ -692,8 +603,6 @@ namespace utils {
         
         while (i < length) {
             if (in[i] == terminator) {
-                // Skip formatting specification separator '|'
-                ++i;
                 break;
             }
             
@@ -1230,3 +1139,185 @@ namespace utils {
 //    }
     
 }
+
+#include "string.hpp"
+
+
+namespace utils {
+    
+    namespace detail {
+        
+        std::size_t parse_identifier(std::string_view in, Identifier& out) {
+            std::size_t offset = 0u;
+            
+            if (std::isdigit(in[offset])) {
+                ++offset;
+                
+                // Positional placeholders must only contain numbers
+                while (std::isdigit(in[offset])) {
+                    ++offset;
+                }
+                
+                std::size_t position;
+                from_string(in.substr(0u, offset), position);
+                
+                out = Identifier(position);
+            }
+            else if (std::isalpha(in[offset]) || in[offset] == '_') {
+                ++offset;
+                
+                // Named placeholders follow the same identifier rules as standard C/C++ identifiers
+                while (std::isalnum(in[offset]) || in[offset] == '_') {
+                    ++offset;
+                }
+
+                out = Identifier(in.substr(0u, offset));
+            }
+            
+            return offset;
+        }
+        
+std::size_t parse_specifier(std::string_view in, Specifier& out) {
+            std::size_t length = in.length();
+            std::size_t i = 0u;
+            
+            // Specifier names follow the same rules as standard C/C++ identifiers
+            while (std::isalpha(in[i]) || (in[i] == '_') || (i && std::isdigit(in[i]))) {
+                ++i;
+            }
+            
+            if (in[i] != '=') {
+                return i;
+            }
+            
+            out.name = in.substr(0, i);
+            
+            // Skip separator '='
+            ++i;
+            
+            if (in[i] != '[') {
+                return i;
+            }
+
+            // Skip opening brace '['
+            std::size_t value_start = ++i;
+
+            while (i < length) {
+                if (in[i] == '[') {
+                    if (i + 1 == length || in[i + 1u] != '[') {
+                        // Unterminated / unescaped opening braces are not allowed
+                        return i;
+                    }
+                    
+                    // Skip escaped opening brace ']'
+                    ++i;
+                }
+                else if (in[i] == ']') {
+                    if (i + 1 == length || in[i + 1] != ']') {
+                        break;
+                    }
+                    
+                    // Skip escaped closing brace ']'
+                    ++i;
+                }
+                
+                ++i;
+            }
+            
+            out.value = in.substr(value_start, i - value_start);
+            return i + 1;
+        }
+        
+        void parse_specifier_value(std::string_view value, std::string& out) {
+            if (value.empty()) {
+                return;
+            }
+            
+            std::size_t length = value.length();
+            out.reserve(length);
+            
+            // Replace escaped brace characters
+            for (std::size_t i = 0u; i < length - 1u; ++i) {
+                bool escaped_brace = (value[i] == '[' && value[i + 1u] == '[') ||
+                                     (value[i] == ']' && value[i + 1u] == ']');
+                
+                if (escaped_brace) {
+                    // Push back only one brace character
+                    out.push_back(value[i]);
+                    ++i;
+                }
+            }
+        }
+        
+        std::size_t parse_format_spec(std::string_view in, FormatSpec& out, bool nested) {
+            // Note: function assumes input string does not contain a leading formatting group separator ':'
+            std::size_t length = in.length();
+            std::size_t group = 0u;
+            std::size_t i = 0u;
+            
+            while (i < length) {
+                char terminator = nested ? '|' : '}';
+                if (in[i] == terminator) {
+                    // Finished parsing format spec
+                    break;
+                }
+                
+                if (in[i] == ':') {
+                    // Skip formatting group separator
+                    // {identifier:representation=[...]}
+                    //            ^
+                    ++i;
+                    
+                    // Note: empty groups are supported and are treated as empty format specifier lists
+                    ++group;
+                }
+                
+                if (in[i] == '|') {
+                    // Skip nested formatting spec separator
+                    // {identifier:|representation=[...]:justification=[...]|}
+                    //             ^
+                    ++i;
+                    
+                    i += parse_format_spec(in.substr(i), out[group], true);
+
+                    // After parsing a nested formatting spec, the terminator character is expected to be '|'
+                    if (in[i] != '|') {
+                        return i;
+                    }
+                }
+                else {
+                    // Parse format specifiers
+                    while (true) {
+                        Specifier specifier { };
+                        i += parse_specifier(in.substr(i), specifier);
+                        
+                        // Format specifiers must be unique
+                        if (out[group].has_specifier(specifier.name)) {
+                            throw;
+                        }
+                        
+                        parse_specifier_value(specifier.value, out[group][specifier.name]);
+                        
+                        if (in[i] == ',') {
+                            // Skip format specifier separator
+                            continue;
+                        }
+                        else if (in[i] == terminator) {
+                            // End of format spec
+                            break;
+                        }
+                        else {
+                            // Invalid character
+                            return i;
+                        }
+                    }
+                }
+            }
+            
+            return i;
+        }
+        
+    }
+    
+}
+

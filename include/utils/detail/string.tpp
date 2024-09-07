@@ -27,7 +27,7 @@ namespace utils {
         };
         
         template <typename T>
-        struct PlaceholderFormatter : public Formatter<T> {
+        struct PlaceholderFormatter : Formatter<T> {
             PlaceholderFormatter() : length(0u),
                                      specification_index(0u),
                                      start(std::numeric_limits<std::size_t>::max()) {
@@ -131,7 +131,7 @@ namespace utils {
                         }
                     }, tuple);
                     
-                    std::tuple<detail::PlaceholderFormatter<typename std::decay<const Ts>::type>...> formatters { };
+                    std::tuple<Formatter<typename std::decay<const Ts>::type>...> formatters { };
                     std::size_t capacity = m_format.size();
                     
                     // Initialize formatters
@@ -139,12 +139,15 @@ namespace utils {
                         const Identifier& identifier = m_identifiers[m_placeholders[i].identifier_index];
                         const Specification& spec = m_specifications[m_placeholders[i].specification_index];
                         
-                        utils::apply([&capacity, &formatters, &spec]<typename T, std::size_t I>(const T& value) {
-                            detail::PlaceholderFormatter<T>& formatter = std::get<I>(formatters);
-                            formatter.parse(spec);
-                            if constexpr (is_formattable_to<T>) {
-                                formatter.length = formatter.reserve(value);
-                                capacity += formatter.length;
+                        utils::apply([&capacity, &formatters, &parent = spec]<typename T, std::size_t I>(const T& value) {
+                            Formatter<T>& formatter = std::get<I>(formatters);
+                            
+                            const FormatString& fmt = formatter.get_format_string();
+                            for (const Placeholder& placeholder : fmt.m_placeholders) {
+                                const Identifier& identifier = fmt.m_identifiers[placeholder.identifier_index];
+                                const Specification& spec = fmt.m_specifications[placeholder.specification_index];
+                                
+                                formatter.parse(parent + spec, identifier);
                             }
                         }, tuple, i);
                     }
@@ -678,58 +681,18 @@ namespace utils {
 
     template <typename T>
     std::string IntegerFormatter<T>::format(T value) const {
-        std::size_t capacity = to_binary(value, nullptr);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        // Format indirectly to std::string to avoid double allocations
-        FormattingContext context { capacity, result.data() };
-        
         switch (representation) {
             case Representation::Decimal:
-                to_decimal(value, &context);
-                break;
+                return to_decimal(value);
             case Representation::Binary:
-                to_binary(value, &context);
-                break;
+                return to_binary(value);
             case Representation::Hexadecimal:
-                to_hexadecimal(value, &context);
-                break;
-        }
-        
-        return std::move(result);
-    }
-
-    template <typename T>
-    std::size_t IntegerFormatter<T>::reserve(T value) const {
-        switch (representation) {
-            case Representation::Decimal:
-                return to_decimal(value, nullptr);
-            case Representation::Binary:
-                return to_binary(value, nullptr);
-            case Representation::Hexadecimal:
-                return to_hexadecimal(value, nullptr);
+                return to_hexadecimal(value);
         }
     }
     
     template <typename T>
-    void IntegerFormatter<T>::format_to(T value, FormattingContext context) const {
-        switch (representation) {
-            case Representation::Decimal:
-                to_decimal(value, &context);
-                break;
-            case Representation::Binary:
-                to_binary(value, &context);
-                break;
-            case Representation::Hexadecimal:
-                to_hexadecimal(value, &context);
-                break;
-        }
-    }
-    
-    template <typename T>
-    std::size_t IntegerFormatter<T>::to_decimal(T value, FormattingContext* context) const {
+    std::string IntegerFormatter<T>::to_decimal(T value) const {
         // Compute the minimum number of characters to hold the formatted value
         std::size_t num_characters;
         
@@ -755,58 +718,66 @@ namespace utils {
             }
         }
         
-        std::size_t capacity = num_characters + num_separator_characters;
+        std::size_t length = num_characters + num_separator_characters;
+        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::string result(capacity, fill_character);
         
-        if (context) {
-            FormattingContext result = *context;
-            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
-            
-            char buffer[std::numeric_limits<T>::digits10 + (std::is_signed<T>::value ? 1 : 0)];
-            char* start = buffer;
-            char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
-            const auto& [ptr, error_code] = std::to_chars(start, end, value, 10);
-            
-            if (value < 0) {
-                result[write_position++] = '-';
-                ++start; // Do not read negative sign from buffer
-            }
-            else {
-                switch (sign) {
-                    case Sign::Aligned:
-                        result[write_position++] = ' ';
-                        break;
-                    case Sign::Both:
-                        result[write_position++] = '+';
-                        break;
-                    case Sign::NegativeOnly:
-                    default:
-                        break;
-                }
-            }
-            
-            std::size_t num_characters_written = ptr - start;
-            
-            if (_use_separator_character) {
-                std::size_t current = 3 - (num_characters_written % 3);
-                for (std::size_t i = 0u; i < num_characters_written; ++i, ++current) {
-                    if (i && (current % 3) == 0u) {
-                        result[write_position++] = ',';
-                    }
-
-                    result[write_position++] = *(start + i);
-                }
-            }
-            else {
-                // Copy formatted contents directly
-                result.insert(write_position, start, num_characters_written);
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        char buffer[std::numeric_limits<T>::digits10 + (std::is_signed<T>::value ? 1 : 0)];
+        char* start = buffer;
+        char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
+        const auto& [ptr, error_code] = std::to_chars(start, end, value, 10);
+        
+        if (value < 0) {
+            result[write_position++] = '-';
+            ++start; // Do not read negative sign from buffer
+        }
+        else {
+            switch (sign) {
+                case Sign::Aligned:
+                    result[write_position++] = ' ';
+                    break;
+                case Sign::Both:
+                    result[write_position++] = '+';
+                    break;
+                case Sign::NegativeOnly:
+                default:
+                    break;
             }
         }
         
-        return std::max(capacity, (std::size_t) width);
+        std::size_t num_characters_written = ptr - start;
+        
+        if (_use_separator_character) {
+            std::size_t current = 3 - (num_characters_written % 3);
+            for (std::size_t i = 0u; i < num_characters_written; ++i, ++current) {
+                if (i && (current % 3) == 0u) {
+                    result[write_position++] = ',';
+                }
+
+                result[write_position++] = *(start + i);
+            }
+        }
+        else {
+            // Copy contents directly
+            result.replace(write_position, num_characters_written, start);
+        }
     }
     
     template <typename T>
-    std::size_t IntegerFormatter<T>::to_binary(T value, FormattingContext* context) const {
+    std::string IntegerFormatter<T>::to_binary(T value) const {
         std::size_t num_characters;
         
         // Compute the minimum number of characters to hold the formatted value
@@ -878,64 +849,74 @@ namespace utils {
             }
         }
         
-        std::size_t capacity = num_characters + num_padding_characters + num_separator_characters;
+        std::size_t length = num_characters + num_padding_characters + num_separator_characters;
         if (use_base_prefix) {
             // +2 characters for base prefix '0b'
-            capacity += 2u;
+            length += 2u;
         }
 
-        if (context) {
-            FormattingContext result = *context;
-            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
-
-            // Convert value to binary
-            char buffer[sizeof(T) * CHAR_BIT] { 0 };
-            char* end = buffer;
-            for (int i = 0; i < (int) num_characters; ++i, ++end) {
-                int bit = (value >> (num_characters - 1 - i)) & 1;
-                *end = (char) (48 + bit); // 48 is the ASCII code for '0'
-            }
-            
-            if (use_base_prefix) {
-                result[write_position++] = '0';
-                result[write_position++] = 'b';
-            }
-            
-            if (_use_separator_character) {
-                std::size_t current = 0u;
-
-                for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
-                    if (current && (num_characters - current) % _group_size == 0u) {
-                        result[write_position++] = '\'';
-                    }
-                    
-                    result[write_position++] = value < 0 ? '1' : '0';
-                }
-                
-                for (char* start = buffer; start != end; ++start, ++current) {
-                    if (current && (num_characters - current) % _group_size == 0u) {
-                        result[write_position++] = '\'';
-                    }
-
-                    result[write_position++] = *start;
-                }
-            }
-            else {
-                for (std::size_t i = 0u; i < num_padding_characters; ++i) {
-                    result[write_position++] = value < 0 ? '1' : '0';
-                }
-
-                for (char* start = buffer; start != end; ++start) {
-                    result[write_position++] = *start;
-                }
-            }
+        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::string result(capacity, fill_character);
+        
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
         }
         
-        return std::max(capacity, (std::size_t) width);
+        // Convert value to binary
+        char buffer[sizeof(T) * CHAR_BIT] { 0 };
+        char* end = buffer;
+        for (int i = 0; i < (int) num_characters; ++i, ++end) {
+            int bit = (value >> (num_characters - 1 - i)) & 1;
+            *end = (char) (48 + bit); // 48 is the ASCII code for '0'
+        }
+        
+        if (use_base_prefix) {
+            result[write_position++] = '0';
+            result[write_position++] = 'b';
+        }
+        
+        if (_use_separator_character) {
+            std::size_t current = 0u;
+
+            for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
+                if (current && (num_characters - current) % _group_size == 0u) {
+                    result[write_position++] = '\'';
+                }
+                
+                result[write_position++] = value < 0 ? '1' : '0';
+            }
+            
+            for (char* start = buffer; start != end; ++start, ++current) {
+                if (current && (num_characters - current) % _group_size == 0u) {
+                    result[write_position++] = '\'';
+                }
+
+                result[write_position++] = *start;
+            }
+        }
+        else {
+            for (std::size_t i = 0u; i < num_padding_characters; ++i) {
+                result[write_position++] = value < 0 ? '1' : '0';
+            }
+
+            // Copy contents directly
+            result.replace(write_position, end - buffer, buffer);
+        }
+        
+        return std::move(result);
     }
     
     template <typename T>
-    std::size_t IntegerFormatter<T>::to_hexadecimal(T value, FormattingContext* context) const {
+    std::string IntegerFormatter<T>::to_hexadecimal(T value) const {
         std::size_t num_characters;
         
         // Compute the minimum number of characters to hold the formatted value
@@ -1008,111 +989,122 @@ namespace utils {
             }
         }
         
-        std::size_t capacity = num_characters + num_padding_characters + num_separator_characters;
+        std::size_t length = num_characters + num_padding_characters + num_separator_characters;
         
         if (use_base_prefix) {
-            // +2 characters for base prefix '0b'
-            capacity += 2u;
+            // +2 characters for base prefix '0x'
+            length += 2u;
         }
 
-        if (context) {
-            FormattingContext result = *context;
-            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<IntegerFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
+        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::string result(capacity, fill_character);
+        
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        // Convert value to binary
+        std::size_t num_characters_binary = num_characters * 4u;
+        char buffer[sizeof(T) * CHAR_BIT] { '0' };
+        char* end = buffer;
+        for (int i = 0; i < (int) num_characters_binary; ++i, ++end) {
+            int bit = (value >> (num_characters_binary - 1 - i)) & 1;
+            *end = (char) (48 + bit); // 48 is the ASCII code for '0'
+        }
+        
+        if (use_base_prefix) {
+            result[write_position++] = '0';
+            result[write_position++] = 'x';
+        }
+        
+        char nibble[4] = { '0' };
+        
+        // Convert binary representation to hexadecimal
+        // Pad first group binary representation if necessary, as this group might not be the same size as the rest
+        // Example: 0b01001 has two groups (000)1 and 1001
+        unsigned num_groups = num_characters_binary / 4u;
+        unsigned remainder = num_characters_binary % 4u;
+        unsigned num_padding_characters_binary = 0u;
+        
+        if (remainder) {
+            // Number of binary characters does not equally divide into a hexadecimal representation, first group will require padding characters
+            num_groups += 1u;
+            num_padding_characters_binary = 4u - remainder;
+        }
+        
+        if (_use_separator_character) {
+            std::size_t current = 0u;
 
-            // Convert value to binary
-            std::size_t num_characters_binary = num_characters * 4u;
-            char buffer[sizeof(T) * CHAR_BIT] { '0' };
-            char* end = buffer;
-            for (int i = 0; i < (int) num_characters_binary; ++i, ++end) {
-                int bit = (value >> (num_characters_binary - 1 - i)) & 1;
-                *end = (char) (48 + bit); // 48 is the ASCII code for '0'
-            }
-            
-            if (use_base_prefix) {
-                result[write_position++] = '0';
-                result[write_position++] = 'x';
-            }
-            
-            char nibble[4] = { '0' };
-            
-            // Convert binary representation to hexadecimal
-            // Pad first group binary representation if necessary, as this group might not be the same size as the rest
-            // Example: 0b01001 has two groups (000)1 and 1001
-            unsigned num_groups = num_characters_binary / 4u;
-            unsigned remainder = num_characters_binary % 4u;
-            unsigned num_padding_characters_binary = 0u;
-            
-            if (remainder) {
-                // Number of binary characters does not equally divide into a hexadecimal representation, first group will require padding characters
-                num_groups += 1u;
-                num_padding_characters_binary = 4u - remainder;
-            }
-            
-            if (_use_separator_character) {
-                std::size_t current = 0u;
-
-                // Append any extra padding characters
-                for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
-                    if (current && (num_characters - current) % _group_size == 0u) {
-                        result[write_position++] = '\'';
-                    }
-                    
-                    result[write_position++] = value < 0 ? 'F' : '0';
+            // Append any extra padding characters
+            for (std::size_t i = 0u; i < num_padding_characters; ++i, ++current) {
+                if (current && (num_characters - current) % _group_size == 0u) {
+                    result[write_position++] = '\'';
                 }
                 
-                char* ptr = buffer;
-                for (int group = 0; group < num_groups; ++group, ++current) {
-                    // Insert separator
-                    if (current && (num_characters - current) % _group_size == 0u) {
-                        result[write_position++] = '\'';
-                    }
-
-                    // Convert binary to hexadecimal
-                    int i = 0;
-                    
-                    // Append any necessary padding characters to the front of the nibble
-                    if (num_padding_characters_binary) {
-                        for (; i < num_padding_characters_binary; ++i) {
-                            nibble[i] = value < 0 ? '1' : '0';
-                        }
-                        // Padding is only applicable to the first group
-                        num_padding_characters_binary = 0u;
-                    }
-                    
-                    while (i != 4) {
-                        nibble[i++] = *ptr++;
-                    }
-                    result[write_position++] = detail::nibble_to_hexadecimal(nibble);
-                }
+                result[write_position++] = value < 0 ? 'F' : '0';
             }
-            else {
-                for (std::size_t i = 0u; i < num_padding_characters; ++i) {
-                    result[write_position++] = value < 0 ? 'F' : '0';
+            
+            char* ptr = buffer;
+            for (int group = 0; group < num_groups; ++group, ++current) {
+                // Insert separator
+                if (current && (num_characters - current) % _group_size == 0u) {
+                    result[write_position++] = '\'';
+                }
+
+                // Convert binary to hexadecimal
+                int i = 0;
+                
+                // Append any necessary padding characters to the front of the nibble
+                if (num_padding_characters_binary) {
+                    for (; i < num_padding_characters_binary; ++i) {
+                        nibble[i] = value < 0 ? '1' : '0';
+                    }
+                    // Padding is only applicable to the first group
+                    num_padding_characters_binary = 0u;
                 }
                 
-                char* ptr = buffer;
-                for (int group = 0; group < num_groups; ++group) {
-                    // Convert binary to hexadecimal
-                    int i = 0;
-                    
-                    // Append any necessary padding characters to the front of the nibble
-                    if (num_padding_characters_binary) {
-                        for (; i < num_padding_characters_binary; ++i) {
-                            nibble[i] = value < 0 ? '1' : '0';
-                        }
-                        // Padding is only applicable to the first group
-                        num_padding_characters_binary = 0u;
-                    }
-                    
-                    while (i != 4) {
-                        nibble[i++] = *ptr++;
-                    }
-                    result[write_position++] = detail::nibble_to_hexadecimal(nibble);
+                while (i != 4) {
+                    nibble[i++] = *ptr++;
                 }
+                result[write_position++] = detail::nibble_to_hexadecimal(nibble);
+            }
+        }
+        else {
+            for (std::size_t i = 0u; i < num_padding_characters; ++i) {
+                result[write_position++] = value < 0 ? 'F' : '0';
+            }
+            
+            char* ptr = buffer;
+            for (int group = 0; group < num_groups; ++group) {
+                // Convert binary to hexadecimal
+                int i = 0;
+                
+                // Append any necessary padding characters to the front of the nibble
+                if (num_padding_characters_binary) {
+                    for (; i < num_padding_characters_binary; ++i) {
+                        nibble[i] = value < 0 ? '1' : '0';
+                    }
+                    // Padding is only applicable to the first group
+                    num_padding_characters_binary = 0u;
+                }
+                
+                while (i != 4) {
+                    nibble[i++] = *ptr++;
+                }
+                result[write_position++] = detail::nibble_to_hexadecimal(nibble);
             }
         }
         
-        return std::max(capacity, (std::size_t) width);
+        return std::move(result);
     }
     
     template <typename T>
@@ -1231,38 +1223,14 @@ namespace utils {
             }
         }
     }
-
-    template <typename T>
-    std::string FloatingPointFormatter<T>::format(T value) {
-        std::size_t capacity = format_to(value, nullptr);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        // Format indirectly to std::string to avoid double allocations
-        FormattingContext context { capacity, result.data() };
-        format_to(value, &context);
-        
-        return std::move(result);
-    }
     
     template <typename T>
-    std::size_t FloatingPointFormatter<T>::reserve(T value) const {
-        return format_to(value, nullptr);
-    }
-    
-    template <typename T>
-    void FloatingPointFormatter<T>::format_to(T value, FormattingContext context) const {
-        format_to(value, &context);
-    }
-    
-    template <typename T>
-    std::size_t FloatingPointFormatter<T>::format_to(T value, FormattingContext* context) const {
-        std::size_t capacity = 0u;
+    std::string FloatingPointFormatter<T>::format(T value) const {
+        std::size_t length = 0u;
         std::size_t read_offset = 0u;
 
         // Sign character
-        capacity += value < 0 ? 1u : unsigned(sign != Sign::NegativeOnly);
+        length += value < 0 ? 1u : unsigned(sign != Sign::NegativeOnly);
 
         int num_significant_figures = std::numeric_limits<T>::digits10 + 1;
         if (precision) {
@@ -1290,10 +1258,10 @@ namespace utils {
         const auto& [ptr, error_code] = std::to_chars(start, end, value, format_flags, conversion_precision);
 
         std::size_t num_characters_written = ptr - (start + read_offset);
-        capacity += num_characters_written;
+        length += num_characters_written;
 
         // Additional precision
-        capacity += std::max(0, num_significant_figures - conversion_precision);
+        length += std::max(0, num_significant_figures - conversion_precision);
 
         std::size_t decimal_position = num_characters_written;
         if (use_separator_character) {
@@ -1301,82 +1269,93 @@ namespace utils {
             decimal_position = decimal - (start + read_offset);
 
             // Separators get inserted every 3 characters up until the position of the decimal point
-            capacity += (decimal_position - 1) / 3;
+            length += (decimal_position - 1) / 3;
         }
         
-        if (context) {
-            FormattingContext result = *context;
-            std::size_t write_position = detail::apply_justification(static_cast<typename std::underlying_type<FloatingPointFormatter<T>::Justification>::type>(justification), fill_character, capacity, result);
-            
-            if (value < 0) {
-                result[write_position++] = '-';
+        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::string result(capacity, fill_character);
+        
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        if (value < 0) {
+            result[write_position++] = '-';
+        }
+        else {
+            switch (sign) {
+                case Sign::Aligned:
+                    result[write_position++] = ' ';
+                    break;
+                case Sign::Both:
+                    result[write_position++] = '+';
+                    break;
+                case Sign::NegativeOnly:
+                default:
+                    break;
             }
-            else {
-                switch (sign) {
-                    case Sign::Aligned:
-                        result[write_position++] = ' ';
-                        break;
-                    case Sign::Both:
-                        result[write_position++] = '+';
-                        break;
-                    case Sign::NegativeOnly:
-                    default:
-                        break;
-                }
+        }
+
+        if (representation == Representation::Scientific) {
+            char* e = std::find(buffer, ptr, 'e');
+            std::size_t e_position = e - (start + read_offset);
+
+            for (std::size_t i = 0u; i < e_position; ++i) {
+                result[write_position++] = *(buffer + read_offset + i);
             }
-    
-            if (representation == Representation::Scientific) {
-                char* e = std::find(buffer, ptr, 'e');
-                std::size_t e_position = e - (start + read_offset);
-    
-                for (std::size_t i = 0u; i < e_position; ++i) {
+
+            // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
+            for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
+                result[write_position++] = '0';
+            }
+
+            for (start = buffer + read_offset + e_position; start != ptr; ++start) {
+                result[write_position++] = *start;
+            }
+        }
+        else {
+            // Separator character only makes sense for fixed floating point values
+            if (use_separator_character) {
+                // Separators get inserted every 3 characters up until the position of the decimal point
+                std::size_t group_size = 3;
+                std::size_t counter = group_size - (decimal_position % group_size);
+
+                // Write the number portion, up until the decimal point (with separators)
+                for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
+                    if (i && counter % group_size == 0u) {
+                        result[write_position++] = ',';
+                    }
+
                     result[write_position++] = *(buffer + read_offset + i);
                 }
-    
-                // For scientific notation, fake precision must be appended before the 'e' denoting the exponent
-                for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
-                    result[write_position++] = '0';
-                }
 
-                for (start = buffer + read_offset + e_position; start != ptr; ++start) {
+                // Write decimal portion
+                for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
                     result[write_position++] = *start;
                 }
             }
             else {
-                // Separator character only makes sense for fixed floating point values
-                if (use_separator_character) {
-                    // Separators get inserted every 3 characters up until the position of the decimal point
-                    std::size_t group_size = 3;
-                    std::size_t counter = group_size - (decimal_position % group_size);
-    
-                    // Write the number portion, up until the decimal point (with separators)
-                    for (std::size_t i = 0; i < decimal_position; ++i, ++counter) {
-                        if (i && counter % group_size == 0u) {
-                            result[write_position++] = ',';
-                        }
-    
-                        result[write_position++] = *(buffer + read_offset + i);
-                    }
-    
-                    // Write decimal portion
-                    for (start = buffer + read_offset + decimal_position; start != ptr; ++start) {
-                        result[write_position++] = *start;
-                    }
+                for (start = buffer + read_offset; start != ptr; ++start) {
+                    result[write_position++] = *start;
                 }
-                else {
-                    for (start = buffer + read_offset; start != ptr; ++start) {
-                        result[write_position++] = *start;
-                    }
-                }
-    
-                // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
-                for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
-                    result[write_position++] = '0';
-                }
+            }
+
+            // For regular floating point values, fake higher precision by appending the remaining decimal places as 0
+            for (std::size_t i = conversion_precision; i < num_significant_figures; ++i) {
+                result[write_position++] = '0';
             }
         }
         
-        return std::max(capacity, (std::size_t) width);
+        return std::move(result);
     }
     
     // StringFormatter
@@ -1490,6 +1469,10 @@ namespace utils {
     
     // Section: standard containers
     
+    // Default element formatting: { key: value }
+    template <typename K, typename V, typename H, typename P, typename A>
+    FormatString Formatter<std::unordered_map<K, V, H, P, A>>::m_default_format = "{{ {key}: {value} }}";
+    
     template <typename K, typename V, typename H, typename P, typename A>
     Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : m_formatter() {
     }
@@ -1498,8 +1481,35 @@ namespace utils {
     Formatter<std::unordered_map<K, V, H, P, A>>::~Formatter() = default;
     
     template <typename K, typename V, typename H, typename P, typename A>
+    void Formatter<std::unordered_map<K, V, H, P, A>>::push_format(FormatString fmt) {
+        // Remap placeholder names from std::unordered_map naming convention to std::pair naming convention
+        fmt.rename_placeholder("key", "first");
+        fmt.rename_placeholder("value", "second");
+        m_formatter.set_format(fmt);
+    }
+    
+    template <typename K, typename V, typename H, typename P, typename A>
+    void Formatter<std::unordered_map<K, V, H, P, A>>::pop_format() {
+    }
+    
+    template <typename K, typename V, typename H, typename P, typename A>
     void Formatter<std::unordered_map<K, V, H, P, A>>::parse(const FormatString::Specification& spec) {
-        m_formatter.parse(spec);
+        if (spec.empty()) {
+            return;
+        }
+        
+        if (spec.type() == FormatString::Specification::Type::SpecifierList) {
+        }
+        else {
+            // Global formatting group is applied to the container
+            if (spec.has_group(0)) {
+                const FormatString::Specification& global = spec.get_formatting_group(0);
+            }
+
+            if (spec.has_group(1)) {
+                m_formatter.parse(spec.get_formatting_group(1));
+            }
+        }
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
@@ -1508,41 +1518,60 @@ namespace utils {
             return "{ }";
         }
         
-        std::size_t capacity = reserve(value);
-        
-        std::string result;
-        result.resize(capacity);
-        
-        FormattingContext context { capacity, result.data() };
-        format_to(value, context);
-        
-        return std::move(result);
-    }
-    
-    template <typename K, typename V, typename H, typename P, typename A>
-    std::size_t Formatter<std::unordered_map<K, V, H, P, A>>::reserve(const T& value) const {
-        if (value.empty()) {
-            // Empty std::unordered_map format: "{ }"
-            return 3u;
-        }
-        
         // Format: { { key: value }, { key: value }, { key: value }, { key: value } }
         
         std::size_t num_elements = value.size();
-        std::size_t capacity = 0u;
         
+        // Format std::unordered_map elements
+        std::vector<std::string> elements;
+        elements.reserve(num_elements);
+        for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
+            elements.emplace_back(m_formatter.format(*iter));
+        }
+
         // 2 characters for container opening / closing braces { }
         // 2 characters for leading space before the first element and trailing space after the last element
-        capacity += 4u;
-        
-        // 2 characters for comma + space between two elements
-        capacity += (num_elements - 1u) * 2u;
-        
-        for (auto iter = std::begin(value); iter != std::end(value); ++iter) {
-            capacity += m_formatter.reserve(*iter); // std::unordered_map already points to a std::pair
+        // 2 characters for comma + space (between two elements)
+        std::size_t length = 4u + (num_elements - 1u) * 2u;
+
+        for (const std::string& element : elements) {
+            length += element.length();
         }
         
-        return capacity;
+        std::size_t capacity = std::max(length, width);
+        std::string result(capacity, fill_character);
+        
+        // Apply justification
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        result[write_position++] = '{';
+        result[write_position++] = ' ';
+
+        for (const std::string& element : elements) {
+            length = element.length();
+            result.replace(write_position, length, element);
+            write_position += length;
+    
+            result[write_position++] = ',';
+            result[write_position++] = ' ';
+        }
+        
+        // Overwrite the last two characters to remove the trailing comma
+        result[capacity - 2u] = ' ';
+        result[capacity - 1u] = '}';
+        
+        return std::move(result);
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
@@ -1576,7 +1605,8 @@ namespace utils {
     }
     
     template <typename T, typename U>
-    Formatter<std::pair<T, U>>::Formatter() : m_formatters() {
+    Formatter<std::pair<T, U>>::Formatter() : m_formatters(),
+                                              m_formats(1) {
         static_assert(is_formattable<T> || is_formattable_to<T>, "std::pair<T, U>: T must (at least) provide implementations for parse() and format()");
         static_assert(is_formattable<U> || is_formattable_to<U>, "std::pair<T, U>: U must (at least) provide implementations for parse() and format()");
 
@@ -1593,101 +1623,41 @@ namespace utils {
     
     template <typename T, typename U>
     void Formatter<std::pair<T, U>>::parse(const FormatString::Specification& spec) {
-        if (spec.type() == FormatString::Specification::Type::FormattingGroupList) {
-            if (spec.size() >= 2u) {
-                m_formatters.first.parse(spec.get_formatting_group(0));
-                m_formatters.second.parse(spec.get_formatting_group(1));
-            }
+        
+        if (spec.empty()) {
+            return;
+        }
+        
+        FormatString::Specification::Type type = spec.type();
+        
+        if (type == FormatString::Specification::Type::SpecifierList) {
+            // Specifier list provided, apply specifiers globally
         }
         else {
-            // TODO: log message
+            m_format.update_placeholder("first", [](FormatString::Identifier& identifier, FormatString::Specification& spec, std::size_t position) {
+                spec +=
+            });
+            
+            if (spec.has_group(0)) {
+                m_formatters.first.parse(spec.get_formatting_group(0));
+            }
+            
+            if (spec.has_group(1)) {
+                m_formatters.first.parse(spec.get_formatting_group(1));
+            }
+            
+            // TODO: additional groups are not used
         }
     }
     
     template <typename T, typename U>
     std::string Formatter<std::pair<T, U>>::format(const std::pair<T, U>& value) const {
-        std::size_t capacity = reserve(value);
+        FormatString fmt = m_format.empty() ? m_format : m_default;
+        std::string formatted = fmt.format(NamedArgument<T>("first", value.first), NamedArgument<T>("second", value.second));
         
-        std::string result;
-        result.resize(capacity);
+        // Apply justification, width, etc
         
-        FormattingContext context { capacity, result.data() };
-        format_to(value, context);
-        
-        return std::move(result);
-    }
-    
-    template <typename T, typename U>
-    std::size_t Formatter<std::pair<T, U>>::reserve(const std::pair<T, U>& value) const {
-        // Format: { first, second }
-        std::size_t capacity = 0u;
-        
-        // 2 characters for opening / closing braces { }
-        // 2 characters for leading space before the first element and trailing space after the last element
-        capacity += 4u;
-        
-        // String types should be printed with quotes around them
-        if constexpr (is_string_type<T>::value) {
-            capacity += 2u;
-        }
-        if constexpr (is_string_type<U>::value) {
-            capacity += 2u;
-        }
-        
-        // 2 characters for comma + space
-        capacity += 2u;
-        
-        // TODO: cache to avoid double allocations? would need to modify function to not be const
-        if constexpr (is_formattable_to<T>) {
-            capacity += m_formatters.first.reserve(value.first);
-        }
-        else {
-            capacity += m_formatters.first.format(value.first).length();
-        }
-        
-        if constexpr (is_formattable_to<U>) {
-            capacity += m_formatters.second.reserve(value.second);
-        }
-        else {
-            capacity += m_formatters.second.format(value.second).length();
-        }
-        
-        return capacity;
-    }
-    
-    template <typename T, typename U>
-    void Formatter<std::pair<T, U>>::format_to(const std::pair<T, U>& value, FormattingContext context) const {
-        std::size_t offset = 0u;
-        
-        // Opening brace
-        context[offset++] = '{';
-        context[offset++] = ' ';
-        
-        // Format first value
-        {
-            std::size_t length = m_formatters.first.reserve(value.first);
-            
-            FormattingContext slice { length, &context[offset] };
-            m_formatters.first.format_to(value.first, slice);
-            
-            offset += length;
-        }
-        
-        context[offset++] = ',';
-        context[offset++] = ' ';
-        
-        // Format second value
-        {
-            std::size_t length = m_formatters.second.reserve(value.second);
-            
-            FormattingContext slice { length, &context[offset] };
-            m_formatters.second.format_to(value.second, slice);
-            
-            offset += length;
-        }
-        
-        context[offset++] = ' ';
-        context[offset++] = '}';
+        return std::move(formatted);
     }
     
     template <typename T>

@@ -34,6 +34,8 @@ namespace utils {
     template <typename T>
     concept String = is_string_type<T>::value;
     
+    
+    
     template <typename Fn, typename T>
     concept returns_type = requires(const Fn& predicate) {
         { predicate() } -> std::same_as<T>;

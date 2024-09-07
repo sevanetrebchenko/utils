@@ -1,6 +1,6 @@
 
 #include "utils/result.hpp"
-#include "utils/string.hpp"
+#include "string.hpp"
 #include "utils/constexpr.hpp"
 #include <iostream>
 #include <vector>
@@ -105,6 +105,8 @@ int main() {
     Formatter<int> formatter { };
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
+    
+    utils::format("asdf {}", "adsf");
 
     std::unordered_map<int, float> a {
         { 1, 1.1f },

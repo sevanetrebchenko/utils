@@ -11,13 +11,13 @@
 namespace utils {
     namespace logging {
         
-        struct Log {
-            std::string format;
-            std::string message;
-            MessageLevel level;
-            datetime::Timestamp timestamp;
-            std::source_location source;
-        };
+//        struct Log {
+//            std::string format;
+//            std::string message;
+//            MessageLevel level;
+//            datetime::Timestamp timestamp;
+//            std::source_location source;
+//        };
         
     }
 }
