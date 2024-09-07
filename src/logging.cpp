@@ -99,37 +99,62 @@
 ////
 //
 
+#include "utils/string.hpp"
+#include "utils/logging.hpp"
+
+#include <source_location>
 #include <iostream>
 
-#include "utils/logging/level.hpp"
-#include <source_location>
-
-namespace utils::logging {
-
-    namespace detail {
-
-        void log(MessageLevel level, const std::string& message, std::source_location source) {
-            std::cout << to_string(level) << " : " << message << ", from " << source.file_name() << ":" << source.line() << std::endl;
+namespace utils {
+    
+    using namespace logging;
+    
+    template <>
+    struct Formatter<Message::Level> {
+        void parse(const FormatSpec& spec) {
         }
-
+        
+        std::string format(Message::Level level) const {
+            switch (level) {
+                case Message::Level::Debug:
+                    return "DEBUG";
+                case Message::Level::Info:
+                    return "INFO";
+                case Message::Level::Warning:
+                    return "WARNING";
+                case Message::Level::Error:
+                    return "ERROR";
+                case Message::Level::Fatal:
+                    return "FATAL";
+            }
+        }
+    };
+ 
+    namespace logging {
+        
+        namespace detail {
+    
+            void log(const Message& message) {
+                std::cout << utils::format("[{level}] - {message}, from {source}", NamedArgument("level", message.level), NamedArgument("message", message.message), NamedArgument("source", message.source)) << '\n';
+            }
+    
+        }
+        
+        Message::Message(std::string_view fmt, std::source_location source) : level(Level::Debug),
+                                                                              format(fmt),
+                                                                              source(source),
+                                                                              message() {
+        }
+        
+        Message::Message(const char* fmt, std::source_location source) : level(Level::Debug),
+                                                                         format(fmt),
+                                                                         source(source),
+                                                                         message() {
+            
+        }
+        
+        Message::~Message() = default;
+        
     }
-
-    std::string to_string(MessageLevel level) {
-        if (level == MessageLevel::Info) {
-            return "info";
-        }
-        else if (level == MessageLevel::Debug) {
-            return "debug";
-        }
-        else if (level == MessageLevel::Warning) {
-            return "warning";
-        }
-        else if (level == MessageLevel::Error) {
-            return "error";
-        }
-        else {
-            return "fatal";
-        }
-    }
-
+    
 }

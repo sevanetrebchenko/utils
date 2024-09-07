@@ -532,13 +532,12 @@
 //
 //#endif // STRING_HPP
 
-
+#pragma once
 
 #ifndef STRING_HPP
 #define STRING_HPP
 
 #include "utils/concepts.hpp"
-#include "utils/exceptions.hpp"
 
 #include <string> // std::string
 #include <source_location> // std::source_location
@@ -579,9 +578,6 @@ namespace utils {
     std::size_t from_string(std::string_view in, double& out);
     std::size_t from_string(std::string_view in, long double& out);
     
-    
-
-    
     class FormatSpec {
         public:
             enum class Type {
@@ -594,6 +590,10 @@ namespace utils {
             
             Type type() const;
             bool empty() const;
+            std::size_t size() const;
+            
+            bool operator==(const FormatSpec& other) const;
+            bool operator!=(const FormatSpec& other) const;
             
             // Methods for specifier lists
             
@@ -603,16 +603,14 @@ namespace utils {
             std::string_view operator[](std::string_view name) const;
 
             std::string& get_specifier(std::string_view name);
+            
+            template <typename ...Ts>
+            std::string_view get_specifier(std::string_view first, std::string_view second, Ts... rest) const;
             std::string_view get_specifier(std::string_view name) const;
 
-            // Note: must be called with types convertible to std::string_view (asserted at compile time)
             template <typename ...Ts>
             bool has_specifier(std::string_view first, std::string_view second, Ts... rest) const;
-            [[nodiscard]] bool has_specifier(std::string_view specifier) const;
-            
-            // Note: must be called with types convertible to std::string_view (asserted at compile time)
-            template <typename ...Ts>
-            std::string_view one_of(Ts... args) const;
+            bool has_specifier(std::string_view specifier) const;
             
             // Methods for formatting groups
             
@@ -643,7 +641,6 @@ namespace utils {
             
             // Conversion from specifier list to formatting group list
             explicit FormatSpec(SpecifierList&& specifiers);
-            
             
             // A specification can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
             // Specifiers are stored in a std::vector instead of std::unordered map as the number of formatting specifiers is expected to be relatively small
@@ -692,40 +689,46 @@ namespace utils {
     namespace detail {
         
         template <typename T>
-        struct IntegerFormatter {
-            IntegerFormatter();
-            ~IntegerFormatter();
-            
-            void parse(const FormatSpec& spec);
-            std::string format(T value) const;
-            
-            enum class Representation {
-                Decimal = 0,
-                Binary,
-                Hexadecimal
-            } representation;
-            
-            Sign sign;
-            Justification justification;
-            std::size_t width;
-            char fill_character;
-            
-            // For decimal representations, separates every 3 characters with a comma
-            // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote
-            std::optional<bool> use_separator_character;
-            
-            // Specifies how many characters are in a single group (works in conjunction with 'use_separator_character' specifier)
-            // Only applicable to binary / hexadecimal representations
-            std::optional<std::uint8_t> group_size;
-            
-            // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
-            // Only applicable to binary / hexadecimal representations
-            bool use_base_prefix;
-            
-            // Specifies the total number of digits to use when formatting
-            // The number of digits is rounded up to the nearest multiple of 'group_size', if specified
-            // Only applicable to binary / hexadecimal representations
-            std::uint8_t digits;
+        class IntegerFormatter {
+            public:
+                IntegerFormatter();
+                ~IntegerFormatter();
+                
+                void parse(const FormatSpec& spec);
+                std::string format(T value) const;
+                
+                enum class Representation {
+                    Decimal = 0,
+                    Binary,
+                    Hexadecimal
+                } representation;
+                
+                Sign sign;
+                Justification justification;
+                std::size_t width;
+                char fill_character;
+                
+                // For decimal representations, separates every 3 characters with a comma
+                // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote
+                std::optional<bool> use_separator_character;
+                
+                // Specifies how many characters are in a single group (works in conjunction with 'use_separator_character' specifier)
+                // Only applicable to binary / hexadecimal representations
+                std::optional<std::uint8_t> group_size;
+                
+                // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
+                // Only applicable to binary / hexadecimal representations
+                bool use_base_prefix;
+                
+                // Specifies the total number of digits to use when formatting
+                // The number of digits is rounded up to the nearest multiple of 'group_size', if specified
+                // Only applicable to binary / hexadecimal representations
+                std::uint8_t digits;
+                
+            private:
+                inline std::string to_binary(T value) const;
+                inline std::string to_decimal(T value) const;
+                inline std::string to_hexadecimal(T value) const;
         };
         
     }

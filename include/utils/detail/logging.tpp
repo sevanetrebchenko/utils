@@ -1,8 +1,7 @@
 
 #pragma once
 
-#include "utils/logging/level.hpp"
-
+#include "utils/string.hpp"
 #include <source_location> // std::source_location
 
 namespace utils::logging {

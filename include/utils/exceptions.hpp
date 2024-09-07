@@ -1,4 +1,6 @@
 
+#pragma once
+
 #ifndef EXCEPTIONS_HPP
 #define EXCEPTIONS_HPP
 
@@ -13,5 +15,8 @@ namespace utils {
     };
     
 }
+
+// Template definitions
+#include "utils/detail/exceptions.tpp"
 
 #endif // EXCEPTIONS_HPP

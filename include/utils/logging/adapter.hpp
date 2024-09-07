@@ -2,8 +2,7 @@
 #ifndef UTILS_ADAPTER_HPP
 #define UTILS_ADAPTER_HPP
 
-#include "utils/logging/level.hpp"
-#include "utils/logging/log.hpp"
+#include "utils/logging.hpp"
 #include "utils/datetime/duration.hpp"
 #include "utils/string.hpp"
 
@@ -43,7 +42,7 @@ namespace utils {
                 void disable();
                 
                 void set_format(std::string format);
-                void set_level(MessageLevel level);
+//                void set_level(MessageLevel level);
                 
                 void enable_buffering(std::size_t size);
                 void flush();
@@ -81,7 +80,7 @@ namespace utils {
                 
             private:
                 // FormatString m_format;
-                MessageLevel m_level;
+//                MessageLevel m_level;
                 bool m_enabled;
                 
                 std::unordered_map<std::type_index, std::string> m_format_overrides;

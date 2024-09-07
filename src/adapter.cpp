@@ -22,9 +22,9 @@ namespace utils::logging {
     
     }
     
-    void Adapter::set_level(MessageLevel level) {
-    
-    }
+//    void Adapter::set_level(MessageLevel level) {
+//
+//    }
     
     void Adapter::enable_buffering(std::size_t size) {
     
