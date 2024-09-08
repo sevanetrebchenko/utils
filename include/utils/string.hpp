@@ -654,6 +654,8 @@ namespace utils {
     
     template <typename T>
     struct NamedArgument {
+        using type = T;
+        
         NamedArgument(std::string_view name, const T& value);
         ~NamedArgument();
     
@@ -661,6 +663,7 @@ namespace utils {
         const T& value; // Store as a reference to avoid copying non-trivially copyable types
     };
     
+    // Function throws exception if a placeholder does not have an argument specified
     template <typename ...Ts>
     std::string format(std::string_view fmt, const Ts&... args);
     
@@ -727,7 +730,7 @@ namespace utils {
                 // Specifies the total number of digits to use when formatting
                 // The number of digits is rounded up to the nearest multiple of 'group_size', if specified
                 // Only applicable to binary / hexadecimal representations
-                std::uint8_t digits;
+                std::optional<std::uint8_t> digits;
                 
             private:
                 inline std::string to_binary(T value) const;
@@ -741,7 +744,21 @@ namespace utils {
     
     // char
     template <>
-    struct Formatter<std::int8_t> : detail::IntegerFormatter<std::int8_t> {
+    struct Formatter<char> {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(char c) const;
+        
+        Justification justification;
+        std::size_t width;
+        char fill_character;
+    };
+    
+    // signed char
+    template <>
+    struct Formatter<std::int8_t> : public detail::IntegerFormatter<std::int8_t> {
     };
     
     // unsigned char
@@ -832,20 +849,20 @@ namespace utils {
     // String types
     
     template <>
-    struct Formatter<const char*> {
-        Formatter();
-        ~Formatter();
-        
-        void parse(const FormatSpec& spec);
-        std::string format(const char* value) const;
-        
-        Justification justification;
-        std::size_t width;
-        char fill_character;
-    };
-    
-    template <>
-    struct Formatter<char*> : Formatter<const char*> {
+    class Formatter<const char*> {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const char* value) const;
+            
+            Justification justification;
+            std::size_t width;
+            char fill_character;
+            
+        protected:
+            inline std::string format(const char* value, std::size_t length) const;
     };
     
     template <>
@@ -974,6 +991,11 @@ namespace utils {
     struct Formatter<NamedArgument<T>> : Formatter<T> {
         std::string format(const NamedArgument<T>& value);
     };
+    
+    template <typename T>
+    std::string Formatter<NamedArgument<T>>::format(const NamedArgument<T>& value) {
+        return Formatter<T>::format(value.value);
+    }
     
 }
 

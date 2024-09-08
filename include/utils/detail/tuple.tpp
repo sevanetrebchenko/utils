@@ -2,33 +2,32 @@
 #ifndef TUPLE_TPP
 #define TUPLE_TPP
 
-
 #define GENERATE_APPLY_DEFINITIONS_FOR(TUPLE)                                                                                                                                                    \
 namespace utils {                                                                                                                                                                                \
     namespace detail {                                                                                                                                                                           \
                                                                                                                                                                                                  \
         /* For invoking callback 'fn' on each element of the tuple */                                                                                                                            \
         template <typename Fn, typename ...Ts, std::size_t ...Is>                                                                                                                                \
-        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_value<Fn, Ts>, ...) {                                                                       \
+        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_value<Fn, Ts> && ...) {                                                                     \
             (fn(std::get<Is>(tuple)), ...);                                                                                                                                                      \
         }                                                                                                                                                                                        \
                                                                                                                                                                                                  \
         /* For invoking callback 'fn' on each element of the tuple, passing the index of the element as an additional parameter */                                                               \
         template <typename Fn, typename ...Ts, std::size_t ...Is>                                                                                                                                \
-        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_runtime_index<Fn, Ts>, ...) {                                                               \
+        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_runtime_index<Fn, Ts> && ...) {                                                             \
             (fn(std::get<Is>(tuple), Is), ...);                                                                                                                                                  \
         }                                                                                                                                                                                        \
                                                                                                                                                                                                  \
         /* For invoking callback 'fn' on each element of the tuple, passing both the type and the index of the element as template parameters */                                                 \
         /* This is useful for templated lambda functions where the type of any given element is not the same / easily known */                                                                   \
         template <typename Fn, typename ...Ts, std::size_t ...Is>                                                                                                                                \
-        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, Ts, Is>, ...) {                                                      \
+        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (invocable_with_compile_time_index<Fn, Ts, Is> && ...) {                                                    \
             (fn.template operator()<typename std::decay<Ts>::type, Is>(std::get<Is>(tuple)), ...);                                                                                               \
         }                                                                                                                                                                                        \
                                                                                                                                                                                                  \
         /* For invoking callback 'fn' on each element of the tuple, passing the index of the element as the only template parameter */                                                           \
         template <typename Fn, typename... Ts, std::size_t ...Is>                                                                                                                                \
-        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (implicitly_invocable_with_compile_time_index<Fn, Ts, Is>, ...) {                                           \
+        inline void apply(Fn&& fn, TUPLE tuple, std::index_sequence<Is...>) requires (implicitly_invocable_with_compile_time_index<Fn, Ts, Is> && ...) {                                         \
             (fn.template operator()<Is>(std::get<Is>(tuple)), ...);                                                                                                                              \
         }                                                                                                                                                                                        \
                                                                                                                                                                                                  \
@@ -111,22 +110,22 @@ namespace utils::detail {
     
     template <typename Fn, typename T>
     concept invocable_with_value = requires(Fn fn, T value) {
-        { fn(value) };
+        fn(value);
     };
     
     template <typename Fn, typename T>
     concept invocable_with_runtime_index = requires(Fn fn, T value, std::size_t index) {
-        { fn(value, index) };
+        fn(value, index);
     };
     
     template <typename Fn, typename T, std::size_t I>
     concept implicitly_invocable_with_compile_time_index = requires(Fn fn, T value) {
-        { fn.template operator()<I>(value) };
+        fn.template operator()<I>(value);
     };
     
     template <typename Fn, typename T, std::size_t I>
     concept invocable_with_compile_time_index = requires(Fn fn, T value) {
-        { fn.template operator()<T, I>(value) };
+        fn.template operator()<T, I>(value);
     };
 
 }

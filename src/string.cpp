@@ -1940,4 +1940,177 @@ namespace utils {
         return !(*this == other);
     }
     
+    Formatter<char>::Formatter() : justification(Justification::Left),
+                                   width(0u),
+                                   fill_character(' ') {
+    }
+    
+    Formatter<char>::~Formatter() {
+    }
+    
+    void Formatter<char>::parse(const utils::FormatSpec& spec) {
+        if (spec.type() == FormatSpec::Type::FormattingGroupList) {
+            throw std::runtime_error("format spec must be a list of specifiers");
+        }
+
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width"));
+
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = _width;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+    }
+    
+    std::string Formatter<char>::format(char c) const {
+        std::size_t capacity = std::max(1ull, width);
+        std::string result(capacity, fill_character);
+
+        switch (justification) {
+            case Justification::Left:
+                result[0] = c;
+                break;
+            case Justification::Right:
+                result[capacity - 1] = c;
+                break;
+            case Justification::Center:
+                result[(capacity - 1) / 2] = c;
+                break;
+        }
+        
+        return std::move(result);
+    }
+    
+    Formatter<const char*>::Formatter() : justification(Justification::Left),
+                                          width(0u),
+                                          fill_character(' ') {
+    }
+    
+    Formatter<const char*>::~Formatter() {
+    }
+    
+    void Formatter<const char*>::parse(const utils::FormatSpec& spec) {
+        if (spec.type() == FormatSpec::Type::FormattingGroupList) {
+            throw std::runtime_error("format spec must be a list of specifiers");
+        }
+
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width"));
+
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = _width;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+    }
+    
+    std::string Formatter<const char*>::format(const char* value) const {
+        return std::move(format(value, std::strlen(value)));
+    }
+    
+    std::string Formatter<const char*>::format(const char* value, std::size_t length) const {
+        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::string result(capacity, fill_character);
+
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        result.replace(write_position, length, value, 0, length);
+        return std::move(result);
+    }
+    
+    std::string Formatter<std::string_view>::format(std::string_view value) const {
+        return Formatter<const char*>::format(value.data(), value.length());
+    }
+    
+    std::string Formatter<std::string>::format(const std::string& value) const {
+        return Formatter<const char*>::format(value.c_str(), value.length());
+    }
+    
+    Formatter<std::source_location>::Formatter() {
+    }
+
+    Formatter<std::source_location>::~Formatter() {
+    }
+
+    void Formatter<std::source_location>::parse(const utils::FormatSpec& spec) {
+    }
+
+    std::string Formatter<std::source_location>::format(const std::source_location& value) const {
+        return "";
+    }
+
 }
