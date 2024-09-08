@@ -1707,6 +1707,14 @@ namespace utils {
 
     namespace detail {
 
+        template <typename T>
+        struct is_named_argument : std::false_type {
+        };
+
+        template <typename T>
+        struct is_named_argument<NamedArgument<T>> : std::true_type {
+        };
+        
         struct Identifier {
             Identifier();
             Identifier(std::size_t position);
@@ -1889,52 +1897,57 @@ namespace utils {
             return "";
         }
         
-        // Parse format string
-        std::size_t length = fmt.length();
+        std::tuple<typename std::decay<Ts>::type...> tuple = std::make_tuple(args...);
         
         std::vector<Identifier> identifiers;
         std::vector<FormatSpec> specifications;
         std::vector<Placeholder> placeholders;
         
+        // Parse format string
+        
+        std::size_t length = fmt.length();
+        std::size_t last_read_position = 0u;
+        std::size_t i = 0u;
+        
         std::string out;
         out.reserve(length);
-        
-        std::size_t i = 0u;
         
         while (i < length) {
             if (fmt[i] == '{') {
                 if (i + 1 == length) {
-                    throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {}", i));
+                    throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}'", i));
                 }
                 else if (fmt[i + 1] == '{') {
-                    // Escaped brace
+                    // Escaped opening brace '{{'
+                    out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                    
                     ++i;
+                    last_read_position = i + 1u; // Skip to the next character after the second brace
                 }
                 else {
+                    out.append(fmt, last_read_position, i - last_read_position); // Do not include opening brace
+                    
                     // Skip placeholder opening brace '{'
-                    std::size_t placeholder_start = i++;
+                    i++;
                     
                     Identifier identifier { };
                     i += parse_identifier(fmt.substr(i), identifier);
                     if (fmt[i] != ':' && fmt[i] != '}') {
                         // Expecting format spec separator ':' or placeholder closing brace '}'
-                        throw std::runtime_error(utils::format("invalid character at position {} - expecting format spec separator ':' or placeholder closing brace '}'", i));
+                        throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting format spec separator ':' or placeholder closing brace '}'", fmt[i], i));
                     }
                     
                     FormatSpec spec { };
                     if (fmt[i] == ':') {
-                        // Format spec separator ':'
+                        // Skip format spec separator ':'
                         ++i;
                         
                         std::size_t num_characters_read = parse_format_spec(fmt.substr(i, length - i), spec);
                         i += num_characters_read;
                         if (fmt[i] != '}') {
-                            throw std::runtime_error(utils::format("invalid character at position {} - expecting ", i));
+                            throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting placeholder closing brace '}'", fmt[i], i));
                         }
                     }
-                    
-                    // Skip placeholder closing brace '}'
-                    ++i;
                     
                     // Verify placeholder homogeneity
                     if (!placeholders.empty()) {
@@ -1977,11 +1990,94 @@ namespace utils {
                     }
             
                     // Placeholders are automatically sorted by their position in the format string
-                    placeholders.emplace_back(identifier_index, specification_index, placeholder_start);
+                    placeholders.emplace_back(identifier_index, specification_index, out.length());
+                    
+                    // Skip placeholder closing brace '}'
+                    last_read_position = ++i;
+                }
+            }
+            else if (fmt[i] == '}') {
+                if (i + 1 < length && fmt[i + 1] == '}') {
+                    // Escaped closing brace '}}'
+                    out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                    
+                    ++i;
+                    last_read_position = i + 1u; // Skip to the next character after the second brace
+                }
+                else {
+                    throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}'", i));
                 }
             }
             
             ++i;
+        }
+        
+        if (i != last_read_position) {
+            // Append any remaining characters
+            out.append(fmt, last_read_position, i - last_read_position);
+        }
+        
+        if (placeholders.empty()) {
+            return std::move(out);
+        }
+        
+        // Format string type is determined by the type of the first placeholder
+        Identifier::Type type = identifiers[placeholders[0].identifier_index].type;
+        constexpr std::size_t num_arguments = sizeof...(Ts);
+        
+        if (type == Identifier::Type::Auto) {
+            // Format string contains only auto-numbered placeholders
+            
+            // Check: argument list must not contain any NamedArgument<T> types
+            utils::apply([]<typename T, std::size_t I>(const T& value) {
+                if constexpr (detail::is_named_argument<T>::value) {
+                    throw std::runtime_error(utils::format("invalid argument at position {} - named arguments are not allowed in format strings that only contain auto-numbered placeholders", I));
+                }
+            }, tuple);
+            
+            std::size_t offset = 0u;
+            
+            std::size_t
+            
+            
+        }
+        else {
+            // Format string contains a mix of positional and named placeholders
+            std::size_t num_positional_arguments = 0u;
+    
+            // Check: arguments for positional placeholders must come before any arguments for named placeholders
+            utils::apply([&num_positional_arguments, positional_arguments_parsed = false]<typename T>(const T&, std::size_t index) mutable {
+                if constexpr (detail::is_named_argument<T>::value) {
+                    if (!positional_arguments_parsed) {
+                        positional_arguments_parsed = true;
+                    }
+                }
+                else {
+                    if (positional_arguments_parsed) {
+                        // Encountered positional argument after named argument cutoff
+                        throw std::runtime_error(utils::format("invalid argument at position {} - arguments for positional placeholders must come before arguments for named placeholders", index));
+                    }
+    
+                    ++num_positional_arguments;
+                }
+            }, tuple);
+            
+            // Check: two NamedArgument<T> arguments should not reference the same named placeholder
+            utils::apply_for([&tuple, num_arguments]<typename T>(const T& outer, std::size_t i) {
+                ASSERT(detail::is_named_argument<T>::value, "argument is not of type NamedArgument<T>");
+    
+                if constexpr (detail::is_named_argument<T>::value) {
+                    utils::apply_for([&outer, i]<typename U>(const U& inner, std::size_t j) {
+                        ASSERT(detail::is_named_argument<U>::value, "argument is not of type NamedArgument<U>");
+    
+                        if constexpr (detail::is_named_argument<U>::value) {
+                            if (outer.name == inner.name) {
+                                throw FormattedError("invalid argument at position {} - named arguments must be unique (argument for placeholder '{}' first encountered at argument position {})", j, inner.name, i);
+                            }
+                        }
+                    }, tuple, i + 1u, num_arguments);
+                }
+            }, tuple, num_positional_arguments, num_arguments);
         }
         
         return std::move(out);
