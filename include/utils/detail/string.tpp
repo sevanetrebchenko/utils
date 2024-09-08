@@ -1896,34 +1896,40 @@ namespace utils {
         std::vector<FormatSpec> specifications;
         std::vector<Placeholder> placeholders;
         
+        std::string out;
+        out.reserve(length);
+        
         std::size_t i = 0u;
         
         while (i < length) {
             if (fmt[i] == '{') {
                 if (i + 1 == length) {
-                    throw;
+                    throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {}", i));
                 }
                 else if (fmt[i + 1] == '{') {
                     // Escaped brace
+                    ++i;
                 }
                 else {
-                    // Placeholder opening brace '{'
-                    ++i;
+                    // Skip placeholder opening brace '{'
+                    std::size_t placeholder_start = i++;
                     
                     Identifier identifier { };
                     i += parse_identifier(fmt.substr(i), identifier);
                     if (fmt[i] != ':' && fmt[i] != '}') {
-                        throw;
+                        // Expecting format spec separator ':' or placeholder closing brace '}'
+                        throw std::runtime_error(utils::format("invalid character at position {} - expecting format spec separator ':' or placeholder closing brace '}'", i));
                     }
                     
                     FormatSpec spec { };
                     if (fmt[i] == ':') {
                         // Format spec separator ':'
                         ++i;
-
-                        i += parse_format_spec(fmt.substr(i), spec);
+                        
+                        std::size_t num_characters_read = parse_format_spec(fmt.substr(i, length - i), spec);
+                        i += num_characters_read;
                         if (fmt[i] != '}') {
-                            throw;
+                            throw std::runtime_error(utils::format("invalid character at position {} - expecting ", i));
                         }
                     }
                     
@@ -1944,11 +1950,41 @@ namespace utils {
                     // Register placeholder
                     std::size_t num_identifiers = identifiers.size();
                     std::size_t identifier_index = num_identifiers;
+                    
+                    // Find or register identifier
+                    for (std::size_t j = 0u; j < num_identifiers; ++j) {
+                        if (identifiers[j] == identifier) {
+                            identifier_index = j;
+                            break;
+                        }
+                    }
+                    if (identifier_index == num_identifiers) {
+                        identifiers.emplace_back(identifier);
+                    }
+            
+                    // Find or register format specification
+                    std::size_t num_format_specifications = specifications.size();
+                    std::size_t specification_index = num_format_specifications;
+            
+                    for (std::size_t j = 0u; j < num_format_specifications; ++j) {
+                        if (specifications[j] == spec) {
+                            specification_index = j;
+                            break;
+                        }
+                    }
+                    if (specification_index == num_format_specifications) {
+                        specifications.emplace_back(std::move(spec));
+                    }
+            
+                    // Placeholders are automatically sorted by their position in the format string
+                    placeholders.emplace_back(identifier_index, specification_index, placeholder_start);
                 }
             }
+            
+            ++i;
         }
         
-        return "";
+        return std::move(out);
     }
     
     // Section: IntegerFormatter

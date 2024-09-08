@@ -1274,15 +1274,12 @@ namespace utils {
             out.reserve(length);
 
             // Replace escaped brace characters
-            for (std::size_t i = 0u; i < length - 1u; ++i) {
-                bool escaped_brace = (value[i] == '[' && value[i + 1u] == '[') ||
-                                     (value[i] == ']' && value[i + 1u] == ']');
-
-                if (escaped_brace) {
+            for (std::size_t i = 0u; i < length; ++i) {
+                if (i + 1 < length && ((value[i] == '[' && value[i + 1u] == '[') || (value[i] == ']' && value[i + 1u] == ']'))) {
                     // Push back only one brace character
-                    out.push_back(value[i]);
                     ++i;
                 }
+                out.push_back(value[i]);
             }
         }
 
@@ -1337,6 +1334,7 @@ namespace utils {
 
                         if (in[i] == ',') {
                             // Skip format specifier separator
+                            ++i;
                             continue;
                         }
                         else if (in[i] == terminator) {
@@ -1561,7 +1559,7 @@ namespace utils {
         std::string_view str = trim(in);
 
         if (str.empty()) {
-            throw FormattedError("");
+            // throw FormattedError("");
         }
 
         // Only a leading '-' is permitted at the beginning
@@ -1671,7 +1669,7 @@ namespace utils {
 
     // FormatSpec implementation
     
-    FormatSpec::FormatSpec() : m_spec(),
+    FormatSpec::FormatSpec() : m_spec(SpecifierList()),
                                m_type(Type::SpecifierList) {
     }
 
@@ -1688,6 +1686,36 @@ namespace utils {
         }
     }
 
+    FormatSpec::FormatSpec(const FormatSpec& other) {
+        *this = other;
+    }
+    
+    FormatSpec::FormatSpec(FormatSpec&& other) noexcept {
+        if (*this != other) {
+            m_type = other.m_type;
+            m_spec = std::move(other.m_spec);
+        }
+    }
+    
+    FormatSpec& FormatSpec::operator=(const FormatSpec& other) {
+        if (*this != other) {
+            m_type = other.m_type;
+            if (other.m_type == Type::SpecifierList) {
+                // Vector of specifiers can be copied directly
+                m_spec = other.m_spec;
+            }
+            else {
+                FormattingGroupList groups = FormattingGroupList();
+                for (const FormatSpec* spec : std::get<FormattingGroupList>(other.m_spec)) {
+                    groups.emplace_back(new FormatSpec(*spec));
+                }
+                m_spec = std::move(groups);
+            }
+        }
+        
+        return *this;
+    }
+    
     FormatSpec::Type FormatSpec::type() const {
         return m_type;
     }
@@ -1892,7 +1920,7 @@ namespace utils {
 
         return false;
     }
-
+    
     FormatSpec::Specifier::Specifier(std::string name, std::string value) : name(std::move(name)),
                                                                             value(std::move(value)) {
     }

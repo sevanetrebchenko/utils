@@ -588,6 +588,10 @@ namespace utils {
             FormatSpec();
             ~FormatSpec();
             
+            FormatSpec(const FormatSpec& other);
+            FormatSpec(FormatSpec&& other) noexcept;
+            FormatSpec& operator=(const FormatSpec& other);
+            
             Type type() const;
             bool empty() const;
             std::size_t size() const;

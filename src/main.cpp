@@ -114,7 +114,7 @@ int main() {
         { 4, 4.4f },
     };
     
-//    std::cout << utils::format("'{::precision=[2]}'", a) << std::endl;
+    std::cout << utils::format("'{::precision=[2]}'", a) << std::endl;
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
