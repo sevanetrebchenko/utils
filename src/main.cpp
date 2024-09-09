@@ -105,7 +105,12 @@ int main() {
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
     
-    std::cout << utils::format("asdf {:representation=[binary]}", 36) << '\n';
+    try {
+        std::cout << utils::format("asdf {} {}", 36) << '\n';
+    }
+    catch (std::runtime_error&  e) {
+        std::cout << e.what() << std::endl;
+    }
 
     std::unordered_map<int, float> a {
         { 1, 1.1f },

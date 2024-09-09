@@ -1183,7 +1183,6 @@ namespace utils {
             }
         }
         
-        
         std::size_t parse_identifier(std::string_view in, Identifier& out) {
             std::size_t offset = 0u;
 
@@ -1350,65 +1349,6 @@ namespace utils {
             }
 
             return i;
-        }
-
-        std::size_t apply_justification(std::uint8_t justification, char fill_character, std::size_t length, std::string& out) {
-            std::size_t capacity = out.length();
-            std::size_t start = 0u;
-
-            char fill = ' ';
-            if (fill_character) {
-                fill = fill_character;
-            }
-
-            if (length < capacity) {
-                // Formatted string
-                switch (justification) {
-                    case 0:
-                        // Justify left (append fill character from the right)
-                        for (std::size_t i = length; i < capacity; ++i) {
-                            out[i] = fill;
-                        }
-                        break;
-                    case 1:
-                        // Justify right (append fill character from the left)
-                        start = (capacity - 1u) - length;
-                        for (std::size_t i = 0u; i < start; ++i) {
-                            out[i] = fill;
-                        }
-                        break;
-                    case 2:
-                        // Justify center (append fill character on both sides equally)
-                        start = (capacity - length) / 2;
-
-                        // Left side
-                        for (std::size_t i = 0u; i < start; ++i) {
-                            out[i] = fill;
-                        }
-
-                        // Right side (account for additional character in the case that width is odd)
-                        std::size_t last = capacity - 1u;
-                        for (std::size_t i = 0u; i < start + ((capacity - length) % 2); ++i) {
-                            out[last - i] = fill;
-                        }
-                        break;
-                }
-            }
-
-            return start;
-        }
-
-        int round_up_to_multiple(int value, int multiple) {
-            if (multiple == 0) {
-                return value;
-            }
-
-            int remainder = value % multiple;
-            if (remainder == 0) {
-                return value;
-            }
-
-            return value + multiple - remainder;
         }
 
         char nibble_to_hexadecimal(const char* nibble) {
@@ -1940,6 +1880,16 @@ namespace utils {
         return !(*this == other);
     }
     
+    FormatString::FormatString(const char* format, std::source_location source) : format(format),
+                                                                                  source(source) {
+    }
+
+    FormatString::FormatString(std::string_view format, std::source_location source) : format(format),
+                                                                                       source(source) {
+    }
+    
+    FormatString::~FormatString() = default;
+    
     Formatter<char>::Formatter() : justification(Justification::Left),
                                    width(0u),
                                    fill_character(' ') {
@@ -2100,17 +2050,21 @@ namespace utils {
         return Formatter<const char*>::format(value.c_str(), value.length());
     }
     
-    Formatter<std::source_location>::Formatter() {
+    Formatter<std::source_location>::Formatter() : m_file_formatter(),
+                                                   m_line_formatter() {
     }
 
-    Formatter<std::source_location>::~Formatter() {
-    }
+    Formatter<std::source_location>::~Formatter() = default;
 
     void Formatter<std::source_location>::parse(const utils::FormatSpec& spec) {
     }
 
     std::string Formatter<std::source_location>::format(const std::source_location& value) const {
-        return "";
+        std::string result;
+        
+        result += m_file_formatter.format(value.file_name()) + ":" + m_line_formatter.format(value.line());
+        
+        return std::move(result);
     }
-
+    
 }

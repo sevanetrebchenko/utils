@@ -1,4 +1,6 @@
 
+#pragma once
+
 #ifndef LOGGING_HPP
 #define LOGGING_HPP
 
@@ -28,7 +30,6 @@ namespace utils {
             
             std::string_view format;
             std::source_location source;
-            
             std::string message;
         };
         

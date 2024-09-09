@@ -663,9 +663,26 @@ namespace utils {
         const T& value; // Store as a reference to avoid copying non-trivially copyable types
     };
     
+    template <typename T>
+    struct is_named_argument : std::false_type {
+    };
+
+    template <typename T>
+    struct is_named_argument<NamedArgument<T>> : std::true_type {
+    };
+    
+    struct FormatString {
+        FormatString(std::string_view format, std::source_location source = std::source_location::current());
+        FormatString(const char* format, std::source_location source = std::source_location::current());
+        ~FormatString();
+        
+        std::string_view format;
+        std::source_location source;
+    };
+    
     // Function throws exception if a placeholder does not have an argument specified
     template <typename ...Ts>
-    std::string format(std::string_view fmt, const Ts&... args);
+    std::string format(FormatString str, const Ts&... args);
     
     // Section: Formatters
     

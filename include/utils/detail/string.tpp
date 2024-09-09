@@ -1707,14 +1707,6 @@ namespace utils {
 
     namespace detail {
 
-        template <typename T>
-        struct is_named_argument : std::false_type {
-        };
-
-        template <typename T>
-        struct is_named_argument<NamedArgument<T>> : std::true_type {
-        };
-        
         struct Identifier {
             Identifier();
             Identifier(std::size_t position);
@@ -1740,12 +1732,6 @@ namespace utils {
             std::string_view value;
         };
         
-        struct Placeholder {
-            std::size_t identifier_index;
-            std::size_t specification_index;
-            std::size_t position;
-        };
-        
         char nibble_to_hexadecimal(const char* nibble);
         
         // Returns the number of characters read
@@ -1760,7 +1746,7 @@ namespace utils {
             if (is_auto_numbered) {
                 // Check: argument list must not contain any NamedArgument<T> types
                 utils::apply([]<typename T, std::size_t I>(const T& value) {
-                    if constexpr (detail::is_named_argument<T>::value) {
+                    if constexpr (is_named_argument<T>::value) {
                         throw std::runtime_error(utils::format("invalid argument at position {} - named arguments are not allowed in format strings that only contain auto-numbered placeholders", I));
                     }
                 }, tuple);
@@ -1772,7 +1758,7 @@ namespace utils {
         
                 // Check: arguments for positional placeholders must come before any arguments for named placeholders
                 utils::apply([&num_positional_arguments, positional_arguments_parsed = false]<typename T>(const T&, std::size_t index) mutable {
-                    if constexpr (detail::is_named_argument<T>::value) {
+                    if constexpr (is_named_argument<T>::value) {
                         if (!positional_arguments_parsed) {
                             positional_arguments_parsed = true;
                         }
@@ -1789,13 +1775,13 @@ namespace utils {
                 
                 // Check: two NamedArgument<T> arguments should not reference the same named placeholder
                 utils::apply_for([&tuple, num_arguments]<typename T>(const T& outer, std::size_t i) {
-                    ASSERT(detail::is_named_argument<T>::value, "argument is not of type NamedArgument<T>");
+                    ASSERT(is_named_argument<T>::value, "argument is not of type NamedArgument<T>");
         
-                    if constexpr (detail::is_named_argument<T>::value) {
+                    if constexpr (is_named_argument<T>::value) {
                         utils::apply_for([&outer, i]<typename U>(const U& inner, std::size_t j) {
-                            ASSERT(detail::is_named_argument<U>::value, "argument is not of type NamedArgument<U>");
+                            ASSERT(is_named_argument<U>::value, "argument is not of type NamedArgument<U>");
         
-                            if constexpr (detail::is_named_argument<U>::value) {
+                            if constexpr (is_named_argument<U>::value) {
                                 if (outer.name == inner.name) {
                                     throw std::runtime_error(utils::format("invalid argument at position {} - named arguments must be unique (argument for placeholder '{}' first encountered at argument position {})", j, inner.name, i));
                                 }
@@ -2645,148 +2631,11 @@ namespace utils {
             return std::move(result);
         }
         
-        template <typename Tuple>
-        inline std::string format(std::string_view fmt, const Tuple& tuple) {
-            constexpr std::size_t num_arguments = std::tuple_size<Tuple>::value;
-            
-            std::optional<Identifier::Type> type { };
-            std::size_t argument_index = 0u; // Used only for auto-numbered format strings
-            
-            std::size_t length = fmt.length();
-            std::size_t last_read_position = 0u;
-            std::size_t i = 0u;
-            
-            std::string out { };
-            
-            while (i < length) {
-                if (fmt[i] == '{') {
-                    if (i + 1 == length) {
-                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}'", i));
-                    }
-                    else if (fmt[i + 1] == '{') {
-                        // Escaped opening brace '{{'
-                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
-                        
-                        ++i;
-                        last_read_position = i + 1u; // Skip to the next character after the second brace
-                    }
-                    else {
-                        out.append(fmt, last_read_position, i - last_read_position); // Do not include opening brace
-                        
-                        // Skip placeholder opening brace '{'
-                        i++;
-                        
-                        Identifier identifier { };
-                        i += parse_identifier(fmt.substr(i), identifier);
-                        if (fmt[i] != ':' && fmt[i] != '}') {
-                            // Expecting format spec separator ':' or placeholder closing brace '}'
-                            throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting format spec separator ':' or placeholder closing brace '}'", fmt[i], i));
-                        }
-                        
-                        if (!type) {
-                            // The identifier of the first placeholder dictates the type of format string
-                            type = identifier.type;
-                            validate_arguments(tuple, identifier.type == Identifier::Type::Auto);
-                        }
-                        else {
-                            // Verify format string homogeneity - all placeholders must be of the same type
-                            bool homogeneous = (*type == Identifier::Type::Auto && identifier.type == Identifier::Type::Auto) || (*type != Identifier::Type::Auto && identifier.type != Identifier::Type::Auto);
-                            if (!homogeneous) {
-                                throw std::runtime_error("format string placeholders must be homogeneous");
-                            }
-                        }
-                        
-                        FormatSpec spec { };
-                        if (fmt[i] == ':') {
-                            // Skip format spec separator ':'
-                            ++i;
-                            
-                            std::size_t num_characters_read = parse_format_spec(fmt.substr(i, length - i), spec);
-                            i += num_characters_read;
-                            if (fmt[i] != '}') {
-                                throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting placeholder closing brace '}'", fmt[i], i));
-                            }
-                        }
-    
-                        // Format identifier
-                        switch (*type) {
-                            case Identifier::Type::Auto: {
-                                if (argument_index >= num_arguments) {
-                                    throw;
-                                }
-                                else {
-                                    utils::apply([&spec, &out]<typename T>(const T& value) {
-                                        utils::Formatter<T> formatter { };
-                                        formatter.parse(spec);
-                                        out.append(formatter.format(value));
-                                    }, tuple, argument_index++);
-                                }
-                                break;
-                            }
-                            case Identifier::Type::Position: {
-                                if (identifier.position >= num_arguments) {
-                                    throw;
-                                }
-                                else {
-                                    utils::apply([&spec, &out]<typename T>(const T& value) {
-                                        utils::Formatter<T> formatter { };
-                                        formatter.parse(spec);
-                                        out.append(formatter.format(value));
-                                    }, tuple, identifier.position);
-                                }
-                                break;
-                            }
-                            case Identifier::Type::Name: {
-                                bool formatted = false;
-                                utils::apply([name = identifier.name, &formatted, &spec, &out]<typename T>(const T& arg) {
-                                    if constexpr (is_named_argument<T>::value) {
-                                        if (arg.name == name) {
-                                            utils::Formatter<typename T::type> formatter { };
-                                            formatter.parse(spec);
-                                            out.append(formatter.format(arg.value));
-                                            formatted = true;
-                                        }
-                                    }
-                                }, tuple);
-                                
-                                if (!formatted) {
-                                    throw;
-                                }
-                                break;
-                            }
-                        }
-                        
-                        // Skip placeholder closing brace '}'
-                        last_read_position = ++i;
-                    }
-                }
-                else if (fmt[i] == '}') {
-                    if (i + 1 < length && fmt[i + 1] == '}') {
-                        // Escaped closing brace '}}'
-                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
-                        
-                        ++i;
-                        last_read_position = i + 1u; // Skip to the next character after the second brace
-                    }
-                    else {
-                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}'", i));
-                    }
-                }
-                
-                ++i;
-            }
-            
-            if (i != last_read_position) {
-                // Append any remaining characters
-                out.append(fmt, last_read_position, i - last_read_position);
-            }
-            
-            return std::move(out);
-        }
-        
         char nibble_to_hexadecimal(const char nibble[4]);
         
     }
+    
+    // namespace utils
     
     template <String T, String U>
     [[nodiscard]] bool icasecmp(const T& first, const U& second) {
@@ -2922,29 +2771,32 @@ namespace utils {
     }
     
     template <typename ...Ts>
-    std::string format(std::string_view fmt, const Ts&... args) {
+    std::string format(FormatString str, const Ts&... args) {
+        std::string_view fmt = str.format;
+        const std::source_location& source = str.source;
+        
         if (fmt.empty()) {
             return "";
         }
         
         constexpr std::size_t num_arguments = sizeof...(Ts);
+        
+        std::size_t length = fmt.length();
+        std::size_t last_read_position = 0u;
+        std::size_t i = 0u;
+        
+        std::string out;
+        
         if constexpr (num_arguments) {
             std::tuple<typename std::decay<const Ts>::type...> tuple = std::make_tuple(args...);
-            return detail::format(fmt, tuple);
-        }
-        else {
-            // No arguments provided to format
-            std::size_t length = fmt.length();
-            std::size_t last_read_position = 0u;
-            std::size_t i = 0u;
             
-            std::string out;
-            out.reserve(length);
+            std::optional<detail::Identifier::Type> type { };
+            std::size_t argument_index = 0u; // Used only for auto-numbered format strings
             
             while (i < length) {
                 if (fmt[i] == '{') {
                     if (i + 1 == length) {
-                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}'", i));
+                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}' ({})", i, source));
                     }
                     else if (fmt[i + 1] == '{') {
                         // Escaped opening brace '{{'
@@ -2954,8 +2806,90 @@ namespace utils {
                         last_read_position = i + 1u; // Skip to the next character after the second brace
                     }
                     else {
-                        // Placeholder with no value
-                        throw;
+                        out.append(fmt, last_read_position, i - last_read_position); // Do not include opening brace
+                        
+                        // Skip placeholder opening brace '{'
+                        i++;
+                        
+                        detail::Identifier identifier { };
+                        i += parse_identifier(fmt.substr(i), identifier);
+                        if (fmt[i] != ':' && fmt[i] != '}') {
+                            // Expecting format spec separator ':' or placeholder closing brace '}'
+                            throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting format spec separator ':' or placeholder closing brace '}' ({})", fmt[i], i, source));
+                        }
+                        
+                        if (!type) {
+                            // The identifier of the first placeholder dictates the type of format string
+                            type = identifier.type;
+                            detail::validate_arguments(tuple, identifier.type == detail::Identifier::Type::Auto);
+                        }
+                        else {
+                            // Verify format string homogeneity - all placeholders must be of the same type
+                            bool homogeneous = (*type == detail::Identifier::Type::Auto && identifier.type == detail::Identifier::Type::Auto) || (*type != detail::Identifier::Type::Auto && identifier.type != detail::Identifier::Type::Auto);
+                            if (!homogeneous) {
+                                throw std::runtime_error(utils::format("invalid format string - placeholder types must be homogeneous ({})", source));
+                            }
+                        }
+                        
+                        FormatSpec spec { };
+                        if (fmt[i] == ':') {
+                            // Skip format spec separator ':'
+                            ++i;
+                            
+                            std::size_t num_characters_read = detail::parse_format_spec(fmt.substr(i, length - i), spec);
+                            i += num_characters_read;
+                            if (fmt[i] != '}') {
+                                throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting placeholder closing brace '}' ({})", fmt[i], i, source));
+                            }
+                        }
+    
+                        // Format placeholder
+                        switch (*type) {
+                            case detail::Identifier::Type::Auto: {
+                                // utils::apply is a noop is the argument index exceeds the length of the tuple
+                                // An exception for this is raised below (after parsing the whole format string)
+                                utils::apply([&spec, &out]<typename T>(const T& value) {
+                                    Formatter<T> formatter { };
+                                    formatter.parse(spec);
+                                    out.append(formatter.format(value));
+                                }, tuple, argument_index++);
+                                break;
+                            }
+                            case detail::Identifier::Type::Position: {
+                                if (identifier.position >= num_arguments) {
+                                    throw std::runtime_error(utils::format("invalid format string - missing argument for placeholder {} at position {} ()", identifier.position, i, source));
+                                }
+                                else {
+                                    utils::apply([&spec, &out]<typename T>(const T& value) {
+                                        Formatter<T> formatter { };
+                                        formatter.parse(spec);
+                                        out.append(formatter.format(value));
+                                    }, tuple, identifier.position);
+                                }
+                                break;
+                            }
+                            case detail::Identifier::Type::Name: {
+                                bool formatted = false;
+                                utils::apply([name = identifier.name, &formatted, &spec, &out]<typename T>(const T& arg) {
+                                    if constexpr (is_named_argument<T>::value) {
+                                        if (arg.name == name) {
+                                            Formatter<typename T::type> formatter { };
+                                            formatter.parse(spec);
+                                            out.append(formatter.format(arg.value));
+                                            formatted = true;
+                                        }
+                                    }
+                                }, tuple);
+                                
+                                if (!formatted) {
+                                    throw std::runtime_error(utils::format("invalid format string - missing NamedArgument for placeholder '{}' at position {{ ({})", identifier.name, i, source));
+                                }
+                                break;
+                            }
+                        }
+                        
+                        // Skip placeholder closing brace '}'
+                        last_read_position = ++i;
                     }
                 }
                 else if (fmt[i] == '}') {
@@ -2967,20 +2901,59 @@ namespace utils {
                         last_read_position = i + 1u; // Skip to the next character after the second brace
                     }
                     else {
-                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}'", i));
+                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}' ({})", i, source));
                     }
                 }
                 
                 ++i;
             }
             
-            if (i != last_read_position) {
-                // Append any remaining characters
-                out.append(fmt, last_read_position, i - last_read_position);
+            if (*type == detail::Identifier::Type::Auto && argument_index > num_arguments) {
+                throw std::runtime_error(utils::format("not enough arguments provided to format(...) - expecting: {}, received: {} ({})", argument_index, num_arguments, source));
             }
-            
-            return std::move(out);
         }
+        else {
+            // No arguments provided to format
+            while (i < length) {
+                if (fmt[i] == '{') {
+                    if (i + 1 == length) {
+                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}' ()", i, source));
+                    }
+                    else if (fmt[i + 1] == '{') {
+                        // Escaped opening brace '{{'
+                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                        
+                        ++i;
+                        last_read_position = i + 1u; // Skip to the next character after the second brace
+                    }
+                    else {
+                        // format(...) was called with no arguments, so the existence of any placeholders is invalid
+                        throw std::runtime_error(utils::format("invalid format string - missing argument for placeholder at position {} ()", i, source));
+                    }
+                }
+                else if (fmt[i] == '}') {
+                    if (i + 1 < length && fmt[i + 1] == '}') {
+                        // Escaped closing brace '}}'
+                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                        
+                        ++i;
+                        last_read_position = i + 1u; // Skip to the next character after the second brace
+                    }
+                    else {
+                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}' ()", i, source));
+                    }
+                }
+                
+                ++i;
+            }
+        }
+        
+        if (i != last_read_position) {
+            // Append any remaining characters
+            out.append(fmt, last_read_position, i - last_read_position);
+        }
+        
+        return std::move(out);
     }
     
 //

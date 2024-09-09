@@ -1,6 +1,9 @@
 
 #pragma once
 
+#ifndef LOGGING_TPP
+#define LOGGING_TPP
+
 #include "utils/string.hpp"
 #include <source_location> // std::source_location
 
@@ -48,3 +51,5 @@ namespace utils::logging {
     }
     
 }
+
+#endif // LOGGING_TPP
