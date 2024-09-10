@@ -105,12 +105,12 @@ int main() {
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
     
-    try {
-        std::cout << utils::format("asdf {} {}", 36) << '\n';
-    }
-    catch (std::runtime_error&  e) {
-        std::cout << e.what() << std::endl;
-    }
+//    try {
+//        std::cout << utils::format("asdf {}", 36) << '\n';
+//    }
+//    catch (std::runtime_error&  e) {
+//        std::cout << e.what() << std::endl;
+//    }
 
     std::unordered_map<int, float> a {
         { 1, 1.1f },
@@ -119,7 +119,7 @@ int main() {
         { 4, 4.4f },
     };
     
-//    std::cout << utils::format("'this is a format string {{ {adf::precision=[2]}' {ad} {{ ", a) << std::endl;
+    std::cout << utils::format("this is a format string {:::precision=[2]}", a) << std::endl;
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     

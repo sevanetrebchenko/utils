@@ -1184,7 +1184,7 @@ namespace utils {
         }
         
         std::size_t parse_identifier(std::string_view in, Identifier& out) {
-            std::size_t offset = 0u;
+            std::size_t offset = 0;
 
             if (std::isdigit(in[offset])) {
                 ++offset;
@@ -1195,7 +1195,7 @@ namespace utils {
                 }
 
                 std::size_t position;
-                from_string(in.substr(0u, offset), position);
+                from_string(in.substr(0, offset), position);
 
                 out = Identifier(position);
             }
@@ -1207,7 +1207,7 @@ namespace utils {
                     ++offset;
                 }
 
-                out = Identifier(in.substr(0u, offset));
+                out = Identifier(in.substr(0, offset));
             }
 
             return offset;
@@ -1215,7 +1215,7 @@ namespace utils {
 
         std::size_t parse_specifier(std::string_view in, Specifier& out) {
             std::size_t length = in.length();
-            std::size_t i = 0u;
+            std::size_t i = 0;
 
             // Specifier names follow the same rules as standard C/C++ identifiers
             while (std::isalpha(in[i]) || (in[i] == '_') || (i && std::isdigit(in[i]))) {
@@ -1240,7 +1240,7 @@ namespace utils {
 
             while (i < length) {
                 if (in[i] == '[') {
-                    if (i + 1 == length || in[i + 1u] != '[') {
+                    if (i + 1 == length || in[i + 1] != '[') {
                         // Unterminated / unescaped opening braces are not allowed
                         return i;
                     }
@@ -1273,8 +1273,8 @@ namespace utils {
             out.reserve(length);
 
             // Replace escaped brace characters
-            for (std::size_t i = 0u; i < length; ++i) {
-                if (i + 1 < length && ((value[i] == '[' && value[i + 1u] == '[') || (value[i] == ']' && value[i + 1u] == ']'))) {
+            for (std::size_t i = 0; i < length; ++i) {
+                if (i + 1 < length && ((value[i] == '[' && value[i + 1] == '[') || (value[i] == ']' && value[i + 1] == ']'))) {
                     // Push back only one brace character
                     ++i;
                 }
@@ -1285,8 +1285,8 @@ namespace utils {
         std::size_t parse_format_spec(std::string_view in, FormatSpec& out, bool nested) {
             // Note: function assumes input string does not contain a leading formatting group separator ':'
             std::size_t length = in.length();
-            std::size_t group = 0u;
-            std::size_t i = 0u;
+            std::size_t group = 0;
+            std::size_t i = 0;
 
             while (i < length) {
                 char terminator = nested ? '|' : '}';
@@ -1303,6 +1303,7 @@ namespace utils {
 
                     // Note: empty groups are supported and are treated as empty format specifier lists
                     ++group;
+                    continue;
                 }
 
                 if (in[i] == '|') {
@@ -1480,12 +1481,12 @@ namespace utils {
             return "";
         }
 
-        std::size_t start = 0u;
+        std::size_t start = 0;
         while (std::isspace(in[start])) {
             ++start;
         }
 
-        std::size_t end = in.length() - 1u;
+        std::size_t end = in.length() - 1;
         while (end != start && std::isspace(in[end])) {
             --end;
         }
@@ -1609,23 +1610,14 @@ namespace utils {
 
     // FormatSpec implementation
     
-    FormatSpec::FormatSpec() : m_spec(SpecifierList()),
+    FormatSpec::FormatSpec() : m_spec(std::monostate { }),
                                m_type(Type::SpecifierList) {
     }
 
     FormatSpec::FormatSpec(SpecifierList&& specifiers) : m_spec(std::move(specifiers)),
                                                          m_type(Type::SpecifierList) {
     }
-
-    FormatSpec::~FormatSpec() {
-        if (m_type == Type::FormattingGroupList) {
-            FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
-            for (FormatSpec* spec : groups) {
-                delete spec;
-            }
-        }
-    }
-
+    
     FormatSpec::FormatSpec(const FormatSpec& other) {
         *this = other;
     }
@@ -1638,17 +1630,36 @@ namespace utils {
     }
     
     FormatSpec& FormatSpec::operator=(const FormatSpec& other) {
-        if (*this != other) {
+        if (*this == other) {
+            return *this;
+        }
+        
+        if (std::holds_alternative<std::monostate>(other.m_spec)) {
+            // Assigning to a FormatSpec that currently has no data
+            if (!std::holds_alternative<std::monostate>(m_spec) && m_type == Type::FormattingGroupList) {
+                for (FormatSpec* spec : std::get<FormattingGroupList>(m_spec)) {
+                    delete spec;
+                }
+            }
+            // Reset to defaults
+            m_type = Type::SpecifierList;
+            m_spec = std::monostate { }; // std::vector assignment operator automatically cleans up specifier memory when m_spec is of type SpecifierList
+        }
+        else {
             m_type = other.m_type;
+            
             if (other.m_type == Type::SpecifierList) {
                 // Vector of specifiers can be copied directly
                 m_spec = other.m_spec;
             }
             else {
                 FormattingGroupList groups = FormattingGroupList();
+                
+                // Perform a deep copy of nested formatting groups
                 for (const FormatSpec* spec : std::get<FormattingGroupList>(other.m_spec)) {
                     groups.emplace_back(new FormatSpec(*spec));
                 }
+                
                 m_spec = std::move(groups);
             }
         }
@@ -1656,22 +1667,41 @@ namespace utils {
         return *this;
     }
     
+    FormatSpec::~FormatSpec() {
+        if (m_type == Type::FormattingGroupList) {
+            FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
+            for (FormatSpec* spec : groups) {
+                delete spec;
+            }
+        }
+    }
+    
     FormatSpec::Type FormatSpec::type() const {
         return m_type;
     }
 
     std::size_t FormatSpec::size() const {
-        // All internal types (std::vector) support the size operation
         static const auto visitor = []<typename T>(const T& data) -> std::size_t {
-            return data.size();
+            if constexpr (std::is_same<T, std::monostate>::value) {
+                return 0;
+            }
+            else {
+                // SpecifierList and FormattingGroupList are both std::vector types
+                return data.size();
+            }
         };
         return std::visit(visitor, m_spec);
     }
 
     bool FormatSpec::empty() const {
-        // All internal types (std::vector) support the empty operation
         static const auto visitor = []<typename T>(const T& data) -> bool {
-            return data.empty();
+            if constexpr (std::is_same<T, std::monostate>::value) {
+                return true;
+            }
+            else {
+                // SpecifierList and FormattingGroupList are both std::vector types
+                return data.empty();
+            }
         };
         return std::visit(visitor, m_spec);
     }
@@ -1681,57 +1711,72 @@ namespace utils {
     }
     
     bool FormatSpec::operator==(const FormatSpec& other) const {
-        if (m_type != other.m_type) {
-            return false;
-        }
-        
-        std::size_t s = size();
-        if (s != other.size()) {
-            return false;
-        }
-
-        switch (m_type) {
-            case Type::FormattingGroupList: {
-                const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
-                const FormattingGroupList& other_groups = std::get<FormattingGroupList>(other.m_spec);
-
-                for (std::size_t i = 0u; i < s; ++i) {
-                    if (!groups[i] && !other_groups[i]) {
-                        // Both are nullptr (equal)
-                        continue;
-                    }
-
-                    if (!groups[i] && other_groups[i] || groups[i] && !other_groups[i]) {
-                        return false;
-                    }
-
-                    // Both are valid pointers
-                    if (*(groups[i]) != *(other_groups[i])) {
-                        return false;
-                    }
-                }
-
-                break;
+        if (std::holds_alternative<std::monostate>(m_spec)) {
+            if (std::holds_alternative<std::monostate>(other.m_spec)) {
+                return true;
             }
-            case Type::SpecifierList: {
-                const SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
-                const SpecifierList& other_specifiers = std::get<SpecifierList>(other.m_spec);
-
-                for (std::size_t i = 0u; i < s; ++i) {
-                    if (specifiers[i] != other_specifiers[i]) {
-                        return false;
-                    }
-                }
-
-                break;
+            else {
+                return false;
             }
         }
-
-        return true;
+        else {
+            if (std::holds_alternative<std::monostate>(other.m_spec)) {
+                return false;
+            }
+            else {
+                if (m_type != other.m_type) {
+                    return false;
+                }
+                
+                std::size_t _size = size();
+                if (_size != other.size()) {
+                    return false;
+                }
+                
+                if (m_type == Type::SpecifierList) {
+                    // Compare specifier values
+                    const SpecifierList& specifiers = std::get<SpecifierList>(m_spec);
+                    const SpecifierList& other_specifiers = std::get<SpecifierList>(other.m_spec);
+                    
+                    for (std::size_t i = 0; i < _size; ++i) {
+                        if (specifiers[i] != other_specifiers[i]) {
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    // Compare nested formatting groups
+                    const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
+                    const FormattingGroupList& other_groups = std::get<FormattingGroupList>(other.m_spec);
+    
+                    for (std::size_t i = 0; i < _size; ++i) {
+                        // Compare pointers
+                        if (!groups[i] && !other_groups[i]) {
+                            continue;
+                        }
+                        if (!groups[i] && other_groups[i] || groups[i] && !other_groups[i]) {
+                            return false;
+                        }
+    
+                        // Compare nested format specs
+                        if (*(groups[i]) != *(other_groups[i])) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+        }
     }
 
     void FormatSpec::set_specifier(std::string_view key, std::string value) {
-        if (m_type == Type::FormattingGroupList) {
+        if (std::holds_alternative<std::monostate>(m_spec)) {
+            m_spec = SpecifierList();
+            m_type = Type::SpecifierList;
+        }
+        else if (m_type == Type::FormattingGroupList) {
+            // Format specifier-related functions are not available on formatting group lists
             throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
         }
 
@@ -1756,9 +1801,12 @@ namespace utils {
     }
 
     std::string& FormatSpec::get_specifier(std::string_view key) {
-        if (m_type == Type::FormattingGroupList) {
-            // While formatting groups initialized to specifier lists can be converted to formatting group lists, the opposite of this operation is purposefully not supported
-            // Initializing a nested formatting specification to a formatting group can only be done through an intentional operation
+        if (std::holds_alternative<std::monostate>(m_spec)) {
+            m_spec = SpecifierList();
+            m_type = Type::SpecifierList;
+        }
+        else if (m_type == Type::FormattingGroupList) {
+            // Format specifier-related functions are not available on formatting group lists
             throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
         }
 
@@ -1775,6 +1823,7 @@ namespace utils {
 
     std::string_view FormatSpec::get_specifier(std::string_view key) const {
         if (m_type == Type::FormattingGroupList) {
+            // Format specifier-related functions are not available on formatting group lists
             throw FormattedError("bad and/or ambiguous format specification access - specification contains nested formatting group(s) and cannot be accessed by specifier (key: '{}')", key);
         }
 
@@ -1801,13 +1850,19 @@ namespace utils {
         // Use a specifier list in line in place of a formatting group list there is only one active group
         if (m_type == Type::SpecifierList) {
             if (index == 0u) {
-                // Continue treating this as a specifier list and not a formatting group list
+                // get_group(0) - continue treating this as a specifier list
                 return *this;
             }
             else {
                 // When an additional group is requested, convert internal structure to a formatting group list
                 // This first requires the conversion of this (specifier list) to the first formatting group
-                m_spec = FormattingGroupList { new FormatSpec(std::move(std::get<SpecifierList>(m_spec))) };
+                if (empty()) {
+                    m_spec = FormattingGroupList();
+                }
+                else {
+                    m_spec = FormattingGroupList { new FormatSpec(std::move(std::get<SpecifierList>(m_spec))) };
+                }
+                
                 m_type = Type::FormattingGroupList;
             }
         }
@@ -1838,20 +1893,27 @@ namespace utils {
     }
 
     bool FormatSpec::has_group(std::size_t index) const {
-        if (std::holds_alternative<SpecifierList>(m_spec)) {
-            // TODO: calling has_group on a specifier list makes no sense, throw exception?
+        if (std::holds_alternative<std::monostate>(m_spec)) {
+            // Uninitialized format spec
             return false;
         }
+        else if (m_type == Type::SpecifierList) {
+            throw FormattedError("bad format specification access - has_group called on specifier list");
+        }
 
-        return index < std::get<FormattingGroupList>(m_spec).size();
+        const FormattingGroupList& groups = std::get<FormattingGroupList>(m_spec);
+        return index < groups.size() && groups[index];
     }
 
     bool FormatSpec::has_specifier(std::string_view key) const {
-        if (std::holds_alternative<FormattingGroupList>(m_spec)) {
-            // TODO: calling has_group on a formatting group list makes no sense, throw exception?
+        if (std::holds_alternative<std::monostate>(m_spec)) {
+            // Uninitialized format spec
             return false;
         }
-
+        else if (m_type == Type::FormattingGroupList) {
+            throw FormattedError("bad format specification access - has_specifier called on formatting group list");
+        }
+        
         for (const Specifier& specifier : std::get<SpecifierList>(m_spec)) {
             if (icasecmp(specifier.name, key)) {
                 return true;

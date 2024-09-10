@@ -1367,8 +1367,7 @@ namespace utils {
                             // Skip format spec separator ':'
                             ++i;
                             
-                            std::size_t num_characters_read = detail::parse_format_spec(fmt.substr(i, length - i), spec);
-                            i += num_characters_read;
+                            i += detail::parse_format_spec(fmt.substr(i, length - i), spec);
                             if (fmt[i] != '}') {
                                 throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting placeholder closing brace '}' ({})", fmt[i], i, source));
                             }
@@ -1547,9 +1546,12 @@ namespace utils {
 
         // 2 characters for container opening / closing braces { }
         // 2 characters for leading space before the first element and trailing space after the last element
-        // 2 characters for comma + space (between two elements)
-        std::size_t length = 4u + (num_elements - 1u) * 2u;
-
+        
+        // 2 characters for element opening / closing braces { } (per element)
+        // 2 characters for leading space before the element key and trailing space after the element value (per element)
+        // 2 characters for comma + space between element key and value (per element)
+        // 2 characters for comma + space between two elements (per element - 1)
+        std::size_t length = 4 + (num_elements * 6) + (num_elements - 1) * 2;
         for (const std::pair<std::string, std::string>& element : elements) {
             length += element.first.length();
             length += element.second.length();
@@ -1582,12 +1584,18 @@ namespace utils {
             result[write_position++] = '{';
             result[write_position++] = ' ';
             
+            // Key
             length = element.first.length();
             result.replace(write_position, length, element.first, 0, length);
             write_position += length;
 
             result[write_position++] = ',';
             result[write_position++] = ' ';
+            
+            // Value
+            length = element.second.length();
+            result.replace(write_position, length, element.second, 0, length);
+            write_position += length;
             
             result[write_position++] = ' ';
             result[write_position++] = '}';

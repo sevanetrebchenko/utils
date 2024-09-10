@@ -586,11 +586,10 @@ namespace utils {
             };
             
             FormatSpec();
-            ~FormatSpec();
-            
             FormatSpec(const FormatSpec& other);
             FormatSpec(FormatSpec&& other) noexcept;
             FormatSpec& operator=(const FormatSpec& other);
+            ~FormatSpec();
             
             Type type() const;
             bool empty() const;
@@ -646,9 +645,10 @@ namespace utils {
             // Conversion from specifier list to formatting group list
             explicit FormatSpec(SpecifierList&& specifiers);
             
-            // A specification can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
+            // A spec can either be a mapping of key - value pairs (specifier name / value) or a nested specification group
             // Specifiers are stored in a std::vector instead of std::unordered map as the number of formatting specifiers is expected to be relatively small
-            std::variant<SpecifierList, FormattingGroupList> m_spec;
+            // The spec starts out as std::monostate to avoid unnecessary allocations
+            std::variant<std::monostate, SpecifierList, FormattingGroupList> m_spec;
             Type m_type;
     };
     
@@ -836,9 +836,8 @@ namespace utils {
             std::string format(T value) const;
             
             enum class Representation {
-                Decimal = 0,
-                Binary,
-                Hexadecimal
+                Fixed = 0,
+                Scientific
             } representation;
             
             Sign sign;
