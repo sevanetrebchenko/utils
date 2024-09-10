@@ -124,7 +124,7 @@ int main() {
     int c = 42;
     int* ptr = &c;
     
-    std::cout << utils::format("'{:width=[10]}'", nullptr) << std::endl;
+    std::cout << utils::format("'{:width=[10]}'", ptr) << std::endl;
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     

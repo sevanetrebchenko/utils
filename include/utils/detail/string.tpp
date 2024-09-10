@@ -854,7 +854,7 @@ namespace utils {
                         result[write_position++] = '\'';
                     }
     
-                    result[write_position++] = value < 0 ? 'F' : '0';
+                    result[write_position++] = value < 0 ? 'f' : '0';
                 }
     
                 char* ptr = buffer;
@@ -884,7 +884,7 @@ namespace utils {
             }
             else {
                 for (std::size_t i = 0u; i < num_padding_characters; ++i) {
-                    result[write_position++] = value < 0 ? 'F' : '0';
+                    result[write_position++] = value < 0 ? 'f' : '0';
                 }
     
                 char* ptr = buffer;

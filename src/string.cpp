@@ -1424,11 +1424,11 @@ namespace utils {
                     else {
                         if (nibble[3] == '0') {
                             // 1010 (10)
-                            return 'A';
+                            return 'a';
                         }
                         else {
                             // 1011 (11)
-                            return 'B';
+                            return 'b';
                         }
                     }
                 }
@@ -1438,22 +1438,22 @@ namespace utils {
                         // 110-
                         if (nibble[3] == '0') {
                             // 1100 (12)
-                            return 'C';
+                            return 'c';
                         }
                         else {
                             // 1101 (13)
-                            return 'D';
+                            return 'd';
                         }
                     }
                     else {
                         // 111-
                         if (nibble[3] == '0') {
                             // 1110 (14)
-                            return 'E';
+                            return 'e';
                         }
                         else {
                             // 1111 (15)
-                            return 'F';
+                            return 'f';
                         }
                     }
                 }
