@@ -893,9 +893,22 @@ namespace utils {
     
     // Pointer types
     
-    template <typename T>
-    struct Formatter<T*> : detail::IntegerFormatter<std::uintptr_t> {
+    template <>
+    struct Formatter<void*> : detail::IntegerFormatter<std::uintptr_t> {
+        Formatter();
+        ~Formatter();
+        
+        // Intentionally shadows base IntegerFormatter functions
         void parse(const FormatSpec& spec);
+        std::string format(void* value) const;
+    };
+    
+    template <typename T>
+    struct Formatter<T*> : Formatter<void*> {
+    };
+    
+    template <>
+    struct Formatter<std::nullptr_t> : Formatter<void*> {
     };
 
     // Standard types

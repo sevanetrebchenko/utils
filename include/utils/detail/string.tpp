@@ -1485,7 +1485,6 @@ namespace utils {
         
         return std::move(out);
     }
- 
     
     template <typename K, typename V, typename H, typename P, typename A>
     Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : justification(Justification::Left),

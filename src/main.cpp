@@ -121,6 +121,11 @@ int main() {
     
     std::cout << utils::format("this is a format string {:justification=[right],fill_character=[-],width=[60]::precision=[2]}", a) << std::endl;
     
+    int c = 42;
+    int* ptr = &c;
+    
+    std::cout << utils::format("'{:width=[10]}'", nullptr) << std::endl;
+    
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;

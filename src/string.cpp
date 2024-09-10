@@ -2112,6 +2112,126 @@ namespace utils {
         return Formatter<const char*>::format(value.c_str(), value.length());
     }
     
+    Formatter<void*>::Formatter() : detail::IntegerFormatter<std::uintptr_t>() {
+        // Pointers are always formatted using hexadecimal
+        representation = Representation::Hexadecimal;
+        use_base_prefix = true;
+    }
+    
+    void Formatter<void*>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format specification for integer values must be a list of specifiers");
+
+        // Note: this is a simplified version of detail::IntegerFormatter<T>::parse
+        
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width"));
+
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = _width;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+
+        if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
+            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter"));
+            if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                use_separator_character = true;
+            }
+            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
+                use_separator_character = false;
+            }
+            else {
+                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("group_size", "groupsize")) {
+            std::string_view value = trim(spec.get_specifier("group_size", "groupsize"));
+
+            unsigned _group_size;
+            std::size_t num_characters_read = from_string(value, _group_size);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid group_size specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                group_size = _group_size;
+            }
+        }
+
+        if (spec.has_specifier("use_base_prefix", "usebaseprefix")) {
+            std::string_view value = trim(spec.get_specifier("use_base_prefix", "usebaseprefix"));
+            if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                use_base_prefix = true;
+            }
+            else if (icasecmp(value, "false") || icasecmp(value, "0")) {
+                use_base_prefix = false;
+            }
+            else {
+                logging::warning("ignoring unknown use_base_prefix specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
+            }
+        }
+    }
+    
+    Formatter<void*>::~Formatter() = default;
+    
+    std::string Formatter<void*>::format(void* value) const {
+        if (value) {
+            return std::move(detail::IntegerFormatter<std::uintptr_t>::format((std::uintptr_t) value));
+        }
+        else {
+            // Null pointers are printed as 'nullptr' and use a subset of the available formatting specifiers
+            std::size_t length = 7; // 'nullptr' is 7 characters
+            std::size_t capacity = std::max(length, width);
+            std::string result(capacity, fill_character);
+    
+            switch (justification) {
+                case Justification::Left:
+                    result.replace(0, length, "nullptr");
+                    break;
+                case Justification::Right:
+                    result.replace(capacity - length, length, "nullptr");
+                    break;
+                case Justification::Center:
+                    result.replace((capacity - length) / 2, length, "nullptr");
+                    break;
+            }
+            
+            return std::move(result);
+        }
+    }
+    
     Formatter<std::source_location>::Formatter() : m_file_formatter(),
                                                    m_line_formatter() {
     }
