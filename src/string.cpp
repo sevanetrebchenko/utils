@@ -1337,8 +1337,8 @@ namespace utils {
                             ++i;
                             continue;
                         }
-                        else if (in[i] == terminator) {
-                            // End of format spec
+                        else if (in[i] == terminator || in[i] == ':') {
+                            // End of format spec || new format group
                             break;
                         }
                         else {
