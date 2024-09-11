@@ -1486,6 +1486,120 @@ namespace utils {
         return std::move(out);
     }
     
+    template <typename T, typename U>
+    Formatter<std::pair<T, U>>::Formatter() : justification(Justification::Left),
+                                              width(0),
+                                              fill_character(' '),
+                                              m_formatters() {
+    }
+    
+    template <typename T, typename U>
+    Formatter<std::pair<T, U>>::~Formatter() = default;
+    
+    template <typename T, typename U>
+    void Formatter<std::pair<T, U>>::parse(const utils::FormatSpec& spec) {
+        if (spec.has_group(0)) {
+            parse_specifiers(spec);
+        }
+        if (spec.has_group(1)) {
+            m_formatters.first.parse(spec.get_group(1));
+        }
+        if (spec.has_group(2)) {
+            m_formatters.second.parse(spec.get_group(2));
+        }
+    }
+    
+    template <typename T, typename U>
+    std::string Formatter<std::pair<T, U>>::format(const std::pair<T, U>& value) const {
+
+        // Output format: { first, second }
+        std::string first = m_formatters.first.format(value.first);
+        std::string second = m_formatters.second.format(value.second);
+        
+        // 2 characters for container opening / closing braces { }
+        // 2 characters for leading space before the first element and trailing space after the last element
+        // 2 characters for comma + space in between characters
+        std::size_t length = 6 + first.length() + second.length();
+        std::size_t capacity = std::max(length, width);
+        std::string result(capacity, fill_character);
+        
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0u;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+        
+        result[write_position++] = '{';
+        result[write_position++] = ' ';
+        
+        length = first.length();
+        result.replace(write_position, length, first, 0, length);
+        write_position += length;
+        
+        result[write_position++] = ',';
+        result[write_position++] = ' ';
+        
+        length = second.length();
+        result.replace(write_position, length, second, 0, length);
+        write_position += length;
+        
+        result[write_position++] = ' ';
+        result[write_position++] = '}';
+        
+        return std::move(result);
+    }
+    
+    template <typename T, typename U>
+    void Formatter<std::pair<T, U>>::parse_specifiers(const FormatSpec& spec) {
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width"));
+
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = _width;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+    }
+    
+    
     template <typename K, typename V, typename H, typename P, typename A>
     Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : justification(Justification::Left),
                                                                 width(0u),

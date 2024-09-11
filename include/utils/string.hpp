@@ -929,6 +929,9 @@ namespace utils {
             char fill_character;
             
         private:
+            // Parses specifiers applicable to this
+            void parse_specifiers(const FormatSpec& spec);
+            
             std::pair<Formatter<T>, Formatter<U>> m_formatters;
     };
     
