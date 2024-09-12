@@ -672,6 +672,7 @@ namespace utils {
     };
     
     struct FormatString {
+        // Purposefully not marked as explicit
         FormatString(std::string_view format, std::source_location source = std::source_location::current());
         FormatString(const char* format, std::source_location source = std::source_location::current());
         ~FormatString();
@@ -682,190 +683,185 @@ namespace utils {
     
     // Function throws exception if a placeholder does not have an argument specified
     template <typename ...Ts>
-    std::string format(FormatString str, const Ts&... args);
+    std::string format(const FormatString& str, const Ts&... args);
     
     // Section: Formatters
     
-    enum class Justification {
-        Left = 0,
-        Right,
-        Center
-    };
-    
-    enum class Sign {
-        NegativeOnly = 0,
-        Aligned,
-        Both
+    class FormatterBase {
+        public:
+            FormatterBase();
+            ~FormatterBase();
+            
+            void parse(const FormatSpec& spec);
+            
+            enum class Justification {
+                Left = 0,
+                Right,
+                Center
+            } justification;
+            
+            std::size_t width;
+            char fill_character;
+        
+        protected:
+            // Returns the offset at which formatted values should be written
+            std::size_t apply_justification(std::size_t length) const;
     };
     
     template <typename T>
-    struct Formatter {
-        Formatter();
-        ~Formatter();
-        
-        void parse(const FormatSpec& spec);
-        std::string format(const T& value) const;
-        
-        std::size_t width;
-        char fill_character;
+    struct Formatter : public FormatterBase {
     };
     
-    namespace detail {
-        
-        template <typename T>
-        class IntegerFormatter {
-            public:
-                IntegerFormatter();
-                ~IntegerFormatter();
-                
-                void parse(const FormatSpec& spec);
-                std::string format(T value) const;
-                
-                enum class Representation {
-                    Decimal = 0,
-                    Binary,
-                    Hexadecimal
-                } representation;
-                
-                Sign sign;
-                Justification justification;
-                std::size_t width;
-                char fill_character;
-                
-                // For decimal representations, separates every 3 characters with a comma
-                // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote
-                std::optional<bool> use_separator_character;
-                
-                // Specifies how many characters are in a single group (works in conjunction with 'use_separator_character' specifier)
-                // Only applicable to binary / hexadecimal representations
-                std::optional<std::uint8_t> group_size;
-                
-                // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
-                // Only applicable to binary / hexadecimal representations
-                bool use_base_prefix;
-                
-                // Specifies the total number of digits to use when formatting
-                // The number of digits is rounded up to the nearest multiple of 'group_size', if specified
-                // Only applicable to binary / hexadecimal representations
-                std::optional<std::uint8_t> digits;
-                
-            private:
-                inline std::string to_binary(T value) const;
-                inline std::string to_decimal(T value) const;
-                inline std::string to_hexadecimal(T value) const;
-        };
-        
-    }
-
     // Integer types
     
-    // char
-    template <>
-    struct Formatter<char> {
-        Formatter();
-        ~Formatter();
-        
-        void parse(const FormatSpec& spec);
-        std::string format(char c) const;
-        
-        Justification justification;
-        std::size_t width;
-        char fill_character;
-    };
-    
-    // signed char
-    template <>
-    struct Formatter<std::int8_t> : public detail::IntegerFormatter<std::int8_t> {
-    };
-    
-    // unsigned char
-    template <>
-    struct Formatter<std::uint8_t> : detail::IntegerFormatter<std::uint8_t> {
-    };
-    
-    // short
-    template <>
-    struct Formatter<std::int16_t> : detail::IntegerFormatter<std::int16_t> {
-    };
-    
-    // unsigned short
-    template <>
-    struct Formatter<std::uint16_t> : detail::IntegerFormatter<std::uint16_t> {
-    };
-    
-    // int
-    template <>
-    struct Formatter<std::int32_t> : detail::IntegerFormatter<std::int32_t> {
-    };
-    
-    // unsigned int
-    template <>
-    struct Formatter<std::uint32_t> : detail::IntegerFormatter<std::uint32_t> {
-    };
-    
-    // long
-    template <>
-    struct Formatter<long> : detail::IntegerFormatter<long> {
-    };
-    
-    // unsigned long
-    template <>
-    struct Formatter<unsigned long> : detail::IntegerFormatter<unsigned long> {
-    };
-    
-    // long long
-    template <>
-    struct Formatter<std::int64_t> : detail::IntegerFormatter<std::int64_t> {
-    };
-    
-    // unsigned long long
-    template <>
-    struct Formatter<std::uint64_t> : detail::IntegerFormatter<std::uint64_t> {
-    };
-    
-    // Floating point types
-    
-    namespace detail {
-        
-        template <typename T>
-        struct FloatingPointFormatter {
-            FloatingPointFormatter();
-            ~FloatingPointFormatter();
+    template <typename T>
+    class IntegerFormatter : public FormatterBase {
+        public:
+            IntegerFormatter();
+            ~IntegerFormatter();
             
             void parse(const FormatSpec& spec);
             std::string format(T value) const;
             
             enum class Representation {
-                Fixed = 0,
-                Scientific
+                Decimal = 0,
+                Binary,
+                Hexadecimal
             } representation;
             
-            Sign sign;
-            Justification justification;
-            std::size_t width;
-            char fill_character;
-            std::uint8_t precision;
-            bool use_separator_character;
-        };
-        
-    }
+            enum class Sign {
+                NegativeOnly = 0,
+                Aligned,
+                Both
+            } sign;
+            
+            // For decimal representations, separates every 3 characters with a comma
+            // For binary / hexadecimal representations, separates every 'group_size' bits with a single quote
+            std::optional<bool> use_separator_character;
+            
+            // Specifies how many characters are in a single group (works in conjunction with 'use_separator_character' specifier)
+            // Only applicable to binary / hexadecimal representations
+            std::optional<std::uint8_t> group_size;
+            
+            // Specifies whether to use a base prefix (0b for binary, 0x for hexadecimal)
+            // Only applicable to binary / hexadecimal representations
+            bool use_base_prefix;
+            
+            // Specifies the total number of digits to use when formatting
+            // The number of digits is rounded up to the nearest multiple of 'group_size', if specified
+            // Only applicable to binary / hexadecimal representations
+            std::optional<std::uint8_t> digits;
+            
+        private:
+            inline std::string to_binary(T value) const;
+            inline std::string to_decimal(T value) const;
+            inline std::string to_hexadecimal(T value) const;
+    };
     
+    // char
     template <>
-    struct Formatter<float> : detail::FloatingPointFormatter<float> {
+    struct Formatter<char> : public FormatterBase {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(char c) const;
+    };
+    
+    // signed char
+    template <>
+    struct Formatter<std::int8_t> : public IntegerFormatter<std::int8_t> {
+    };
+    
+    // unsigned char
+    template <>
+    struct Formatter<std::uint8_t> : public IntegerFormatter<std::uint8_t> {
+    };
+    
+    // short
+    template <>
+    struct Formatter<std::int16_t> : public IntegerFormatter<std::int16_t> {
+    };
+    
+    // unsigned short
+    template <>
+    struct Formatter<std::uint16_t> : public IntegerFormatter<std::uint16_t> {
+    };
+    
+    // int
+    template <>
+    struct Formatter<std::int32_t> : public IntegerFormatter<std::int32_t> {
+    };
+    
+    // unsigned int
+    template <>
+    struct Formatter<std::uint32_t> : public IntegerFormatter<std::uint32_t> {
+    };
+    
+    // long
+    template <>
+    struct Formatter<long> : public IntegerFormatter<long> {
+    };
+    
+    // unsigned long
+    template <>
+    struct Formatter<unsigned long> : public IntegerFormatter<unsigned long> {
+    };
+    
+    // long long
+    template <>
+    struct Formatter<std::int64_t> : public IntegerFormatter<std::int64_t> {
+    };
+    
+    // unsigned long long
+    template <>
+    struct Formatter<std::uint64_t> : public IntegerFormatter<std::uint64_t> {
+    };
+    
+    // Floating point types
+    
+    template <typename T>
+    struct FloatingPointFormatter : public FormatterBase {
+        FloatingPointFormatter();
+        ~FloatingPointFormatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(T value) const;
+        
+        enum class Representation {
+            Fixed = 0,
+            Scientific
+        } representation;
+        
+        enum class Sign {
+            NegativeOnly = 0,
+            Aligned,
+            Both
+        } sign;
+        std::uint8_t precision;
+        bool use_separator_character;
+    };
+    
+    // float
+    template <>
+    struct Formatter<float> : public FloatingPointFormatter<float> {
     };
 
+    // double
     template <>
-    struct Formatter<double> : detail::FloatingPointFormatter<double> {
+    struct Formatter<double> : public FloatingPointFormatter<double> {
     };
     
+    // long double
     template <>
-    struct Formatter<long double> : detail::FloatingPointFormatter<long double> {
+    struct Formatter<long double> : public FloatingPointFormatter<long double> {
     };
     
     // String types
     
+    // const char*
     template <>
-    class Formatter<const char*> {
+    class Formatter<const char*> : public FormatterBase {
         public:
             Formatter();
             ~Formatter();
@@ -873,104 +869,86 @@ namespace utils {
             void parse(const FormatSpec& spec);
             std::string format(const char* value) const;
             
-            Justification justification;
-            std::size_t width;
-            char fill_character;
-            
         protected:
             inline std::string format(const char* value, std::size_t length) const;
     };
     
+    // std::string_view
     template <>
-    struct Formatter<std::string_view> : Formatter<const char*> {
+    struct Formatter<std::string_view> : public Formatter<const char*> {
         std::string format(std::string_view value) const;
     };
     
+    // std::string
     template <>
-    struct Formatter<std::string> : Formatter<const char*> {
+    struct Formatter<std::string> : public Formatter<const char*> {
         std::string format(const std::string& value) const;
     };
     
     // Pointer types
     
+    // void*
     template <>
-    struct Formatter<void*> : detail::IntegerFormatter<std::uintptr_t> {
+    struct Formatter<void*> : public IntegerFormatter<std::uintptr_t> {
         Formatter();
         ~Formatter();
         
-        // Intentionally shadows base IntegerFormatter functions
         void parse(const FormatSpec& spec);
         std::string format(void* value) const;
     };
     
+    // T*
     template <typename T>
-    struct Formatter<T*> : Formatter<void*> {
+    struct Formatter<T*> : public Formatter<void*> {
     };
     
+    // std::nullptr_t
     template <>
-    struct Formatter<std::nullptr_t> : Formatter<void*> {
+    struct Formatter<std::nullptr_t> : public Formatter<void*> {
     };
 
     // Standard types
     
+    // std::pair
     template <typename T, typename U>
-    class Formatter<std::pair<T, U>> {
+    class Formatter<std::pair<T, U>> : public FormatterBase {
         public:
             Formatter();
             ~Formatter();
             
+            // Format: { first, second }
             void parse(const FormatSpec& spec);
-            
-            // Output format: { first, second }
             std::string format(const std::pair<T, U>& value) const;
-        
-            Justification justification;
-            std::size_t width;
-            char fill_character;
             
         private:
-            // Parses specifiers applicable to this
-            void parse_specifiers(const FormatSpec& spec);
-            
             std::pair<Formatter<T>, Formatter<U>> m_formatters;
     };
     
+    // std::tuple
     template <typename ...Ts>
-    class Formatter<std::tuple<Ts...>> {
+    class Formatter<std::tuple<Ts...>> : public FormatterBase {
         public:
             Formatter();
             ~Formatter();
             
+            // Format: { first, second, ... }
             void parse(const FormatSpec& spec);
-            
-            // Output format: { first, second, ... }
             std::string format(const std::tuple<Ts...>& value) const;
-        
-            Justification justification;
-            std::size_t width;
-            char fill_character;
             
         private:
-            // Parse specifiers for this
-            void parse_specifiers(const FormatSpec& spec);
-            
             std::tuple<Formatter<Ts>...> m_formatters;
     };
     
+    // std::source_location
     template <>
-    class Formatter<std::source_location> {
+    class Formatter<std::source_location> : public FormatterBase {
         public:
             Formatter();
             ~Formatter();
             
+            // Format: file:line
             void parse(const FormatSpec& spec);
-            
-            // Output format: filepath:line
             std::string format(const std::source_location& value) const;
-            
-            Justification justification;
-            std::size_t width;
-            char fill_character;
             
         private:
             Formatter<std::size_t> m_line_formatter;
@@ -979,46 +957,35 @@ namespace utils {
     
     // Standard containers
     
+    // std::vector
     template <typename T>
-    class Formatter<std::vector<T>> {
+    class Formatter<std::vector<T>> : public FormatterBase {
         public:
             Formatter();
             ~Formatter();
             
+            // Format: [ 1, 2, 3, ... ]
             void parse(const FormatSpec& spec);
-            
-            // Output format: [ value, ... ]
             std::string format(const std::vector<T>& value) const;
-            
-            Justification justification;
-            std::size_t width;
-            char fill_character;
             
         private:
             Formatter<T> m_formatter;
     };
     
+    // std::unordered_map
     template <typename K, typename V, typename H, typename P, typename A>
-    class Formatter<std::unordered_map<K, V, H, P, A>> {
+    class Formatter<std::unordered_map<K, V, H, P, A>> : public FormatterBase {
         public:
             using T = std::unordered_map<K, V, H, P, A>;
             
             Formatter();
             ~Formatter();
             
+            // Format: { { key: value }, ... }
             void parse(const FormatSpec& spec);
-            
-            // Output format: { { key: value }, ... }
             std::string format(const T& value) const;
             
-            Justification justification;
-            std::size_t width;
-            char fill_character;
-            
         private:
-            // Parses specifiers applicable to this
-            void parse_specifiers(const FormatSpec& spec);
-            
             Formatter<K> m_key_formatter;
             Formatter<V> m_value_formatter;
     };
@@ -1026,14 +993,9 @@ namespace utils {
     // Custom / user-defined types
     
     template <typename T>
-    struct Formatter<NamedArgument<T>> : Formatter<T> {
+    struct Formatter<NamedArgument<T>> : public Formatter<T> {
         std::string format(const NamedArgument<T>& value);
     };
-    
-    template <typename T>
-    std::string Formatter<NamedArgument<T>>::format(const NamedArgument<T>& value) {
-        return Formatter<T>::format(value.value);
-    }
     
 }
 

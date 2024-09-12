@@ -132,6 +132,9 @@ int main() {
     std::tuple<int, float, char> tuple { 6, 6.6f, 'a' };
     std::cout << utils::format("'{}'", tuple) << std::endl;
     
+    std::vector<int> vector { 1, 2, 3, 4, 5, 6 };
+    std::cout << utils::format("'{}'", vector) << std::endl;
+    
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
