@@ -129,6 +129,9 @@ int main() {
     std::pair<int, float> pair { 5, 5.5f };
     std::cout << utils::format("'{}'", pair) << std::endl;
     
+    std::tuple<int, float, char> tuple { 6, 6.6f, 'a' };
+    std::cout << utils::format("'{}'", tuple) << std::endl;
+    
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;

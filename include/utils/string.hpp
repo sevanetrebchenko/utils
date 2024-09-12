@@ -951,7 +951,10 @@ namespace utils {
             char fill_character;
             
         private:
-            std::tuple<Formatter<Ts...>> m_formatters;
+            // Parse specifiers for this
+            void parse_specifiers(const FormatSpec& spec);
+            
+            std::tuple<Formatter<Ts>...> m_formatters;
     };
     
     template <>

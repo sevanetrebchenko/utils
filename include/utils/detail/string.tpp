@@ -1511,7 +1511,6 @@ namespace utils {
     
     template <typename T, typename U>
     std::string Formatter<std::pair<T, U>>::format(const std::pair<T, U>& value) const {
-
         // Output format: { first, second }
         std::string first = m_formatters.first.format(value.first);
         std::string second = m_formatters.second.format(value.second);
@@ -1599,6 +1598,151 @@ namespace utils {
         }
     }
     
+    // std::tuple<...>
+    template <typename ...Ts>
+    Formatter<std::tuple<Ts...>>::Formatter() : justification(Justification::Left),
+                                                width(0u),
+                                                fill_character(' '),
+                                                m_formatters() {
+    }
+    
+    template <typename ...Ts>
+    Formatter<std::tuple<Ts...>>::~Formatter() {
+    }
+    
+    template <typename ...Ts>
+    void Formatter<std::tuple<Ts...>>::parse(const utils::FormatSpec& spec) {
+        if (spec.empty()) {
+            return;
+        }
+        
+        if (spec.type() == FormatSpec::Type::SpecifierList) {
+            parse_specifiers(spec);
+        }
+        else {
+            // Specifiers in the first group are applied to the tuple itself
+            if (spec.has_group(0)) {
+                parse_specifiers(spec.get_group(0));
+            }
+            
+            for (std::size_t i = 0; i < sizeof...(Ts); ++i) {
+                std::size_t group = i + 1;
+                
+                if (spec.has_group(group)) {
+                    utils::apply([&spec = spec.get_group(group)]<typename T>(Formatter<T>& formatter) {
+                        formatter.parse(spec);
+                    }, m_formatters, i);
+                }
+            }
+        }
+    }
+    
+    template <typename ...Ts>
+    std::string Formatter<std::tuple<Ts...>>::format(const std::tuple<Ts...>& value) const {
+        constexpr std::size_t num_elements = sizeof...(Ts);
+        if constexpr (num_elements == 0) {
+            return "{ }";
+        }
+        
+        std::vector<std::string> formatted_values { };
+        formatted_values.reserve(num_elements);
+        
+        // 2 characters for container opening / closing braces { }
+        // 2 characters for leading space before the first element and trailing space after the last element
+        // 2 characters for comma + space between two elements (per element - 1)
+        std::size_t length = 4 + (sizeof...(Ts) - 1) * 2;
+        
+        // Cache formatted values and their lengths
+        utils::apply([&formatted_values, &length, &formatters = m_formatters]<typename T, std::size_t I>(const T& value) {
+            formatted_values.emplace_back(std::get<I>(formatters).format(value));
+        }, value);
+        
+        for (const std::string& formatted : formatted_values) {
+            length += formatted.length();
+        }
+        
+        std::size_t capacity = std::max(length, width);
+        std::string result(capacity, fill_character);
+
+        // Apply justification
+        std::size_t write_position;
+        switch (justification) {
+            case Justification::Left:
+                write_position = 0;
+                break;
+            case Justification::Right:
+                write_position = capacity - length;
+                break;
+            case Justification::Center:
+                write_position = (capacity - length) / 2;
+                break;
+        }
+
+        // Format output string
+        result[write_position++] = '{';
+        result[write_position++] = ' ';
+        
+        for (std::size_t i = 0u; i < num_elements; ++i) {
+            length = formatted_values[i].length();
+            result.replace(write_position, length, formatted_values[i], 0, length);
+            write_position += length;
+
+            // Elements are formatted into a comma-separated list
+            if (i != num_elements - 1) {
+                // Do not insert a trailing comma
+                result[write_position++] = ',';
+                result[write_position++] = ' ';
+            }
+        }
+        
+        result[write_position++] = ' ';
+        result[write_position++] = '}';
+        
+        return std::move(result);
+    }
+    
+    template <typename ...Ts>
+    void Formatter<std::tuple<Ts...>>::parse_specifiers(const utils::FormatSpec& spec) {
+        if (spec.has_specifier("justification", "justify", "alignment", "align")) {
+            std::string_view value = trim(spec.get_specifier("justification", "justify", "alignment", "align"));
+            if (icasecmp(value, "left")) {
+                justification = Justification::Left;
+            }
+            else if (icasecmp(value, "right")) {
+                justification = Justification::Right;
+            }
+            else if (icasecmp(value, "center")) {
+                justification = Justification::Center;
+            }
+            else {
+                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
+            }
+        }
+
+        if (spec.has_specifier("width")) {
+            std::string_view value = trim(spec.get_specifier("width"));
+
+            unsigned _width;
+            std::size_t num_characters_read = from_string(value, _width);
+
+            if (num_characters_read < value.length()) {
+                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
+            }
+            else {
+                width = _width;
+            }
+        }
+
+        if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
+            if (value.length() > 1u) {
+                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
+            }
+            else {
+                fill_character = value[0];
+            }
+        }
+    }
     
     template <typename K, typename V, typename H, typename P, typename A>
     Formatter<std::unordered_map<K, V, H, P, A>>::Formatter() : justification(Justification::Left),
@@ -1702,7 +1846,7 @@ namespace utils {
             result.replace(write_position, length, element.first, 0, length);
             write_position += length;
 
-            result[write_position++] = ',';
+            result[write_position++] = ':';
             result[write_position++] = ' ';
             
             // Value
