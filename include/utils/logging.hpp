@@ -24,7 +24,8 @@ namespace utils {
             ~Message();
             
             enum class Level {
-                Debug = 0,
+                Trace = 0,
+                Debug,
                 Info,
                 Warning,
                 Error,
@@ -36,6 +37,9 @@ namespace utils {
             std::string message;
             Timestamp time;
         };
+        
+        template <typename ...Ts>
+        void trace(Message message, const Ts&... args);
         
         template <typename ...Ts>
         void info(Message message, const Ts&... args);
@@ -52,9 +56,15 @@ namespace utils {
         template <typename ...Ts>
         void fatal(Message message, const Ts&... args);
         
+        void set_default_logger();
+        
         void set_format(std::string_view fmt);
         void set_format(const char* fmt);
+        
         void clear_format();
+        
+        
+        
         
     }
     

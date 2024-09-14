@@ -168,7 +168,10 @@ namespace utils {
         
         const char* str;
         if (uppercase) {
-            if (level == Message::Level::Debug) {
+            if (level == Message::Level::Trace) {
+                str = "TRACE";
+            }
+            else if (level == Message::Level::Debug) {
                 str = "DEBUG";
             }
             else if (level == Message::Level::Info) {
@@ -185,6 +188,9 @@ namespace utils {
             }
         }
         else {
+            if (level == Message::Level::Trace) {
+                str = "trace";
+            }
             if (level == Message::Level::Debug) {
                 str = "debug";
             }

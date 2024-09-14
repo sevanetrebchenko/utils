@@ -16,6 +16,13 @@ namespace utils::logging {
     }
     
     template <typename ...Ts>
+    void trace(Message message, const Ts&... args) {
+        message.message = utils::format(message.format, args...);
+        message.level = Message::Level::Trace;
+        detail::log(message);
+    }
+    
+    template <typename ...Ts>
     void info(Message message, const Ts&... args) {
         message.message = utils::format(message.format, args...);
         message.level = Message::Level::Info;
