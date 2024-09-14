@@ -101,34 +101,12 @@
 
 #include "utils/string.hpp"
 #include "utils/logging.hpp"
+#include "utils/assert.hpp"
 
 #include <source_location>
 #include <iostream>
 
 namespace utils {
-    
-    using namespace logging;
-    
-    template <>
-    struct Formatter<Message::Level> {
-        void parse(const FormatSpec& spec) {
-        }
-        
-        std::string format(Message::Level level) const {
-            switch (level) {
-                case Message::Level::Debug:
-                    return "DEBUG";
-                case Message::Level::Info:
-                    return "INFO";
-                case Message::Level::Warning:
-                    return "WARNING";
-                case Message::Level::Error:
-                    return "ERROR";
-                case Message::Level::Fatal:
-                    return "FATAL";
-            }
-        }
-    };
     
     namespace logging {
         
@@ -143,18 +121,88 @@ namespace utils {
         Message::Message(std::string_view fmt, std::source_location source) : level(Level::Debug),
                                                                               format(fmt),
                                                                               source(source),
-                                                                              message() {
+                                                                              message(),
+                                                                              time(Timestamp::now()) {
         }
         
         Message::Message(const char* fmt, std::source_location source) : level(Level::Debug),
                                                                          format(fmt),
                                                                          source(source),
-                                                                         message() {
-            
+                                                                         message(),
+                                                                         time(Timestamp::now()) {
         }
         
         Message::~Message() = default;
         
+    }
+    
+    Formatter<logging::Message::Level>::Formatter() : Formatter<const char*>(),
+                                                      uppercase(true) {
+    }
+    
+    Formatter<logging::Message::Level>::~Formatter() = default;
+    
+    void Formatter<logging::Message::Level>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Message::Level must be a specifier list");
+        Formatter<const char*>::parse(spec);
+        
+        if (spec.has_specifier("uppercase", "lowercase")) {
+            FormatSpec::SpecifierView specifier = spec.get_specifier("uppercase", "lowercase");
+            std::string_view value = trim(specifier.value);
+            
+            if (icasecmp(specifier.name, "uppercase")) {
+                if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                    uppercase = true;
+                }
+            }
+            else { // if (icasecmp(specifier.name, "lowercase")) {
+                if (icasecmp(value, "true") || icasecmp(value, "1")) {
+                    uppercase = false;
+                }
+            }
+        }
+    }
+    
+    std::string Formatter<logging::Message::Level>::format(logging::Message::Level level) const {
+        using namespace logging;
+        
+        const char* str;
+        if (uppercase) {
+            if (level == Message::Level::Debug) {
+                str = "DEBUG";
+            }
+            else if (level == Message::Level::Info) {
+                str = "INFO";
+            }
+            else if (level == Message::Level::Warning) {
+                str = "WARNING";
+            }
+            else if (level == Message::Level::Error) {
+                str = "ERROR";
+            }
+            else { // if (level == Message::Level::Fatal) {
+                str = "FATAL";
+            }
+        }
+        else {
+            if (level == Message::Level::Debug) {
+                str = "debug";
+            }
+            else if (level == Message::Level::Info) {
+                str = "info";
+            }
+            else if (level == Message::Level::Warning) {
+                str = "warning";
+            }
+            else if (level == Message::Level::Error) {
+                str = "error";
+            }
+            else { // if (level == Message::Level::Fatal) {
+                str = "fatal";
+            }
+        }
+        
+        return Formatter<const char*>::format(str);
     }
     
 }

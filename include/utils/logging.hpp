@@ -4,6 +4,9 @@
 #ifndef LOGGING_HPP
 #define LOGGING_HPP
 
+#include "utils/datetime.hpp"
+#include "utils/string.hpp"
+
 #include <string_view> // std::string_view
 #include <source_location> // std::source_location
 
@@ -31,6 +34,7 @@ namespace utils {
             std::string_view format;
             std::source_location source;
             std::string message;
+            Timestamp time;
         };
         
         template <typename ...Ts>
@@ -48,10 +52,24 @@ namespace utils {
         template <typename ...Ts>
         void fatal(Message message, const Ts&... args);
         
+        void set_format(std::string_view fmt);
         void set_format(const char* fmt);
         void clear_format();
         
     }
+    
+    template <>
+    struct Formatter<logging::Message::Level> : public Formatter<const char*> {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(logging::Message::Level level) const;
+        
+        bool uppercase;
+    };
+    
+    
 }
 
 #endif // LOGGING_HPP

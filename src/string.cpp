@@ -819,7 +819,7 @@ namespace utils {
     
     void FormatterBase::parse(const FormatSpec& spec) {
         if (spec.has_specifier("justification", "apply_justification", "alignment", "align")) {
-            std::string_view value = trim(spec.get_specifier("justification", "apply_justification", "alignment", "align"));
+            std::string_view value = trim(spec.get_specifier("justification", "apply_justification", "alignment", "align").value);
             if (icasecmp(value, "left")) {
                 justification = Justification::Left;
             }
@@ -829,9 +829,6 @@ namespace utils {
             else if (icasecmp(value, "center")) {
                 justification = Justification::Center;
             }
-            else {
-                logging::warning("ignoring unknown justification specifier value: '{}' - expecting one of: left, right, or center (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("width")) {
@@ -840,20 +837,14 @@ namespace utils {
             unsigned _width;
             std::size_t num_characters_read = from_string(value, _width);
 
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid width specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
+            if (num_characters_read > 0) {
                 width = _width;
             }
         }
 
         if (spec.has_specifier("fill", "fill_character", "fillcharacter")) {
-            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter"));
-            if (value.length() > 1u) {
-                logging::warning("ignoring invalid fill character specifier value: '{}' - specifier value must be a single character", value);
-            }
-            else {
+            std::string_view value = trim(spec.get_specifier("fill", "fill_character", "fillcharacter").value);
+            if (!value.empty()) {
                 fill_character = value[0];
             }
         }
@@ -929,42 +920,33 @@ namespace utils {
         FormatterBase::parse(spec);
 
         if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
-            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter"));
+            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter").value);
             if (icasecmp(value, "true") || icasecmp(value, "1")) {
                 use_separator_character = true;
             }
             else if (icasecmp(value, "false") || icasecmp(value, "0")) {
                 use_separator_character = false;
             }
-            else {
-                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("group_size", "groupsize")) {
-            std::string_view value = trim(spec.get_specifier("group_size", "groupsize"));
+            std::string_view value = trim(spec.get_specifier("group_size", "groupsize").value);
 
             unsigned _group_size;
             std::size_t num_characters_read = from_string(value, _group_size);
 
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid group_size specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
+            if (num_characters_read > 0) {
                 group_size = _group_size;
             }
         }
 
         if (spec.has_specifier("use_base_prefix", "usebaseprefix")) {
-            std::string_view value = trim(spec.get_specifier("use_base_prefix", "usebaseprefix"));
+            std::string_view value = trim(spec.get_specifier("use_base_prefix", "usebaseprefix").value);
             if (icasecmp(value, "true") || icasecmp(value, "1")) {
                 use_base_prefix = true;
             }
             else if (icasecmp(value, "false") || icasecmp(value, "0")) {
                 use_base_prefix = false;
-            }
-            else {
-                logging::warning("ignoring unknown use_base_prefix specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
             }
         }
     }

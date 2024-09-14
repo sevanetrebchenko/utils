@@ -52,6 +52,12 @@ namespace utils {
                 SpecifierList
             };
             
+            // Provides read-only access to a specifier
+            struct SpecifierView {
+                std::string_view name;
+                std::string_view value;
+            };
+            
             FormatSpec();
             FormatSpec(const FormatSpec& other);
             FormatSpec(FormatSpec&& other) noexcept;
@@ -75,7 +81,7 @@ namespace utils {
             std::string& get_specifier(std::string_view name);
             
             template <typename ...Ts>
-            std::string_view get_specifier(std::string_view first, std::string_view second, Ts... rest) const;
+            SpecifierView get_specifier(std::string_view first, std::string_view second, Ts... rest) const;
             std::string_view get_specifier(std::string_view name) const;
 
             template <typename ...Ts>

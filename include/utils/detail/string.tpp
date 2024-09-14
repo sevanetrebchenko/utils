@@ -5,7 +5,6 @@
 #define STRING_TPP
 
 #include "utils/result.hpp"
-#include "utils/logging.hpp"
 #include "utils/assert.hpp"
 #include "utils/tuple.hpp"
 
@@ -141,19 +140,19 @@ namespace utils {
     }
     
     template <typename ...Ts>
-    std::string_view FormatSpec::get_specifier(std::string_view first, std::string_view second, Ts... rest) const {
+    FormatSpec::SpecifierView FormatSpec::get_specifier(std::string_view first, std::string_view second, Ts... rest) const {
         constexpr std::size_t argument_count = sizeof...(Ts) + 2u; // Include 'first' and 'second' specifiers
-        std::pair<std::string_view, std::string_view> specifiers[argument_count];
+        SpecifierView specifiers[argument_count];
 
         // Index of the first valid specifier
         std::size_t index = argument_count; // Initially set to invalid
         std::size_t valid_specifier_count = 0u;
 
         utils::apply([this, &specifiers, &index, &valid_specifier_count](std::string_view name, std::size_t i) {
-            specifiers[i].first = name;
+            specifiers[i].name = name;
             if (has_specifier(name)) {
                 index = i;
-                specifiers[i].second = get_specifier(name);
+                specifiers[i].value = get_specifier(name);
                 ++valid_specifier_count;
             }
         }, std::make_tuple(first, second, std::string_view(rest)...));
@@ -163,7 +162,7 @@ namespace utils {
             // Error message format: bad format specification access - no values found for any of the following specifiers: ... (length: 87 + comma-separated list of specifiers)
             std::size_t capacity = 87u;
             for (std::size_t i = 0u; i < argument_count; ++i) {
-                capacity += specifiers[i].second.length();
+                capacity += specifiers[i].value.length();
                 if (i != argument_count) {
                     // Avoid trailing comma ', '
                     capacity += 2u;
@@ -176,7 +175,7 @@ namespace utils {
             error += "bad format specification access - no values found for any of the following specifiers: ";
 
             for (std::size_t i = 0u; i < argument_count; ++i) {
-                error += specifiers[i].first; // Name
+                error += specifiers[i].name;
 
                 // Do not add a trailing comma
                 if (i != argument_count) {
@@ -191,8 +190,8 @@ namespace utils {
             // Error message format: ambiguous format specification access - value found for more than one of the following specifiers: ... (length: 99 + comma-separated list of found specifiers)
             std::size_t capacity = 99u;
             for (std::size_t i = 0u, count = 0u; i < argument_count; ++i) {
-                if (!specifiers[i].second.empty()) {
-                    capacity += specifiers[i].first.length();
+                if (!specifiers[i].value.empty()) {
+                    capacity += specifiers[i].name.length();
                     if (count != valid_specifier_count) {
                         // Do not add a trailing comma
                         capacity += 2u;
@@ -207,8 +206,8 @@ namespace utils {
             error += "ambiguous format specification access - value found for more than one of the following specifiers: ";
 
             for (std::size_t i = 0u, count = 0u; i < argument_count; ++i) {
-                if (!specifiers[i].second.empty()) {
-                    error += specifiers[i].first;
+                if (!specifiers[i].value.empty()) {
+                    error += specifiers[i].name;
                     if (count != valid_specifier_count) {
                         // Do not add a trailing comma
                         error += ", ";
@@ -220,7 +219,7 @@ namespace utils {
             throw std::runtime_error(error);
         }
         
-        return specifiers[index].second;
+        return specifiers[index];
     }
     
     template <typename ...Ts>
@@ -453,9 +452,6 @@ namespace utils {
             else if (icasecmp(value, "hexadecimal")) {
                 representation = Representation::Hexadecimal;
             }
-            else {
-                logging::warning("ignoring unknown representation specifier value: '{}' - expecting one of: decimal, binary, or hexadecimal (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("sign")) {
@@ -469,48 +465,38 @@ namespace utils {
             else if (icasecmp(value, "both")) {
                 sign = Sign::Both;
             }
-            else {
-                logging::warning("ignoring unknown sign specifier value: '{}' - expecting one of: negative only (variants: negative_only, negativeonly), aligned, or both (case-insensitive)", value);
-            }
         }
         
         if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
-            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter"));
+            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter").value);
+            
             if (icasecmp(value, "true") || icasecmp(value, "1")) {
                 use_separator_character = true;
             }
             else if (icasecmp(value, "false") || icasecmp(value, "0")) {
                 use_separator_character = false;
             }
-            else {
-                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("group_size", "groupsize")) {
-            std::string_view value = trim(spec.get_specifier("group_size", "groupsize"));
+            std::string_view value = trim(spec.get_specifier("group_size", "groupsize").value);
 
             unsigned _group_size;
             std::size_t num_characters_read = from_string(value, _group_size);
 
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid group_size specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
+            if (num_characters_read > 0) {
                 group_size = _group_size;
             }
         }
 
         if (spec.has_specifier("use_base_prefix", "usebaseprefix")) {
-            std::string_view value = trim(spec.get_specifier("use_base_prefix", "usebaseprefix"));
+            std::string_view value = trim(spec.get_specifier("use_base_prefix", "usebaseprefix").value);
+            
             if (icasecmp(value, "true") || icasecmp(value, "1")) {
                 use_base_prefix = true;
             }
             else if (icasecmp(value, "false") || icasecmp(value, "0")) {
                 use_base_prefix = false;
-            }
-            else {
-                logging::warning("ignoring unknown use_base_prefix specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
             }
         }
 
@@ -520,10 +506,7 @@ namespace utils {
             unsigned _digits;
             std::size_t num_characters_read = from_string(value, _digits);
 
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid digits specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
+            if (num_characters_read > 0) {
                 digits = _digits;
             }
         }
@@ -537,8 +520,7 @@ namespace utils {
         else if (representation == Representation::Binary) {
             return to_binary(value);
         }
-        else {
-            ASSERT(representation == Representation::Hexadecimal, "unknown representation");
+        else { // if (representation == Representation::Hexadecimal) {
             return to_hexadecimal(value);
         }
     }
@@ -994,9 +976,6 @@ namespace utils {
             else if (icasecmp(value, "scientific")) {
                 representation = Representation::Scientific;
             }
-            else {
-                logging::warning("ignoring unknown representation specifier value: '{}' - expecting one of: fixed, scientific (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("sign")) {
@@ -1010,9 +989,6 @@ namespace utils {
             else if (icasecmp(value, "both")) {
                 sign = Sign::Both;
             }
-            else {
-                logging::warning("ignoring unknown sign specifier value: '{}' - expecting one of: negative only (variants: negative_only, negativeonly), aligned, or both (case-insensitive)", value);
-            }
         }
 
         if (spec.has_specifier("precision")) {
@@ -1020,25 +996,20 @@ namespace utils {
 
             unsigned _precision;
             std::size_t num_characters_read = from_string(value, _precision);
-
-            if (num_characters_read < value.length()) {
-                logging::warning("ignoring invalid precision specifier value: '{}' - specifier value must be an integer", value);
-            }
-            else {
+            
+            if (num_characters_read > 0) {
                 precision = _precision;
             }
         }
 
         if (spec.has_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter")) {
-            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter"));
+            std::string_view value = trim(spec.get_specifier("use_separator", "useseparator", "use_separator_character", "useseparatorcharacter").value);
+            
             if (icasecmp(value, "true") || icasecmp(value, "1")) {
                 use_separator_character = true;
             }
             else if (icasecmp(value, "false") || icasecmp(value, "0")) {
                 use_separator_character = false;
-            }
-            else {
-                logging::warning("ignoring unknown use_separator_character specifier value: '{}' - expecting one of: true / 1, false / 0 (case-insensitive)", value);
             }
         }
     }

@@ -133,6 +133,7 @@ int main() {
     std::cout << utils::format("'{}'", tuple) << std::endl;
     
     std::vector<int> vector { 1, 2, 3, 4, 5, 6 };
+    
     std::cout << utils::format("'{}'", vector) << std::endl;
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
@@ -148,7 +149,7 @@ int main() {
 //
 //    auto start = std::chrono::high_resolution_clock::now();
 //    for (std::size_t i = 0u; i < amount; ++i) {
-//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+//        std::string r = utils::format("this is a test format string containing a vector: {::representation=[binary]}, called from: {}", vector, std::source_location::current());
 //    }
 //    auto end = std::chrono::high_resolution_clock::now();
 //    std::cout << "time to format " << amount << ": " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() << std::endl;
@@ -158,8 +159,7 @@ int main() {
 //
 //    for (std::size_t i = 0u; i < amount; ++i) {
 //        start = std::chrono::high_resolution_clock::now();
-//        std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
-//        // std::string r = utils::format("this is a test format string containing a vector: {:specifier=[value [[ ]]]:|representation=[hexadecimal],use_base_prefix=[true]:representation=[binary]|:}, called from: {}", std::source_location::current());
+//        std::string r = utils::format("this is a test format string containing a vector: {:representation=[binary]}, called from: {}", vector, std::source_location::current());
 //        end = std::chrono::high_resolution_clock::now();
 //        durations.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
 //    }
