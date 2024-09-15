@@ -108,6 +108,8 @@
 
 namespace utils {
     
+    std::string default_format = "";
+    
     namespace logging {
         
         namespace detail {
@@ -117,6 +119,7 @@ namespace utils {
             }
     
         }
+        
         
         Message::Message(std::string_view fmt, std::source_location source) : level(Level::Debug),
                                                                               format(fmt),
@@ -134,6 +137,18 @@ namespace utils {
         
         Message::~Message() = default;
         
+    }
+    
+    void set_format(std::string_view fmt) {
+        default_format = fmt;
+    }
+    
+    void set_format(const char* fmt) {
+        default_format = fmt;
+    }
+    
+    void clear_format() {
+    
     }
     
     Formatter<logging::Message::Level>::Formatter() : Formatter<const char*>(),

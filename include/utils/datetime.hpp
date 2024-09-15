@@ -5,6 +5,7 @@
 #define DATETIME_HPP
 
 #include <cstdint> // std::uint8_t, std::uint16_t, std::uint32_t
+#include <chrono> // std::chrono
 
 namespace utils {
 
@@ -34,9 +35,15 @@ namespace utils {
     };
 
     struct Duration {
+        template <typename T>
+        Duration(std::chrono::duration<T> duration);
+        
         Duration(std::uint32_t milliseconds = 0, std::uint32_t seconds = 0, std::uint32_t minutes = 0, std::uint32_t hours = 0, std::uint32_t days = 0); // Automatically converts on overflow
         ~Duration();
 
+        template <typename T>
+        operator std::chrono::duration<T>() const;
+        
         std::uint32_t days;
         std::uint8_t hours; // ranges from 0 to 23
         std::uint8_t minutes; // ranges from 0 to 59

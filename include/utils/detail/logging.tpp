@@ -13,6 +13,8 @@ namespace utils::logging {
         
         void log(const Message& message);
         
+        void register_adapter(std::shared_ptr<Adapter> adapter);
+        
     }
     
     template <typename ...Ts>
