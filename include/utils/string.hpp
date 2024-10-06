@@ -5,22 +5,24 @@
 #define STRING_HPP
 
 #include "utils/concepts.hpp"
+#include "utils/colors.hpp"
 
 #include <string> // std::string
 #include <source_location> // std::source_location
 #include <stdexcept> // std::runtime_error
 #include <variant> // std::variant
 #include <optional> // std::optional
+#include <filesystem> // std::filesystem::path
 
 namespace utils {
     
     // Returns a vector containing the result of splitting 'in' by 'delimiter'.
-    [[nodiscard]] std::vector<std::string> split(std::string_view in, std::string_view delimiter);
+    [[nodiscard]] std::vector<std::string_view> split(std::string_view in, std::string_view delimiter);
 
     // Trim off all whitespace characters on either side of 'in'.
     [[nodiscard]] std::string_view trim(std::string_view in);
 
-    // std::strcasecmp requires null-terminated strings
+    // std::strcasecmp requires null-terminated strings (does not work for std::string_view)
     template <String T, String U>
     [[nodiscard]] bool icasecmp(const T& first, const U& second);
 
@@ -143,7 +145,7 @@ namespace utils {
     template <typename T>
     struct is_named_argument<NamedArgument<T>> : std::true_type {
     };
-    
+
     struct FormatString {
         // Purposefully not marked as explicit
         FormatString(std::string_view format, std::source_location source = std::source_location::current());
@@ -160,25 +162,31 @@ namespace utils {
     
     // Section: Formatters
     
-    class FormatterBase {
-        public:
-            FormatterBase();
-            ~FormatterBase();
-            
-            void parse(const FormatSpec& spec);
-            
-            enum class Justification {
-                Left = 0,
-                Right,
-                Center
-            } justification;
-            
-            std::size_t width;
-            char fill_character;
+    struct FormatterBase {
+        FormatterBase();
+        ~FormatterBase();
         
-        protected:
-            // Returns the offset at which formatted values should be written
-            std::size_t apply_justification(std::size_t length) const;
+        void parse(const FormatSpec& spec);
+        
+        // Applies justification and color
+        std::string format(char value) const;
+        std::string format(std::string value) const;
+        
+        enum class Justification {
+            Left = 0,
+            Right,
+            Center
+        } justification;
+        
+        std::size_t width;
+        char fill_character;
+        
+        enum class Style {
+            None = 0,
+            Bold = 1,
+            Italicized = 3
+        } style;
+        std::optional<Color> color;
     };
     
     template <typename T>
@@ -426,6 +434,11 @@ namespace utils {
         private:
             Formatter<std::size_t> m_line_formatter;
             Formatter<const char*> m_file_formatter;
+    };
+    
+    // std::filesystem::path
+    template <>
+    struct Formatter<std::filesystem::path> : public Formatter<std::string> {
     };
     
     // Standard containers

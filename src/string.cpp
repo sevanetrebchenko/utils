@@ -320,8 +320,8 @@ namespace utils {
 
     }
 
-    [[nodiscard]] std::vector<std::string> split(std::string_view in, std::string_view delimiter) {
-        std::vector<std::string> components { };
+    [[nodiscard]] std::vector<std::string_view> split(std::string_view in, std::string_view delimiter) {
+        std::vector<std::string_view> components { };
 
         std::size_t position;
         do {
@@ -812,7 +812,9 @@ namespace utils {
     
     FormatterBase::FormatterBase() : justification(Justification::Left),
                                      width(0),
-                                     fill_character(' ') {
+                                     fill_character(' '),
+                                     style(Style::None),
+                                     color() {
     }
     
     FormatterBase::~FormatterBase() = default;
@@ -848,19 +850,74 @@ namespace utils {
                 fill_character = value[0];
             }
         }
+        
+        if (spec.has_specifier("style")) {
+            std::string_view value = trim(spec.get_specifier("style"));
+            
+            if (icasecmp(value, "bold")) {
+                style = Style::Bold;
+            }
+            else if (icasecmp(value, "italic") || icasecmp(value, "italicized")) {
+                style = Style::Italicized;
+            }
+        }
+        
+        if (spec.has_specifier("color")) {
+            std::string_view value = trim(spec.get_specifier("color"));
+            
+            // Color can either be provided as an RGB triplet, an 8-bit ANSI color code (0-255), or by name (see color.hpp)
+            auto iter = colors.find(value);
+            if (iter != colors.end()) {
+                // Color specified by name
+                color = iter->second;
+            }
+            else {
+                std::vector<std::string_view> components = split(value, ",");
+                std::size_t size = components.size();
+                
+                if (!components.empty()) {
+                    if (size == 1) {
+                        // 8-bit ANSI code
+                        std::uint8_t code = from_string(components[0], code);
+                        color = ansi_to_rgb(code);
+                    }
+                    else if (size <= 3) {
+                        std::uint8_t r, g, b;
+                        from_string(components[0], r);
+                        from_string(components[1], g);
+                        from_string(components[2], b);
+                        color = { r, g, b };
+                    }
+                }
+            }
+        }
     }
     
-    std::size_t FormatterBase::apply_justification(std::size_t length) const {
+    std::string FormatterBase::format(std::string value) const {
+        std::size_t length = value.length();
+        
+        // Color codes should not contribute to the padding of the formatted string
         std::size_t capacity = std::max(length, width);
+        
+        // + capacity for ANSI color code
+        
+        std::string a = "\033[";
+        
+        std::string result(capacity, fill_character);
+        
+        std::size_t write_position;
         if (justification == Justification::Left) {
-            return 0;
+            write_position = 0;
         }
         else if (justification == Justification::Right) {
-            return capacity - length;
+            write_position = capacity - length;
         }
         else {
-            return (capacity - length) / 2;
+            write_position = (capacity - length) / 2;
         }
+        
+        result.replace(apply_justification(length), length, value, 0, length);
+        
     }
     
     Formatter<char>::Formatter() : FormatterBase() {

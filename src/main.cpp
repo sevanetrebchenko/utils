@@ -1,11 +1,10 @@
 
 #include "utils/result.hpp"
 #include "utils/constexpr.hpp"
+#include "utils/logging.hpp"
 #include <iostream>
 #include <vector>
 #include <chrono>
-#include "utils/logging/adapter.hpp"
-#include <source_location>
 
 struct MyContainer {
     std::vector<int> raw;
@@ -135,6 +134,8 @@ int main() {
     std::vector<int> vector { 1, 2, 3, 4, 5, 6 };
     
     std::cout << utils::format("'{}'", vector) << std::endl;
+    
+    utils::logging::trace("this is a test message {:color=[red]}", 6);
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     
