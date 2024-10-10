@@ -118,24 +118,24 @@ int main() {
         { 4, 4.4f },
     };
     
-    std::cout << utils::format("this is a format string {:justification=[right],fill_character=[-],width=[60]::precision=[2]}", a) << std::endl;
-    
-    int c = 42;
-    int* ptr = &c;
-    
-    std::cout << utils::format("'{:width=[100]}'", ptr) << std::endl;
-    
-    std::pair<int, float> pair { 5, 5.5f };
-    std::cout << utils::format("'{}'", pair) << std::endl;
-    
-    std::tuple<int, float, char> tuple { 6, 6.6f, 'a' };
-    std::cout << utils::format("'{}'", tuple) << std::endl;
-    
-    std::vector<int> vector { 1, 2, 3, 4, 5, 6 };
-    
-    std::cout << utils::format("'{}'", vector) << std::endl;
-    
-    utils::logging::trace("this is a test message {:color=[red]}", 6);
+//    std::cout << utils::format("this is a format string {:justification=[right],fill_character=[-],width=[60]::precision=[2]}", a) << std::endl;
+//
+//    int c = 42;
+//    int* ptr = &c;
+//
+//    std::cout << utils::format("'{:width=[100]}'", ptr) << std::endl;
+//
+//    std::pair<int, float> pair { 5, 5.5f };
+//    std::cout << utils::format("'{}'", pair) << std::endl;
+//
+//    std::tuple<int, float, char> tuple { 6, 6.6f, 'a' };
+//    std::cout << utils::format("'{}'", tuple) << std::endl;
+//
+//    std::vector<int> vector { 1, 2, 3, 4, 5, 6 };
+//
+//    std::cout << utils::format("'{}'", vector) << std::endl;
+
+    utils::logging::warning("this is a test message {:color=[black]}", 6);
     
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
     

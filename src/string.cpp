@@ -1,7 +1,6 @@
 
 #include "utils/string.hpp"
 #include "utils/exceptions.hpp"
-#include "utils/logging.hpp"
 
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
@@ -406,7 +405,6 @@ namespace utils {
 
         if (error_code == std::errc::invalid_argument) {
             // failed to convert
-            logging::fatal("");
             throw FormattedError("");
         }
 
@@ -800,12 +798,16 @@ namespace utils {
         return !(*this == other);
     }
     
-    FormatString::FormatString(const char* format, std::source_location source) : format(format),
-                                                                                  source(source) {
+    FormatString::FormatString(const std::string& format, std::source_location source) : format(format),
+                                                                                         source(source) {
     }
-
+    
     FormatString::FormatString(std::string_view format, std::source_location source) : format(format),
                                                                                        source(source) {
+    }
+    
+    FormatString::FormatString(const char* format, std::source_location source) : format(format),
+                                                                                  source(source) {
     }
     
     FormatString::~FormatString() = default;
@@ -881,7 +883,7 @@ namespace utils {
                         std::uint8_t code = from_string(components[0], code);
                         color = ansi_to_rgb(code);
                     }
-                    else if (size <= 3) {
+                    else if (size >= 3) {
                         std::uint8_t r, g, b;
                         from_string(components[0], r);
                         from_string(components[1], g);
@@ -893,16 +895,61 @@ namespace utils {
         }
     }
     
-    std::string FormatterBase::format(std::string value) const {
-        std::size_t length = value.length();
+    std::string FormatterBase::format(const std::string& value) const {
+        return format(value.c_str(), value.length());
+    }
+    
+    std::string FormatterBase::format(const char* value, std::size_t length) const {
+        // Include capacity for ANSI codes
+        // ANSI format: [{style};38;2;{red};{green};{blue}m{...}[0m
+        // Note: this should only be applied if there are styling options requested
+        
+        std::string prefix, suffix;
+        
+        if (style != Style::None || color) {
+            prefix = "\x1b[";
+            
+            if (style == Style::Bold) {
+                prefix += "1;";
+            }
+            else if (style == Style::Italicized) {
+                prefix += "3;";
+            }
+            
+            if (color) {
+                const Color& c = *color;
+                prefix += "38;2;";
+                
+                char buffer[5] = { 0 }; // Buffer for holding values in the range [0, 255] + terminating semicolon
+                char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
+                
+                std::to_chars_result result;
+                
+                // r
+                result = std::to_chars(buffer, end, color->r, 10);
+                buffer[result.ptr - buffer] = ';';
+                
+                prefix += buffer;
+                
+                // g
+                result = std::to_chars(buffer, end, color->g, 10);
+                buffer[result.ptr - buffer] = ';';
+                
+                prefix += buffer;
+                
+                // b
+                result = std::to_chars(buffer, end, color->b, 10);
+                buffer[result.ptr - buffer] = '\0';
+                
+                prefix += buffer;
+            }
+            prefix += 'm';
+            
+            suffix = "\033[0m";
+        }
         
         // Color codes should not contribute to the padding of the formatted string
         std::size_t capacity = std::max(length, width);
-        
-        // + capacity for ANSI color code
-        
-        std::string a = "\033[";
-        
         std::string result(capacity, fill_character);
         
         std::size_t write_position;
@@ -915,9 +962,18 @@ namespace utils {
         else {
             write_position = (capacity - length) / 2;
         }
+
+        // Insert the prefix, value, and suffix
+        result.replace(0, prefix.length(), prefix);
+        write_position += prefix.length();
         
-        result.replace(apply_justification(length), length, value, 0, length);
+        result.replace(write_position, length, value);
+        write_position += length;
         
+        result.replace(write_position, suffix.length(), suffix);
+        // write_position += suffix.length();
+
+        return std::move(result);
     }
     
     Formatter<char>::Formatter() : FormatterBase() {
@@ -931,10 +987,7 @@ namespace utils {
     }
     
     std::string Formatter<char>::format(char c) const {
-        std::size_t capacity = std::max(1ull, width);
-        std::string result(capacity, fill_character);
-        result[apply_justification(1)] = c;
-        return std::move(result);
+        return std::move(FormatterBase::format(&c, 1));
     }
     
     Formatter<const char*>::Formatter() : FormatterBase() {
@@ -952,10 +1005,7 @@ namespace utils {
     }
     
     std::string Formatter<const char*>::format(const char* value, std::size_t length) const {
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
-        result.replace(apply_justification(length), length, value, 0, length);
-        return std::move(result);
+        return std::move(FormatterBase::format(value, length));
     }
     
     std::string Formatter<std::string_view>::format(std::string_view value) const {
@@ -1016,11 +1066,7 @@ namespace utils {
         }
         else {
             // Null pointers are printed as 'nullptr' and use a subset of the available formatting specifiers
-            std::size_t length = 7; // 'nullptr' string is 7 characters
-            std::size_t capacity = std::max(length, width);
-            std::string result(capacity, fill_character);
-            result.replace(apply_justification(length), length, "nullptr");
-            return std::move(result);
+            return std::move(FormatterBase::format("nullptr"));
         }
     }
     
@@ -1054,29 +1100,17 @@ namespace utils {
     }
 
     std::string Formatter<std::source_location>::format(const std::source_location& value) const {
-        std::string file = m_file_formatter.format(value.file_name());
-        std::string line = m_line_formatter.format(value.line());
-        
         // Format: file:line
-        std::size_t length = file.length() + 1 + line.length();
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
-        
-        std::size_t write_position = apply_justification(length);
-        
-        // File
-        length = file.length();
-        result.replace(write_position, length, file, 0, length);
-        write_position += length;
-        
-        result[write_position++] = ':';
-        
-        // Line
-        length = line.length();
-        result.replace(write_position, length, line, 0, length);
-        write_position += length;
-        
-        return std::move(result);
+        return std::move(FormatterBase::format(m_file_formatter.format(value.file_name()) + ':' + m_line_formatter.format(value.line())));
+    }
+    
+    std::string Formatter<std::filesystem::path>::format(const std::filesystem::path& value) const {
+        return std::move(Formatter<std::string>::format(value.string()));
+    }
+    
+    std::string Formatter<std::thread::id>::format(const std::thread::id& value) const {
+        std::hash<std::thread::id> hash { };
+        return std::move(Formatter<std::size_t>::format(hash(value)));
     }
     
 }

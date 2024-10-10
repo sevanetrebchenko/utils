@@ -558,8 +558,7 @@ namespace utils {
             }
         }
 
-        std::size_t length = num_characters + num_separator_characters;
-        std::size_t capacity = std::max(length, (std::size_t) width);
+        std::size_t capacity = std::max(num_characters, (std::size_t) width);
         std::string result(capacity, fill_character);
 
         std::size_t write_position;
@@ -568,10 +567,10 @@ namespace utils {
                 write_position = 0u;
                 break;
             case Justification::Right:
-                write_position = capacity - length;
+                write_position = capacity - num_characters;
                 break;
             case Justification::Center:
-                write_position = (capacity - length) / 2;
+                write_position = (capacity - num_characters) / 2;
                 break;
         }
 
@@ -615,7 +614,7 @@ namespace utils {
             result.replace(write_position, num_characters_written, start, 0, num_characters_written);
         }
         
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
 
     template <typename T>
@@ -1062,9 +1061,8 @@ namespace utils {
             length += (decimal_position - 1) / 3;
         }
 
-        std::size_t capacity = std::max(length, (std::size_t) width);
-        std::string result(capacity, fill_character);
-        std::size_t write_position = apply_justification(length);
+        std::string result(length, fill_character);
+        std::size_t write_position = 0;
 
         if (value < 0) {
             result[write_position++] = '-';
@@ -1133,7 +1131,7 @@ namespace utils {
             }
         }
 
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
     
     template <typename T, typename U>
@@ -1175,10 +1173,9 @@ namespace utils {
         // 2 characters for leading space before the first element and trailing space after the last element
         // 2 characters for comma + space in between characters
         std::size_t length = 6 + first.length() + second.length();
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
+        std::string result(length, fill_character);
         
-        std::size_t write_position = apply_justification(length);
+        std::size_t write_position = 0;
         
         result[write_position++] = '{';
         result[write_position++] = ' ';
@@ -1199,7 +1196,7 @@ namespace utils {
         result[write_position++] = ' ';
         result[write_position++] = '}';
         
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
     
     // std::tuple
@@ -1259,9 +1256,8 @@ namespace utils {
             length += elements.back().length();
         }, value);
         
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
-        std::size_t write_position = apply_justification(length);
+        std::string result(length, fill_character);
+        std::size_t write_position = 0;
 
         result[write_position++] = '{';
         result[write_position++] = ' ';
@@ -1282,7 +1278,7 @@ namespace utils {
         result[write_position++] = ' ';
         result[write_position++] = '}';
         
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
     
     template <typename T>
@@ -1331,10 +1327,8 @@ namespace utils {
             length += elements.back().length();
         }
         
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
-        
-        std::size_t write_position = apply_justification(length);
+        std::string result(length, fill_character);
+        std::size_t write_position = 0;
         
         result[write_position++] = '[';
         result[write_position++] = ' ';
@@ -1355,7 +1349,7 @@ namespace utils {
         result[write_position++] = ' ';
         result[write_position++] = ']';
         
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
     
     template <typename K, typename V, typename H, typename P, typename A>
@@ -1420,10 +1414,8 @@ namespace utils {
             length += element.second.length();
         }
 
-        std::size_t capacity = std::max(length, width);
-        std::string result(capacity, fill_character);
-
-        std::size_t write_position = apply_justification(length);
+        std::string result(length, fill_character);
+        std::size_t write_position = 0;
 
         result[write_position++] = '{';
         result[write_position++] = ' ';
@@ -1462,7 +1454,7 @@ namespace utils {
         result[write_position++] = ' ';
         result[write_position++] = '}';
 
-        return std::move(result);
+        return std::move(FormatterBase::format(result));
     }
     
     template <typename T>

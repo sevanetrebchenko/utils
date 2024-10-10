@@ -6,6 +6,7 @@
 
 #include "utils/concepts.hpp"
 #include "utils/colors.hpp"
+#include "utils/styles.hpp"
 
 #include <string> // std::string
 #include <source_location> // std::source_location
@@ -148,6 +149,7 @@ namespace utils {
 
     struct FormatString {
         // Purposefully not marked as explicit
+        FormatString(const std::string& format, std::source_location source = std::source_location::current());
         FormatString(std::string_view format, std::source_location source = std::source_location::current());
         FormatString(const char* format, std::source_location source = std::source_location::current());
         ~FormatString();
@@ -169,8 +171,8 @@ namespace utils {
         void parse(const FormatSpec& spec);
         
         // Applies justification and color
-        std::string format(char value) const;
-        std::string format(std::string value) const;
+        std::string format(const char* value, std::size_t length) const;
+        std::string format(const std::string& value) const;
         
         enum class Justification {
             Left = 0,
@@ -181,11 +183,7 @@ namespace utils {
         std::size_t width;
         char fill_character;
         
-        enum class Style {
-            None = 0,
-            Bold = 1,
-            Italicized = 3
-        } style;
+        Style style;
         std::optional<Color> color;
     };
     
@@ -439,6 +437,13 @@ namespace utils {
     // std::filesystem::path
     template <>
     struct Formatter<std::filesystem::path> : public Formatter<std::string> {
+        std::string format(const std::filesystem::path& value) const;
+    };
+    
+    // std::thread::id
+    template <>
+    struct Formatter<std::thread::id> : public Formatter<std::size_t> {
+        std::string format(const std::thread::id& value) const;
     };
     
     // Standard containers

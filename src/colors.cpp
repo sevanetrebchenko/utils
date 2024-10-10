@@ -1,5 +1,6 @@
 
 #include "utils/colors.hpp"
+#include "utils/string.hpp"
 
 namespace utils {
     
