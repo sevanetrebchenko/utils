@@ -814,9 +814,7 @@ namespace utils {
     
     FormatterBase::FormatterBase() : justification(Justification::Left),
                                      width(0),
-                                     fill_character(' '),
-                                     style(Style::None),
-                                     color() {
+                                     fill_character(' ') {
     }
     
     FormatterBase::~FormatterBase() = default;
@@ -852,47 +850,6 @@ namespace utils {
                 fill_character = value[0];
             }
         }
-        
-        if (spec.has_specifier("style")) {
-            std::string_view value = trim(spec.get_specifier("style"));
-            
-            if (icasecmp(value, "bold")) {
-                style = Style::Bold;
-            }
-            else if (icasecmp(value, "italic") || icasecmp(value, "italicized")) {
-                style = Style::Italicized;
-            }
-        }
-        
-        if (spec.has_specifier("color")) {
-            std::string_view value = trim(spec.get_specifier("color"));
-            
-            // Color can either be provided as an RGB triplet, an 8-bit ANSI color code (0-255), or by name (see color.hpp)
-            auto iter = colors.find(value);
-            if (iter != colors.end()) {
-                // Color specified by name
-                color = iter->second;
-            }
-            else {
-                std::vector<std::string_view> components = split(value, ",");
-                std::size_t size = components.size();
-                
-                if (!components.empty()) {
-                    if (size == 1) {
-                        // 8-bit ANSI code
-                        std::uint8_t code = from_string(components[0], code);
-                        color = ansi_to_rgb(code);
-                    }
-                    else if (size >= 3) {
-                        std::uint8_t r, g, b;
-                        from_string(components[0], r);
-                        from_string(components[1], g);
-                        from_string(components[2], b);
-                        color = { r, g, b };
-                    }
-                }
-            }
-        }
     }
     
     std::string FormatterBase::format(const std::string& value) const {
@@ -900,55 +857,6 @@ namespace utils {
     }
     
     std::string FormatterBase::format(const char* value, std::size_t length) const {
-        // Include capacity for ANSI codes
-        // ANSI format: [{style};38;2;{red};{green};{blue}m{...}[0m
-        // Note: this should only be applied if there are styling options requested
-        
-        std::string prefix, suffix;
-        
-        if (style != Style::None || color) {
-            prefix = "\x1b[";
-            
-            if (style == Style::Bold) {
-                prefix += "1;";
-            }
-            else if (style == Style::Italicized) {
-                prefix += "3;";
-            }
-            
-            if (color) {
-                const Color& c = *color;
-                prefix += "38;2;";
-                
-                char buffer[5] = { 0 }; // Buffer for holding values in the range [0, 255] + terminating semicolon
-                char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
-                
-                std::to_chars_result result;
-                
-                // r
-                result = std::to_chars(buffer, end, color->r, 10);
-                buffer[result.ptr - buffer] = ';';
-                
-                prefix += buffer;
-                
-                // g
-                result = std::to_chars(buffer, end, color->g, 10);
-                buffer[result.ptr - buffer] = ';';
-                
-                prefix += buffer;
-                
-                // b
-                result = std::to_chars(buffer, end, color->b, 10);
-                buffer[result.ptr - buffer] = '\0';
-                
-                prefix += buffer;
-            }
-            prefix += 'm';
-            
-            suffix = "\033[0m";
-        }
-        
-        // Color codes should not contribute to the padding of the formatted string
         std::size_t capacity = std::max(length, width);
         std::string result(capacity, fill_character);
         
@@ -963,15 +871,8 @@ namespace utils {
             write_position = (capacity - length) / 2;
         }
 
-        // Insert the prefix, value, and suffix
-        result.replace(0, prefix.length(), prefix);
-        write_position += prefix.length();
-        
         result.replace(write_position, length, value);
         write_position += length;
-        
-        result.replace(write_position, suffix.length(), suffix);
-        // write_position += suffix.length();
 
         return std::move(result);
     }

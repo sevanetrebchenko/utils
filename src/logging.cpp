@@ -28,7 +28,7 @@ namespace utils {
                 [[nodiscard]] std::shared_ptr<Sink> get_sink(std::string_view name);
                 void remove_sink(std::string_view name);
                 
-                void log(const Message& message);
+                void log(Message& message);
                 
             private:
                 Logger();
@@ -44,7 +44,7 @@ namespace utils {
             explicit ConsoleSink(FILE* file);
             ~ConsoleSink() override;
             
-            void log(std::string_view message, std::optional<Style> style, std::optional<Color> color) override;
+            void log(std::string_view message, const Message& data) override;
             void flush() override;
             
             bool supports_colored_output;
@@ -120,7 +120,15 @@ namespace utils {
             }
         }
         
-        void Logger::log(const Message& message) {
+        void Logger::log(Message& message) {
+            message.thread_id = std::this_thread::get_id();
+            #if defined(PLATFORM_WINDOWS)
+                message.process_id = GetCurrentProcessId();
+            #else
+                message.process_id = getpid();
+            #endif
+            message.scope = scopes;
+            
             std::lock_guard guard { m_sink_lock };
             for (std::shared_ptr<Sink>& sink : m_sinks) {
                 sink->log(message);
@@ -128,7 +136,7 @@ namespace utils {
         }
         
         // Sink format string is set later to avoid a deadlock with Logger initialization
-        ConsoleSink::ConsoleSink(FILE* file) : Sink(file == stdout ? "stdout" : "stderr", "", file == stdout ? Message::Level::Info : Message::Level::Error),
+        ConsoleSink::ConsoleSink(FILE* file) : Sink(file == stdout ? "stdout" : "stderr", "", file == stdout ? Message::Level::Debug : Message::Level::Error),
                                                supports_colored_output(false),
                                                file(file) {
             ASSERT(file == stdout || file == stderr, "ConsoleSink must redirect output to standard streams");
@@ -164,17 +172,36 @@ namespace utils {
                     }
                 }
             #endif
-            
-            if (supports_colored_output) {
-                disable_structured_styling();
-            }
         }
         
-        void ConsoleSink::log(std::string_view message, std::optional<Style> style, std::optional<Color> color) {
-            // Messages logged through the ConsoleSink already contain ANSI characters, as this is the default color / style formatting option
-            // This is explicitly enabled with the call to disable_structured_styling in the constructor
-            // If the targeted console does not support ANSI codes for color / styling, they are parsed out into structured parameters in Sink::log, which allows the ConsoleSink::log function to ignore them and only print the log message
-            fwrite(message.data(), sizeof(char), message.length(), file);
+        void ConsoleSink::log(std::string_view message, const Message& data) {
+            if (supports_colored_output && data.level != Message::Level::Info) {
+                switch (data.level) {
+                    case Message::Level::Debug:
+                        // Debug messages are printed in bright black (gray)
+                        fwrite("\033[38;5;8m", sizeof(char), 9, file);
+                        break;
+                    case Message::Level::Warning:
+                        // Warning messages are printed in bright yellow
+                        fwrite("\033[38;5;11m", sizeof(char), 10, file);
+                        break;
+                    case Message::Level::Error:
+                        // Error messages are printed in bright red
+                        fwrite("\033[38;5;9m", sizeof(char), 9, file);
+                        break;
+                    case Message::Level::Fatal:
+                        // Fatal messages are printed in bright magenta
+                        fwrite("\033[38;5;13m", sizeof(char), 10, file);
+                        break;
+                }
+                
+                fwrite(message.data(), sizeof(char), message.length(), file);
+                fwrite("\x1b[0m", sizeof(char), 4, file);
+            }
+            else {
+                // Info messages get printed using the default color
+                fwrite(message.data(), sizeof(char), message.length(), file);
+            }
         }
         
         void ConsoleSink::flush() {
@@ -214,146 +241,40 @@ namespace utils {
                                                                                                 m_level(level),
                                                                                                 m_lock(),
                                                                                                 m_format(format ? std::move(*format) : Logger::instance().get_default_format()),
-                                                                                                m_parse_ansi_codes(true),
                                                                                                 m_enabled(true) {
         }
         
         Sink::~Sink() = default;
         
-        void Sink::log(const Message& message) {
+        void Sink::log(const Message& data) {
             if (!m_enabled) {
                 return;
             }
             
-            if (message.level < m_level) {
+            if (data.level < m_level) {
                 return;
             }
-
-            std::thread::id thread_id = std::this_thread::get_id();
-
-            #if defined(PLATFORM_WINDOWS)
-                DWORD process_id = GetCurrentProcessId();
-            #else
-                pid_t process_id = getpid();
-            #endif
             
             std::lock_guard guard { m_lock };
-            std::string formatted = utils::format(m_format, NamedArgument("message", message.message),
-                                                            NamedArgument("level", message.level),
-//                                                            NamedArgument("date", message.timestamp.date),
-                                                            NamedArgument("day", message.timestamp.date.day),
-//                                                            NamedArgument("month", message.timestamp.date.month),
-                                                            NamedArgument("year", message.timestamp.date.year),
-//                                                            NamedArgument("time", message.timestamp.time),
-                                                            NamedArgument("hour", message.timestamp.time.hour),
-                                                            NamedArgument("minute", message.timestamp.time.minute),
-                                                            NamedArgument("second", message.timestamp.time.second),
-                                                            NamedArgument("millisecond", message.timestamp.time.millisecond),
-                                                            NamedArgument("filename", message.source.file_name()),
-                                                            NamedArgument("source", message.source),
-                                                            NamedArgument("line", message.source.line()),
-                                                            NamedArgument("thread_id", thread_id),
-                                                            NamedArgument("tid", thread_id),
-                                                            NamedArgument("process_id", process_id),
-                                                            NamedArgument("pid", process_id));
-            
-            if (!m_parse_ansi_codes) {
-                // Parsing of ANSI codes explicitly disabled, pass the log message through unmodified
-                log(formatted, { }, { });
-                return;
-            }
-
-            using Formatting = std::pair<Style, std::optional<Color>>;
-            std::stack<Formatting> formatting;
-            
-            std::size_t last_read_position = 0;
-
-            while (last_read_position < formatted.length()) {
-                // Styling parameters are specified using ANSI escape codes
-                
-                // Find the start of the next ANSI escape sequence
-                std::size_t start = formatted.find("\x1b[", last_read_position);
-                if (start == std::string::npos) {
-                    break;
-                }
-                
-                // Print string contents before the start of the escape sequence (no color / style applied)
-                log(formatted.substr(last_read_position, start - last_read_position), { }, { });
-                
-                // Find the end of the escape sequence, denoted by an 'm'
-                std::size_t end = formatted.find('m', start);
-                if (end == std::string::npos) {
-                    throw FormattedError("unterminated ANSI escape sequence at position {}", start);
-                }
-
-                std::string_view sequence = std::string_view(formatted).substr(start + 2, end - start - 2);
-                std::size_t offset = 0;
-                
-                std::optional<Style> style { };
-                std::optional<Color> color { };
-                
-                // Parse individual codes separated by ';'
-                while (offset < sequence.length()) {
-                    std::size_t next = sequence.find(';', offset);
-                    std::string_view code = sequence.substr(offset, next - offset);
-                    
-                    if (code == "1") {
-                        // Bold
-                        style = Style::Bold;
-                    }
-                    else if (code == "3") {
-                        // Italicized
-                        style = Style::Italicized;
-                    }
-                    else if (code == "38") {
-                        // RGB color code
-                        offset += 5; // Skip 38;2;
-                        std::uint8_t r, g, b;
-                        
-                        auto parse_color_code = [&sequence, &offset](std::uint8_t& out) {
-                            std::size_t pos = sequence.find(';', offset);
-                            std::string_view value;
-                            if (pos == std::string::npos) {
-                                value = sequence.substr(offset); // No more semicolon, substring to the end
-                            }
-                            else {
-                                value = sequence.substr(offset, pos - offset);
-                            }
-                            
-                            std::from_chars(value.data(), value.data() + value.length(), out);
-
-                            if (pos == std::string::npos) {
-                                offset = sequence.length();
-                            }
-                            else {
-                                offset = pos + 1; // Skip ';'
-                            }
-                        };
-                        
-                        parse_color_code(r);
-                        
-                        if (offset == sequence.length()) {
-                            throw FormattedError("invalid ANSI escape sequence at position {} - color sequence must contain values for r, g, and b (38;2;{{r}};{{g}};{{b}}m)", start);
-                        }
-                        
-                        parse_color_code(g);
-                        
-                        if (offset == sequence.length()) {
-                            throw FormattedError("invalid ANSI escape sequence at position {} - color sequence must contain values for r, g, and b (38;2;{{r}};{{g}};{{b}}m)", start);
-                        }
-                        
-                        parse_color_code(b);
-                        
-                        color = { r, g, b };
-                    }
-                }
-                
-                start = formatted.find("\x1b[0m", end);
-                
-                std::string_view value = std::string_view(formatted).substr(end + 1, start - (end + 1));
-                
-                last_read_position = start + 4; // Skip past
-            }
+            std::string message = std::move(utils::format(m_format, NamedArgument("message", data.message),
+                                                                    NamedArgument("level", data.level),
+                        //                                            NamedArgument("date", data.timestamp.date),
+                                                                    NamedArgument("day", data.timestamp.date.day),
+                        //                                            NamedArgument("month", data.timestamp.date.month),
+                                                                    NamedArgument("year", data.timestamp.date.year),
+                        //                                            NamedArgument("time", data.timestamp.time),
+                                                                    NamedArgument("hour", data.timestamp.time.hour),
+                                                                    NamedArgument("minute", data.timestamp.time.minute),
+                                                                    NamedArgument("second", data.timestamp.time.second),
+                                                                    NamedArgument("millisecond", data.timestamp.time.millisecond),
+                                                                    NamedArgument("filename", data.source.file_name()),
+                                                                    NamedArgument("source", data.source),
+                                                                    NamedArgument("line", data.source.line()),
+                                                                    NamedArgument("thread_id", data.thread_id),
+                                                                    NamedArgument("tid", data.thread_id),
+                                                                    NamedArgument("process_id", data.process_id),
+                                                                    NamedArgument("pid", data.process_id)));
+            log(message, data);
         }
         
         void Sink::set_format(const std::string& format) {
@@ -380,14 +301,8 @@ namespace utils {
             m_enabled = false;
         }
         
-        void Sink::disable_structured_styling() {
-            m_parse_ansi_codes = false;
-        }
-        
         void Sink::flush() {
         }
-        
-
         
         FileSink::FileSink(const std::filesystem::path& filepath, std::ios::openmode open_mode, std::optional<std::string> format, Message::Level level) : Sink(filepath.stem().string(), std::move(format), level) {
             if (!std::filesystem::create_directories(filepath)) {
@@ -407,7 +322,8 @@ namespace utils {
             fclose(m_file);
         }
         
-        void FileSink::log(std::string_view message, std::optional<Style> style, std::optional<Color> color) {
+        void FileSink::log(std::string_view message, const Message& data) {
+            fwrite(message.data(), sizeof(char), message.length(), m_file);
         }
         
         void FileSink::flush() {
@@ -458,7 +374,7 @@ namespace utils {
         
         namespace detail {
             
-            void log(const Message& message) {
+            void log(Message& message) {
                 Logger::instance().log(message);
             }
             
@@ -508,10 +424,7 @@ namespace utils {
         
         const char* str;
         if (uppercase) {
-            if (level == Message::Level::Trace) {
-                str = "TRACE";
-            }
-            else if (level == Message::Level::Debug) {
+            if (level == Message::Level::Debug) {
                 str = "DEBUG";
             }
             else if (level == Message::Level::Info) {
@@ -528,9 +441,6 @@ namespace utils {
             }
         }
         else {
-            if (level == Message::Level::Trace) {
-                str = "trace";
-            }
             if (level == Message::Level::Debug) {
                 str = "debug";
             }

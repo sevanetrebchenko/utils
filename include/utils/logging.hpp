@@ -6,13 +6,19 @@
 
 #include "utils/datetime.hpp"
 #include "utils/string.hpp"
-#include "utils/colors.hpp"
-#include "utils/styles.hpp"
+#include "utils/platform.hpp"
 
 #include <string_view> // std::string_view
 #include <source_location> // std::source_location
 #include <filesystem> // std::filesystem
 #include <functional> // std::function
+#include <span> // std::span
+
+#if defined(PLATFORM_WINDOWS)
+    #include <Windows.h>
+#else
+    #include <unistd.h> // pid_t
+#endif
 
 namespace utils {
     
@@ -28,8 +34,7 @@ namespace utils {
             ~Message();
             
             enum class Level {
-                Trace = 0,
-                Debug,
+                Debug = 0,
                 Info,
                 Warning,
                 Error,
@@ -38,15 +43,20 @@ namespace utils {
             
             std::string_view format;
             std::source_location source;
-            std::string message;
             Timestamp timestamp;
-            std::string_view scope;
-            unsigned thread_id;
-            unsigned process_id;
+            std::string message;
+            
+            std::thread::id thread_id;
+            
+            #if defined(PLATFORM_WINDOWS)
+                DWORD process_id;
+            #else
+                pid_t process_id;
+            #endif
+            
+            // Scope that this message was logged from
+            std::span<std::string> scope;
         };
-        
-        template <typename ...Ts>
-        void trace(Message message, const Ts&... args);
         
         template <typename ...Ts>
         void info(Message message, const Ts&... args);
@@ -93,7 +103,8 @@ namespace utils {
                 explicit Sink(std::string name, std::optional<std::string> format = { }, Message::Level level = Message::Level::Info);
                 virtual ~Sink();
                 
-                void log(const Message& message);
+                void log(const Message& data);
+                virtual void flush();
                 
                 void set_format(const std::string& format);
                 void reset_format(); // Resets Sink format string to the default
@@ -106,22 +117,14 @@ namespace utils {
                 
                 void enable();
                 void disable();
-                
-            protected:
-                // By default, log messages with ANSI escape codes are parsed out and flushed in substrings, where 'message' contains only the substring contents and 'style' and 'color' contain explicit styling parameters
-                // This prevents forcing derived Sink implementations to parse ANSI codes out individually, especially when the Sink target does not support ANSI escape codes
-                // With structured styling disabled, log messages are passed through to the derived implementation unmodified ('style' and 'color' parameters are not used)
-                void disable_structured_styling();
-                
+
             private:
-                virtual void log(std::string_view message, std::optional<Style> style, std::optional<Color> color) = 0;
-                virtual void flush();
+                virtual void log(std::string_view message, const Message& data) = 0;
                 
                 std::string m_name;
                 Message::Level m_level;
                 std::mutex m_lock;
                 std::string m_format;
-                bool m_parse_ansi_codes;
                 bool m_enabled;
         };
         
@@ -133,7 +136,7 @@ namespace utils {
             private:
                 [[nodiscard]] static const char* convert_to_c_open_mode(std::ios::openmode open_mode);
                 
-                void log(std::string_view message, std::optional<Style> style, std::optional<Color> color) override;
+                void log(std::string_view message, const Message& data) override;
                 void flush() override;
                 
                 FILE* m_file;

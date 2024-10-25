@@ -14,16 +14,16 @@ struct MyContainer {
 };
 
 namespace mynamespace {
-    
+
     struct MyType {
-    
-    
+
+
     };
-    
+
     [[nodiscard]] std::string to_string(const MyType& t) {
         return "custom type no formatting";
     }
-    
+
 }
 
 int main() {
@@ -71,13 +71,13 @@ int main() {
 //    formatting["b"] = "56";
 //    formatting["c"] = "5.2";
 //    formatting["d"] = "this is a string";
-    
+
 //    auto list = to_placeholder_list(std::source_location::current());
-    
+
     // std::cout << from_string<unsigned>("12344123123123123123") << std::endl;
 
     // std::cout << utils::format("example format string '{:representation=[scientific],precision=[1]}'", std::numeric_limits<double>::max() - 1) << std::endl;
-    
+
 //    std::string str = "this is a string";
 //    std::string_view strv = "this is a string view";
 //    const char* ccp = "ccp";
@@ -103,7 +103,7 @@ int main() {
     Formatter<int> formatter { };
     std::string r = formatter.format(42);
     std::cout << r << std::endl;
-    
+
 //    try {
 //        std::cout << utils::format("asdf {}", 36) << '\n';
 //    }
@@ -117,7 +117,7 @@ int main() {
         { 3, 3.3f },
         { 4, 4.4f },
     };
-    
+
 //    std::cout << utils::format("this is a format string {:justification=[right],fill_character=[-],width=[60]::precision=[2]}", a) << std::endl;
 //
 //    int c = 42;
@@ -135,17 +135,21 @@ int main() {
 //
 //    std::cout << utils::format("'{}'", vector) << std::endl;
 
-    utils::logging::warning("this is a test message {:color=[black]}", 6);
-    
+    utils::logging::debug("this is a test message {}\n", 5624236);
+    utils::logging::info("this is a test message {}\n", 5624236);
+    utils::logging::warning("this is a test message {}\n", 5624236);
+    utils::logging::error("this is a test message {}\n", 5624236);
+    utils::logging::fatal("this is a test message {}\n", 5624236);
+
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
-    
+
 //    std::cout << utils::format("example format string '{string:width=[15]}'", NamedArgument("string", std::source_location::current())) << std::endl;
 //    std::cout << utils::format("example format string '{}'", strv) << std::endl;
 //    std::cout << utils::format("example format string '{}'", ccp) << std::endl;
 //    std::cout << utils::format("example format string '{}'", ca) << std::endl;
 //    std::cout << utils::format("example format string '{}'", cca) << std::endl;
 //    std::cout << utils::format("example format string '{}'", c) << std::endl;
-    
+
 //    std::size_t amount = 1000000;
 //
 //    auto start = std::chrono::high_resolution_clock::now();
@@ -170,6 +174,7 @@ int main() {
 //        total += duration;
 //    }
 //    std::cout << "average time per format: " << total / amount << std::endl;
-    
+
     return 0;
 }
+

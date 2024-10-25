@@ -10,16 +10,9 @@ namespace utils::logging {
     
     namespace detail {
         
-        void log(const Message& message);
+        void log(Message& message);
         void add_sink(const std::shared_ptr<Sink>& sink);
     
-    }
-    
-    template <typename ...Ts>
-    void trace(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args...);
-        message.level = Message::Level::Trace;
-        detail::log(message);
     }
     
     template <typename ...Ts>

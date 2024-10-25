@@ -5,8 +5,6 @@
 #define STRING_HPP
 
 #include "utils/concepts.hpp"
-#include "utils/colors.hpp"
-#include "utils/styles.hpp"
 
 #include <string> // std::string
 #include <source_location> // std::source_location
@@ -182,9 +180,6 @@ namespace utils {
         
         std::size_t width;
         char fill_character;
-        
-        Style style;
-        std::optional<Color> color;
     };
     
     template <typename T>

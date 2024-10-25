@@ -537,6 +537,7 @@ namespace utils {
                 num_characters = (std::size_t) (std::log10(-value) + 1u) + 1u;
             }
             else {
+                // TODO: log10 of 0 is undefined
                 num_characters = (std::size_t) (std::log10(value) + 1u) + (sign != Sign::NegativeOnly);
             }
         }
