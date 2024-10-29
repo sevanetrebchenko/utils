@@ -148,7 +148,7 @@ namespace utils {
             std::string format(const Date& date) const;
             
         private:
-        
+            std::string_view m_format;
     };
     
     template <>

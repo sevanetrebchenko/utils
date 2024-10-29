@@ -136,7 +136,7 @@ int main() {
 //    std::cout << utils::format("'{}'", vector) << std::endl;
 
     try {
-        utils::logging::info("nested {first:format=[{width}-[[[{{as}d],fill_character=[.]}", NamedArgument("first", 0), NamedArgument("source", 10));
+        logging::info("nested {date:format=[{day:width=[10],fill=[.]}-{month}]}", NamedArgument("date", Date::today()));
     }
     catch (std::runtime_error& e) {
         std::cerr << e.what() << std::endl;

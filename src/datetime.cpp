@@ -379,4 +379,31 @@ namespace utils {
         return date >= other.date && time >= other.time;
     }
     
+    // datetime Formatter implementations
+    
+    Formatter<Date>::Formatter() : m_format() {
+    
+    }
+    
+    Formatter<Date>::~Formatter() = default;
+    
+    void Formatter<Date>::parse(const utils::FormatSpec& spec) {
+        if (spec.type() == FormatSpec::Type::SpecifierList) {
+            if (spec.has_specifier("format")) {
+                m_format = spec.get_specifier("format");
+            }
+        }
+        else {
+            // TODO:
+        }
+    }
+    
+    std::string Formatter<Date>::format(const Date& date) const {
+        if (!m_format.empty()) {
+            return utils::format(m_format, NamedArgument("day", date.day), NamedArgument("month", (std::uint8_t)date.month), NamedArgument("year", date.year));
+        }
+        
+        return "";
+    }
+    
 }
