@@ -4,6 +4,8 @@
 #ifndef DATETIME_HPP
 #define DATETIME_HPP
 
+#include "utils/string.hpp"
+
 #include <cstdint> // std::uint8_t, std::uint16_t, std::uint32_t
 #include <chrono> // std::chrono
 
@@ -117,6 +119,58 @@ namespace utils {
 
         Date date;
         Time time;
+    };
+    
+    // datetime Formatter definitions
+    
+    template <>
+    struct Formatter<Month> : public FormatterBase {
+        void parse(const FormatSpec& spec);
+        std::string format(const Month& month) const;
+    };
+    
+    template <>
+    struct Formatter<Weekday> : public Formatter<const char*> {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(const Weekday& date) const;
+    };
+
+    template <>
+    class Formatter<Date> : public FormatterBase {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Date& date) const;
+            
+        private:
+        
+    };
+    
+    template <>
+    class Formatter<Time> : public FormatterBase {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Time& date) const;
+            
+        private:
+        
+    };
+    
+    template <>
+    struct Formatter<Timestamp> : public Formatter<Date>, Formatter<Time> {
+        Formatter();
+        ~Formatter();
+        
+        void parse(const FormatSpec& spec);
+        std::string format(const Timestamp& date) const;
     };
     
 }

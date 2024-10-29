@@ -1,6 +1,8 @@
 
 #include "utils/string.hpp"
 #include "utils/exceptions.hpp"
+#include "utils/detail/string.tpp"
+
 
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
@@ -8,7 +10,7 @@
 namespace utils {
 
     namespace detail {
-
+        
         Identifier::Identifier() : type(Type::Auto),
                                    position(std::numeric_limits<std::size_t>::max()),
                                    name() {
@@ -69,8 +71,8 @@ namespace utils {
 
             return offset;
         }
-
-        std::size_t parse_specifier(std::string_view in, Specifier& out) {
+        
+        std::size_t parse_specifier_name(std::string_view in, std::string_view& out) {
             std::size_t length = in.length();
             std::size_t i = 0;
 
@@ -78,65 +80,119 @@ namespace utils {
             while (std::isalpha(in[i]) || (in[i] == '_') || (i && std::isdigit(in[i]))) {
                 ++i;
             }
-
-            if (in[i] != '=') {
-                return i;
-            }
-
-            out.name = in.substr(0, i);
-
-            // Skip separator '='
-            ++i;
-
-            if (in[i] != '[') {
-                return i;
-            }
-
-            // Skip opening brace '['
-            std::size_t value_start = ++i;
-
-            while (i < length) {
-                if (in[i] == '[') {
-                    if (i + 1 == length || in[i + 1] != '[') {
-                        // Unterminated / unescaped opening braces are not allowed
-                        return i;
-                    }
-
-                    // Skip escaped opening brace ']'
-                    ++i;
-                }
-                else if (in[i] == ']') {
-                    if (i + 1 == length || in[i + 1] != ']') {
-                        break;
-                    }
-
-                    // Skip escaped closing brace ']'
-                    ++i;
-                }
-
-                ++i;
-            }
-
-            out.value = in.substr(value_start, i - value_start);
-            return i + 1;
+            
+            out = in.substr(0, i);
+            return i;
         }
-
-        void parse_specifier_value(std::string_view value, std::string& out) {
-            if (value.empty()) {
-                return;
-            }
-
-            std::size_t length = value.length();
-            out.reserve(length);
-
-            // Replace escaped brace characters
-            for (std::size_t i = 0; i < length; ++i) {
-                if (i + 1 < length && ((value[i] == '[' && value[i + 1] == '[') || (value[i] == ']' && value[i + 1] == ']'))) {
-                    // Push back only one brace character
+        
+        std::size_t parse_specifier_value(std::string_view in, std::string_view name, std::string& out) {
+            std::size_t length = in.length();
+            std::size_t i = 0;
+            std::size_t last_read_position = i;
+            
+            if (icasecmp(name, "format")) {
+                // Specifiers containing nested format strings are parsed differently
+                bool processing_placeholder = false;
+                
+                while (i < length) {
+                    if (processing_placeholder) {
+                        if (in[i] == '}') {
+                            if (i + 1 == length) {
+                                break;
+                            }
+                            
+                            if (in[i + 1] == '}') {
+                                // Skip escaped closing brace '}}'
+                                ++i;
+                            }
+                            else {
+                                processing_placeholder = false;
+                            }
+                        }
+                        // Do not escape format specifier braces '[' and ']' when processing a nested placeholder
+                    }
+                    else {
+                        if (in[i] == '{') {
+                            if (i + 1 == length) {
+                                break;
+                            }
+                            
+                            if (in[i + 1] == '{') {
+                                // Skip escaped opening brace '{{'
+                                ++i;
+                            }
+                            else {
+                                processing_placeholder = true;
+                            }
+                        }
+                        else if (in[i] == '[') {
+                            if (i + 1 == length) {
+                                return length;
+                            }
+                            
+                            if (in[i + 1] == '[') {
+                                // Escaped opening brace '[['
+                                // Append everything up until (and including) the first brace
+                                out.append(in, last_read_position, i - last_read_position + 1);
+                                
+                                // Skip second brace
+                                ++i;
+                                last_read_position = i + 1;
+                            }
+                            else {
+                                // Unterminated / unescaped opening braces are not allowed
+                                return i;
+                            }
+                        }
+                        else if (in[i] == ']') {
+                            if (i + 1 == length || in[i + 1] != ']') {
+                                break;
+                            }
+                            
+                            // Escaped closing brace ']]'
+                            // Append everything up until (and including) the first brace
+                            out.append(in, last_read_position, i - last_read_position + 1);
+                            
+                            // Skip second brace
+                            ++i;
+                            last_read_position = i + 1;
+                        }
+                    }
+                    
                     ++i;
                 }
-                out.push_back(value[i]);
             }
+            else {
+                while (i < length) {
+                    if (in[i] == '[') {
+                        if (i + 1 == length || in[i + 1] != '[') {
+                            // Unterminated / unescaped opening braces are not allowed
+                            return i;
+                        }
+    
+                        // Skip escaped opening brace ']'
+                        ++i;
+                    }
+                    else if (in[i] == ']') {
+                        if (i + 1 == length || in[i + 1] != ']') {
+                            break;
+                        }
+    
+                        // Skip escaped closing brace ']'
+                        ++i;
+                    }
+    
+                    ++i;
+                }
+            }
+            
+            if (i != last_read_position) {
+                // Append any remaining characters
+                out.append(in, last_read_position, i - last_read_position);
+            }
+            
+            // Skip closing brace ']'
+            return i + 1;
         }
 
         std::size_t parse_format_spec(std::string_view in, FormatSpec& out, bool nested) {
@@ -179,16 +235,26 @@ namespace utils {
                 else {
                     // Parse format specifiers
                     while (true) {
-                        Specifier specifier { };
-                        i += parse_specifier(in.substr(i), specifier);
-
-                        // Format specifiers must be unique
-                        if (out[group].has_specifier(specifier.name)) {
-                            throw;
+                        std::string_view name;
+                        i += parse_specifier_name(in.substr(i), name);
+                        
+                        if (in[i] != '=') {
+                            // Specifier name and value must be separated by '='
+                            return i;
                         }
 
-                        parse_specifier_value(specifier.value, out[group][specifier.name]);
-
+                        // Skip separator '='
+                        ++i;
+                        
+                        if (out[group].has_specifier(name)) {
+                            throw std::runtime_error(utils::format("encountered multiple format specifiers using the same identifier: '{}' - format specifiers must be unique", name));
+                        }
+                        
+                        // Skip opening brace '['
+                        ++i;
+                        
+                        i += parse_specifier_value(in.substr(i), name, out[group][name]);
+                        
                         if (in[i] == ',') {
                             // Skip format specifier separator
                             ++i;
@@ -316,7 +382,7 @@ namespace utils {
                 }
             }
         }
-
+        
     }
 
     [[nodiscard]] std::vector<std::string_view> split(std::string_view in, std::string_view delimiter) {
@@ -871,9 +937,7 @@ namespace utils {
             write_position = (capacity - length) / 2;
         }
 
-        result.replace(write_position, length, value);
-        write_position += length;
-
+        result.replace(write_position, length, value, length);
         return std::move(result);
     }
     

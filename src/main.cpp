@@ -135,11 +135,18 @@ int main() {
 //
 //    std::cout << utils::format("'{}'", vector) << std::endl;
 
-    utils::logging::debug("this is a test message {}\n", 5624236);
-    utils::logging::info("this is a test message {}\n", 5624236);
-    utils::logging::warning("this is a test message {}\n", 5624236);
-    utils::logging::error("this is a test message {}\n", 5624236);
-    utils::logging::fatal("this is a test message {}\n", 5624236);
+    try {
+        utils::logging::info("nested {first:format=[{width}-[[[{{as}d],fill_character=[.]}", NamedArgument("first", 0), NamedArgument("source", 10));
+    }
+    catch (std::runtime_error& e) {
+        std::cerr << e.what() << std::endl;
+    }
+
+//    utils::logging::debug("this is a test message {}\n", 5624236);
+//    utils::logging::info("this is a test message {}\n", 5624236);
+//    utils::logging::warning("this is a test message {}\n", 5624236);
+//    utils::logging::error("this is a test message {}\n", 5624236);
+//    utils::logging::fatal("this is a test message {}\n", 5624236);
 
 //    std::cout << utils::format("{:representation=[decimal],use_separator_character=[1],sign=[both]}", std::numeric_limits<long double>::max()) << std::endl;
 

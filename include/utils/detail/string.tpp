@@ -34,11 +34,6 @@ namespace utils {
             std::string_view name;
         };
         
-        struct Specifier {
-            std::string_view name;
-            std::string_view value;
-        };
-        
         char nibble_to_hexadecimal(const char nibble[4]);
         
         // Returns the number of characters read
@@ -98,6 +93,15 @@ namespace utils {
                 }, tuple, num_positional_arguments, num_arguments);
             }
         }
+        
+        // For overriding source location in external function calls
+        template <typename T>
+        struct is_named_source_location : std::false_type {
+        };
+        
+        template <>
+        struct is_named_source_location<NamedArgument<std::source_location>> : std::true_type {
+        };
         
     }
     
@@ -239,7 +243,7 @@ namespace utils {
     template <typename ...Ts>
     std::string format(const FormatString& str, const Ts&... args) {
         std::string_view fmt = str.format;
-        const std::source_location& source = str.source;
+        std::source_location source = str.source;
         
         if (fmt.empty()) {
             return "";
@@ -255,6 +259,15 @@ namespace utils {
         
         if constexpr (num_arguments) {
             std::tuple<typename std::decay<const Ts>::type...> tuple = std::make_tuple(args...);
+            
+            // 'source' is overridden by the implementation to reference external function calls
+            utils::apply([&source]<typename T>(const T& arg) {
+                if constexpr (detail::is_named_source_location<T>::value) {
+                    if (icasecmp(arg.name, "__source")) {
+                        source = arg.value;
+                    }
+                }
+            }, tuple);
             
             std::optional<detail::Identifier::Type> type { };
             std::size_t argument_index = 0u; // Used only for auto-numbered format strings
@@ -281,7 +294,7 @@ namespace utils {
                         i += parse_identifier(fmt.substr(i), identifier);
                         if (fmt[i] != ':' && fmt[i] != '}') {
                             // Expecting format spec separator ':' or placeholder closing brace '}'
-                            throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting format spec separator ':' or placeholder closing brace '}' ({})", fmt[i], i, source));
+                            throw std::runtime_error(utils::format("invalid character '{}' at position {} ({})", fmt[i], i, source));
                         }
                         
                         if (!type) {
@@ -304,7 +317,7 @@ namespace utils {
                             
                             i += detail::parse_format_spec(fmt.substr(i, length - i), spec);
                             if (fmt[i] != '}') {
-                                throw std::runtime_error(utils::format("invalid character '{}' at position {} - expecting placeholder closing brace '}' ({})", fmt[i], i, source));
+                                throw std::runtime_error(utils::format("invalid character '{}' at position {} ({})", fmt[i], i, source));
                             }
                         }
     
@@ -347,7 +360,7 @@ namespace utils {
                                 }, tuple);
                                 
                                 if (!formatted) {
-                                    throw std::runtime_error(utils::format("invalid format string - missing NamedArgument for placeholder '{}' at position {{ ({})", identifier.name, i, source));
+                                    throw std::runtime_error(utils::format("invalid format string - missing NamedArgument for placeholder '{}' at position {} ({})", identifier.name, i, source));
                                 }
                                 break;
                             }
@@ -366,7 +379,7 @@ namespace utils {
                         last_read_position = i + 1u; // Skip to the next character after the second brace
                     }
                     else {
-                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}' ({})", i, source));
+                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}}}' ({})", i, source));
                     }
                 }
                 
@@ -537,12 +550,23 @@ namespace utils {
                 num_characters = (std::size_t) (std::log10(-value) + 1u) + 1u;
             }
             else {
-                // TODO: log10 of 0 is undefined
-                num_characters = (std::size_t) (std::log10(value) + 1u) + (sign != Sign::NegativeOnly);
+                if (value == 0) {
+                    // std::log10(0) = 0
+                    num_characters = 1;
+                }
+                else {
+                    num_characters = (std::size_t) (std::log10(value) + 1u) + (sign != Sign::NegativeOnly);
+                }
             }
         }
         else {
-            num_characters = (std::size_t) (std::log10(value) + 1u) + (sign != Sign::NegativeOnly);
+            if (value == 0) {
+                // std::log10(0) = 0
+                num_characters = 1;
+            }
+            else {
+                num_characters = (std::size_t) (std::log10(value) + 1u) + (sign != Sign::NegativeOnly);
+            }
         }
 
         bool _use_separator_character = use_separator_character && *use_separator_character;

@@ -256,24 +256,25 @@ namespace utils {
             }
             
             std::lock_guard guard { m_lock };
-            std::string message = std::move(utils::format(m_format, NamedArgument("message", data.message),
-                                                                    NamedArgument("level", data.level),
-                        //                                            NamedArgument("date", data.timestamp.date),
-                                                                    NamedArgument("day", data.timestamp.date.day),
-                        //                                            NamedArgument("month", data.timestamp.date.month),
-                                                                    NamedArgument("year", data.timestamp.date.year),
-                        //                                            NamedArgument("time", data.timestamp.time),
-                                                                    NamedArgument("hour", data.timestamp.time.hour),
-                                                                    NamedArgument("minute", data.timestamp.time.minute),
-                                                                    NamedArgument("second", data.timestamp.time.second),
-                                                                    NamedArgument("millisecond", data.timestamp.time.millisecond),
-                                                                    NamedArgument("filename", data.source.file_name()),
-                                                                    NamedArgument("source", data.source),
-                                                                    NamedArgument("line", data.source.line()),
-                                                                    NamedArgument("thread_id", data.thread_id),
-                                                                    NamedArgument("tid", data.thread_id),
-                                                                    NamedArgument("process_id", data.process_id),
-                                                                    NamedArgument("pid", data.process_id)));
+            std::string message = utils::format(m_format, NamedArgument("message", data.message),
+                                                          NamedArgument("level", data.level),
+//                                                          NamedArgument("timestamp", data.timestamp),
+//                                                          NamedArgument("date", data.timestamp.date),
+//                                                          NamedArgument("day", data.timestamp.date.day),
+//                                                          NamedArgument("month", data.timestamp.date.month),
+//                                                          NamedArgument("year", data.timestamp.date.year),
+//                                                          NamedArgument("time", data.timestamp.time),
+//                                                          NamedArgument("hour", data.timestamp.time.hour),
+//                                                          NamedArgument("minute", data.timestamp.time.minute),
+//                                                          NamedArgument("second", data.timestamp.time.second),
+//                                                          NamedArgument("millisecond", data.timestamp.time.millisecond),
+//                                                          NamedArgument("source", data.source),
+//                                                          NamedArgument("filename", data.source.file_name()),
+//                                                          NamedArgument("line", data.source.line()),
+                                                          NamedArgument("thread_id", data.thread_id),
+                                                          NamedArgument("tid", data.thread_id),
+                                                          NamedArgument("process_id", data.process_id),
+                                                          NamedArgument("pid", data.process_id));
             log(message, data);
         }
         
