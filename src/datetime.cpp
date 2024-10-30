@@ -381,6 +381,246 @@ namespace utils {
     
     // datetime Formatter implementations
     
+    Formatter<Month>::Formatter() : FormatterBase(),
+                                    representation(Representation::Decimal) {
+    }
+
+    Formatter<Month>::~Formatter() {
+    }
+    
+    void Formatter<Month>::parse(const utils::FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Month types must be a specifier list");
+        if (spec.has_specifier("representation")) {
+            std::string_view value = spec.get_specifier("representation");
+            if (icasecmp(value, "decimal")) {
+                representation = Representation::Decimal;
+            }
+            else if (icasecmp(value, "full")) {
+                representation = Representation::Full;
+            }
+            else if (icasecmp(value, "abbreviated")) {
+                representation == Representation::Abbreviated;
+            }
+        }
+        
+        FormatterBase::parse(spec);
+    }
+    
+    std::string Formatter<Month>::format(const Month& month) const {
+        if (representation == Representation::Decimal) {
+            return to_decimal(month);
+        }
+        else if (representation == Representation::Full) {
+            return to_full_name(month);
+        }
+        else { // if (representation == Representation::Abbreviated) {
+            return to_abbreviated_name(month);
+        }
+    }
+    
+    std::string Formatter<Month>::to_decimal(const Month& month) const {
+        if (month == January) {
+            return std::move(FormatterBase::format("1", 1));
+        }
+        else if (month == February) {
+            return std::move(FormatterBase::format("2", 1));
+        }
+        else if (month == March) {
+            return std::move(FormatterBase::format("3", 1));
+        }
+        else if (month == April) {
+            return std::move(FormatterBase::format("4", 1));
+        }
+        else if (month == May) {
+            return std::move(FormatterBase::format("5", 1));
+        }
+        else if (month == June) {
+            return std::move(FormatterBase::format("6", 1));
+        }
+        else if (month == July) {
+            return std::move(FormatterBase::format("7", 1));
+        }
+        else if (month == August) {
+            return std::move(FormatterBase::format("8", 1));
+        }
+        else if (month == September) {
+            return std::move(FormatterBase::format("9", 1));
+        }
+        else if (month == October) {
+            return std::move(FormatterBase::format("10", 2));
+        }
+        else if (month == November) {
+            return std::move(FormatterBase::format("11", 2));
+        }
+        else { // if (month == December) {
+            return std::move(FormatterBase::format("12", 2));
+        }
+    }
+    
+    std::string Formatter<Month>::to_full_name(const Month& month) const {
+        if (month == January) {
+            return std::move(FormatterBase::format("January", 7));
+        }
+        else if (month == February) {
+            return std::move(FormatterBase::format("February", 8));
+        }
+        else if (month == March) {
+            return std::move(FormatterBase::format("March", 5));
+        }
+        else if (month == April) {
+            return std::move(FormatterBase::format("April", 5));
+        }
+        else if (month == May) {
+            return std::move(FormatterBase::format("May", 3));
+        }
+        else if (month == June) {
+            return std::move(FormatterBase::format("June", 4));
+        }
+        else if (month == July) {
+            return std::move(FormatterBase::format("July", 4));
+        }
+        else if (month == August) {
+            return std::move(FormatterBase::format("August", 6));
+        }
+        else if (month == September) {
+            return std::move(FormatterBase::format("September", 9));
+        }
+        else if (month == October) {
+            return std::move(FormatterBase::format("October", 7));
+        }
+        else if (month == November) {
+            return std::move(FormatterBase::format("November", 8));
+        }
+        else { // if (month == December) {
+            return std::move(FormatterBase::format("December", 8));
+        }
+    }
+    
+    std::string Formatter<Month>::to_abbreviated_name(const Month& month) const {
+        const char* name;
+        
+        if (month == January) {
+            name = "Jan";
+        }
+        else if (month == February) {
+            name = "Feb";
+        }
+        else if (month == March) {
+            name = "Mar";
+        }
+        else if (month == April) {
+            name = "Apr";
+        }
+        else if (month == May) {
+            name = "May";
+        }
+        else if (month == June) {
+            name = "Jun";
+        }
+        else if (month == July) {
+            name = "Jul";
+        }
+        else if (month == August) {
+            name = "Aug";
+        }
+        else if (month == September) {
+            name = "Sep";
+        }
+        else if (month == October) {
+            name = "Oct";
+        }
+        else if (month == November) {
+            name = "Nov";
+        }
+        else { // if (month == December) {
+            name = "Dec";
+        }
+        
+        return std::move(FormatterBase::format(name, 3));
+    }
+    
+    Formatter<Weekday>::Formatter() : Formatter<const char*>(),
+                                      representation(Representation::Full) {
+    }
+
+    Formatter<Weekday>::~Formatter() {
+    }
+
+    void Formatter<Weekday>::parse(const utils::FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Weekday types must be a specifier list");
+        if (spec.has_specifier("representation")) {
+            std::string_view value = spec.get_specifier("representation");
+            if (icasecmp(value, "full")) {
+                representation = Representation::Full;
+            }
+            else if (icasecmp(value, "abbreviated")) {
+                representation == Representation::Abbreviated;
+            }
+        }
+        Formatter<const char*>::parse(spec);
+    }
+    
+    std::string Formatter<Weekday>::format(const Weekday& weekday) const {
+        if (representation == Representation::Full) {
+            return to_full_name(weekday);
+        }
+        else { // if (representation == Representation::Abbreviated) {
+            return to_abbreviated_name(weekday);
+        }
+    }
+    
+    std::string Formatter<Weekday>::to_full_name(const Weekday& weekday) const {
+        if (weekday == Monday) {
+            return std::move(Formatter<const char*>::format("Monday", 6));
+        }
+        else if (weekday == Tuesday) {
+            return std::move(Formatter<const char*>::format("Tuesday", 7));
+        }
+        else if (weekday == Wednesday) {
+            return std::move(Formatter<const char*>::format("Wednesday", 9));
+        }
+        else if (weekday == Thursday) {
+            return std::move(Formatter<const char*>::format("Thursday", 8));
+        }
+        else if (weekday == Friday) {
+            return std::move(Formatter<const char*>::format("Friday", 6));
+        }
+        else if (weekday == Saturday) {
+            return std::move(Formatter<const char*>::format("Saturday", 8));
+        }
+        else { // if (weekday == Sunday) {
+            return std::move(Formatter<const char*>::format("Sunday", 6));
+        }
+    }
+    
+    std::string Formatter<Weekday>::to_abbreviated_name(const Weekday& weekday) const {
+        const char* name;
+
+        if (weekday == Monday) {
+            name = "Mon";
+        }
+        else if (weekday == Tuesday) {
+            name = "Tue";
+        }
+        else if (weekday == Wednesday) {
+            name = "Wed";
+        }
+        else if (weekday == Thursday) {
+            name = "Thu";
+        }
+        else if (weekday == Friday) {
+            name = "Fri";
+        }
+        else if (weekday == Saturday) {
+            name = "Sat";
+        }
+        else { // if (weekday == Sunday) {
+            name = "Sun";
+        }
+
+        return std::move(Formatter<const char*>::format(name, 3));
+    }
+    
     Formatter<Date>::Formatter() : m_format() {
     
     }
@@ -399,8 +639,8 @@ namespace utils {
     }
     
     std::string Formatter<Date>::format(const Date& date) const {
-        if (!m_format.empty()) {
-            return utils::format(m_format, NamedArgument("day", date.day), NamedArgument("month", (std::uint8_t)date.month), NamedArgument("year", date.year));
+        if (m_format) {
+            return utils::format(*m_format, NamedArgument("day", date.day), NamedArgument("weekday", date.weekday()), NamedArgument("month", date.month), NamedArgument("year", date.year));
         }
         
         return "";

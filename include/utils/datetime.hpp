@@ -26,7 +26,7 @@ namespace utils {
         December
     };
 
-    enum class Weekday {
+    enum Weekday {
         Monday = 0,
         Tuesday,
         Wednesday,
@@ -124,18 +124,44 @@ namespace utils {
     // datetime Formatter definitions
     
     template <>
-    struct Formatter<Month> : public FormatterBase {
-        void parse(const FormatSpec& spec);
-        std::string format(const Month& month) const;
+    class Formatter<Month> : public FormatterBase {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Month& month) const;
+    
+            enum class Representation : std::uint8_t {
+                Decimal = 0,
+                Full,
+                // ex. Jan instead of January
+                Abbreviated
+            } representation;
+        
+        private:
+            inline std::string to_decimal(const Month& month) const;
+            inline std::string to_full_name(const Month& month) const;
+            inline std::string to_abbreviated_name(const Month& month) const;
     };
     
     template <>
-    struct Formatter<Weekday> : public Formatter<const char*> {
-        Formatter();
-        ~Formatter();
-        
-        void parse(const FormatSpec& spec);
-        std::string format(const Weekday& date) const;
+    class Formatter<Weekday> : public Formatter<const char*> {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Weekday& weekday) const;
+            
+            enum class Representation : std::uint8_t {
+                Full = 0,
+                Abbreviated
+            } representation;
+            
+        private:
+            inline std::string to_full_name(const Weekday& weekday) const;
+            inline std::string to_abbreviated_name(const Weekday& weekday) const;
     };
 
     template <>
@@ -148,7 +174,11 @@ namespace utils {
             std::string format(const Date& date) const;
             
         private:
-            std::string_view m_format;
+            std::optional<std::string_view> m_format;
+            
+            Formatter<std::uint32_t> m_year_formatter;
+            Formatter<Month> m_month_formatter;
+            Formatter<std::uint8_t> m_day_formatter;
     };
     
     template <>
