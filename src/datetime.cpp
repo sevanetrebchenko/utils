@@ -673,7 +673,7 @@ namespace utils {
                                                              NamedArgument("milliseconds", duration.to_milliseconds());
     }
     
-    Formatter<Date>::Formatter() : m_format("{month}/{day}/{year}") {
+    Formatter<Date>::Formatter() : m_format("{month:width=[2],fill=[0],justification=[right]}/{day:width=[2],fill=[0],justification=[right]}/{year}") {
     }
     
     Formatter<Date>::~Formatter() = default;
@@ -695,7 +695,7 @@ namespace utils {
     }
     
     Formatter<Time>::Formatter() : FormatterBase(),
-                                   m_format("{hour:width=[2],fill=[0]}:{minute:width=[2],fill=[0]}:{second:width=[2],fill=[0]}:{millisecond:width=[4],fill=[0]}") {
+                                   m_format("{hour:width=[2],fill=[0],justification=[right]}:{minute:width=[2],fill=[0],justification=[right]}:{second:width=[2],fill=[0],justification=[right]}:{millisecond:width=[4],fill=[0],justification=[right]}") {
     }
 
     Formatter<Time>::~Formatter() {
