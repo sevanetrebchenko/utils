@@ -11,6 +11,7 @@
 #include <string_view> // std::string_view
 #include <source_location> // std::source_location
 #include <filesystem> // std::filesystem
+#include <fstream> // std::ofstream
 #include <functional> // std::function
 #include <span> // std::span
 
@@ -134,12 +135,10 @@ namespace utils {
                 ~FileSink() override;
                 
             private:
-                [[nodiscard]] static const char* convert_to_c_open_mode(std::ios::openmode open_mode);
-                
                 void log(std::string_view message, const Message& data) override;
                 void flush() override;
                 
-                FILE* m_file;
+                std::ofstream m_file;
         };
         
         void set_default_format(std::string format);

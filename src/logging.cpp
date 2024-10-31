@@ -202,6 +202,8 @@ namespace utils {
                 // Info messages get printed using the default color
                 fwrite(message.data(), sizeof(char), message.length(), file);
             }
+            
+            fwrite("\n", sizeof(char), 1, file);
         }
         
         void ConsoleSink::flush() {
@@ -258,19 +260,19 @@ namespace utils {
             std::lock_guard guard { m_lock };
             std::string message = utils::format(m_format, NamedArgument("message", data.message),
                                                           NamedArgument("level", data.level),
-//                                                          NamedArgument("timestamp", data.timestamp),
-//                                                          NamedArgument("date", data.timestamp.date),
-//                                                          NamedArgument("day", data.timestamp.date.day),
-//                                                          NamedArgument("month", data.timestamp.date.month),
-//                                                          NamedArgument("year", data.timestamp.date.year),
-//                                                          NamedArgument("time", data.timestamp.time),
-//                                                          NamedArgument("hour", data.timestamp.time.hour),
-//                                                          NamedArgument("minute", data.timestamp.time.minute),
-//                                                          NamedArgument("second", data.timestamp.time.second),
-//                                                          NamedArgument("millisecond", data.timestamp.time.millisecond),
-//                                                          NamedArgument("source", data.source),
-//                                                          NamedArgument("filename", data.source.file_name()),
-//                                                          NamedArgument("line", data.source.line()),
+                                                          NamedArgument("timestamp", data.timestamp),
+                                                          NamedArgument("date", data.timestamp.date),
+                                                          NamedArgument("day", data.timestamp.date.day),
+                                                          NamedArgument("month", data.timestamp.date.month),
+                                                          NamedArgument("year", data.timestamp.date.year),
+                                                          NamedArgument("time", data.timestamp.time),
+                                                          NamedArgument("hour", data.timestamp.time.hour),
+                                                          NamedArgument("minute", data.timestamp.time.minute),
+                                                          NamedArgument("second", data.timestamp.time.second),
+                                                          NamedArgument("millisecond", data.timestamp.time.millisecond),
+                                                          NamedArgument("source", data.source),
+                                                          NamedArgument("filename", data.source.file_name()),
+                                                          NamedArgument("line", data.source.line()),
                                                           NamedArgument("thread_id", data.thread_id),
                                                           NamedArgument("tid", data.thread_id),
                                                           NamedArgument("process_id", data.process_id),
@@ -310,52 +312,20 @@ namespace utils {
                 throw std::runtime_error(utils::format("failed to create directories for path '{}'", filepath.parent_path()));
             }
     
-            const std::string& path = filepath.string();
-    
-            // fopen creates a new file if it does not exist
-            m_file = fopen(path.c_str(), convert_to_c_open_mode(open_mode));
-            if (!m_file) {
-                throw std::runtime_error(utils::format("failed to open file '{}'", path));
+            m_file = std::ofstream(filepath, open_mode);
+            if (!m_file.is_open()) {
+                throw std::runtime_error(utils::format("failed to open file '{}'", filepath));
             }
         }
         
-        FileSink::~FileSink() {
-            fclose(m_file);
-        }
+        FileSink::~FileSink() = default;
         
         void FileSink::log(std::string_view message, const Message& data) {
-            fwrite(message.data(), sizeof(char), message.length(), m_file);
+            m_file << message << '\n';
         }
         
         void FileSink::flush() {
-            fflush(m_file);
-        }
-        
-        const char* FileSink::convert_to_c_open_mode(std::ios::openmode open_mode) {
-            bool read = open_mode & std::ios::in;
-            bool write = open_mode & std::ios::out;
-            bool append = open_mode & std::ios::app;
-            bool truncate = open_mode & std::ios::trunc;
-            bool binary = open_mode & std::ios::binary;
-            if (write) {
-                if (append) {
-                    return binary ? "ab" : "a";
-                }
-                if (read) {
-                    if (truncate) {
-                        return binary ? "wb+" : "w+";
-                    }
-
-                    return binary ? "rb+" : "r+";
-                }
-                return binary ? "wb" : "w";
-            }
-
-            if (read) {
-                return binary ? "rb" : "r";
-            }
-
-            return nullptr;
+            m_file.flush();
         }
         
         void set_default_format(std::string format) {
