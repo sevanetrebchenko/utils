@@ -38,13 +38,20 @@ namespace utils {
 
     struct Duration {
         template <typename T>
-        Duration(std::chrono::duration<T> duration);
+        Duration(const std::chrono::duration<T>& duration);
         
         Duration(std::uint32_t milliseconds = 0, std::uint32_t seconds = 0, std::uint32_t minutes = 0, std::uint32_t hours = 0, std::uint32_t days = 0); // Automatically converts on overflow
         ~Duration();
 
         template <typename T>
         operator std::chrono::duration<T>() const;
+        
+        // Returns truncated values
+        std::uint32_t to_days() const;
+        std::uint32_t to_hours() const;
+        std::uint32_t to_minutes() const;
+        std::uint32_t to_seconds() const;
+        std::uint32_t to_milliseconds() const;
         
         std::uint32_t days;
         std::uint8_t hours; // ranges from 0 to 23
@@ -93,7 +100,7 @@ namespace utils {
         bool operator<(const Time& other) const;
         bool operator>=(const Time& other) const;
         bool operator<=(const Time& other) const;
-
+        
         std::uint32_t hour;
         std::uint8_t minute; // ranges from 0 to 59
         std::uint8_t second; // ranges from 0 to 59
@@ -156,6 +163,7 @@ namespace utils {
             
             enum class Representation : std::uint8_t {
                 Full = 0,
+                // ex. Mon instead of Monday
                 Abbreviated
             } representation;
             
@@ -164,6 +172,19 @@ namespace utils {
             inline std::string to_abbreviated_name(const Weekday& weekday) const;
     };
 
+    template <>
+    struct Formatter<Duration> : public FormatterBase {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Duration& duration) const;
+            
+        private:
+            std::string_view m_format;
+    };
+    
     template <>
     class Formatter<Date> : public FormatterBase {
         public:
@@ -174,11 +195,7 @@ namespace utils {
             std::string format(const Date& date) const;
             
         private:
-            std::optional<std::string_view> m_format;
-            
-            Formatter<std::uint32_t> m_year_formatter;
-            Formatter<Month> m_month_formatter;
-            Formatter<std::uint8_t> m_day_formatter;
+            std::string_view m_format;
     };
     
     template <>
@@ -188,21 +205,28 @@ namespace utils {
             ~Formatter();
             
             void parse(const FormatSpec& spec);
-            std::string format(const Time& date) const;
+            std::string format(const Time& time) const;
             
         private:
-        
+            std::string_view m_format;
     };
     
     template <>
-    struct Formatter<Timestamp> : public Formatter<Date>, Formatter<Time> {
-        Formatter();
-        ~Formatter();
-        
-        void parse(const FormatSpec& spec);
-        std::string format(const Timestamp& date) const;
+    class Formatter<Timestamp> : public FormatterBase {
+        public:
+            Formatter();
+            ~Formatter();
+            
+            void parse(const FormatSpec& spec);
+            std::string format(const Timestamp& timestamp) const;
+            
+        private:
+            std::string_view m_format;
     };
     
 }
+
+// Template definitions
+#include "utils/detail/datetime.tpp"
 
 #endif // DATETIME_HPP

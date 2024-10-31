@@ -45,6 +45,26 @@ namespace utils {
         days = d;
     }
     
+    std::uint32_t Duration::to_days() const {
+        return days;
+    }
+    
+    std::uint32_t Duration::to_hours() const {
+        return days * 24 + hours;
+    }
+    
+    std::uint32_t Duration::to_minutes() const {
+        return (days * 24 * 60) + (hours * 60) + minutes;
+    }
+    
+    std::uint32_t Duration::to_seconds() const {
+        return (days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds;
+    }
+    
+    std::uint32_t Duration::to_milliseconds() const {
+        return (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
+    }
+    
     Duration::~Duration() = default;
     
     Date Date::today() {
@@ -390,6 +410,7 @@ namespace utils {
     
     void Formatter<Month>::parse(const utils::FormatSpec& spec) {
         ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Month types must be a specifier list");
+        
         if (spec.has_specifier("representation")) {
             std::string_view value = spec.get_specifier("representation");
             if (icasecmp(value, "decimal")) {
@@ -399,7 +420,7 @@ namespace utils {
                 representation = Representation::Full;
             }
             else if (icasecmp(value, "abbreviated")) {
-                representation == Representation::Abbreviated;
+                representation = Representation::Abbreviated;
             }
         }
         
@@ -548,15 +569,17 @@ namespace utils {
 
     void Formatter<Weekday>::parse(const utils::FormatSpec& spec) {
         ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Weekday types must be a specifier list");
+        
         if (spec.has_specifier("representation")) {
             std::string_view value = spec.get_specifier("representation");
             if (icasecmp(value, "full")) {
                 representation = Representation::Full;
             }
             else if (icasecmp(value, "abbreviated")) {
-                representation == Representation::Abbreviated;
+                representation = Representation::Abbreviated;
             }
         }
+        
         Formatter<const char*>::parse(spec);
     }
     
@@ -621,29 +644,108 @@ namespace utils {
         return std::move(Formatter<const char*>::format(name, 3));
     }
     
-    Formatter<Date>::Formatter() : m_format() {
+    Formatter<Duration>::Formatter() : m_format() {
+    }
     
+    Formatter<Duration>::~Formatter() {
+    }
+
+    void Formatter<Duration>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Duration types must be a specifier list");
+        
+        if (spec.has_specifier("format")) {
+            m_format = spec.get_specifier("format");
+        }
+        
+        FormatterBase::parse(spec);
+    }
+    
+    std::string Formatter<Duration>::format(const Duration& duration) const {
+        return FormatterBase::format(utils::format(m_format, NamedArgument("d", duration.days),
+                                                             NamedArgument("h", duration.hours),
+                                                             NamedArgument("m", duration.minutes),
+                                                             NamedArgument("s", duration.seconds)));
+                                                             NamedArgument("ms", duration.milliseconds),
+                                                             NamedArgument("days", duration.to_days()),
+                                                             NamedArgument("hours", duration.to_hours()),
+                                                             NamedArgument("minutes", duration.to_minutes()),
+                                                             NamedArgument("seconds", duration.to_seconds()),
+                                                             NamedArgument("milliseconds", duration.to_milliseconds());
+    }
+    
+    Formatter<Date>::Formatter() : m_format("{month}/{day}/{year}") {
     }
     
     Formatter<Date>::~Formatter() = default;
     
-    void Formatter<Date>::parse(const utils::FormatSpec& spec) {
-        if (spec.type() == FormatSpec::Type::SpecifierList) {
-            if (spec.has_specifier("format")) {
-                m_format = spec.get_specifier("format");
-            }
+    void Formatter<Date>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Date types must be a specifier list");
+        
+        if (spec.has_specifier("format")) {
+            m_format = spec.get_specifier("format");
         }
-        else {
-            // TODO:
-        }
+        FormatterBase::parse(spec);
     }
     
     std::string Formatter<Date>::format(const Date& date) const {
-        if (m_format) {
-            return utils::format(*m_format, NamedArgument("day", date.day), NamedArgument("weekday", date.weekday()), NamedArgument("month", date.month), NamedArgument("year", date.year));
+        return FormatterBase::format(utils::format(m_format, NamedArgument("day", date.day),
+                                                             NamedArgument("weekday", date.weekday()),
+                                                             NamedArgument("month", date.month),
+                                                             NamedArgument("year", date.year)));
+    }
+    
+    Formatter<Time>::Formatter() : FormatterBase(),
+                                   m_format("{hour:width=[2],fill=[0]}:{minute:width=[2],fill=[0]}:{second:width=[2],fill=[0]}:{millisecond:width=[4],fill=[0]}") {
+    }
+
+    Formatter<Time>::~Formatter() {
+    }
+
+    void Formatter<Time>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Time types must be a specifier list");
+        
+        if (spec.has_specifier("format")) {
+            m_format = spec.get_specifier("format");
         }
         
-        return "";
+        FormatterBase::parse(spec);
+    }
+    
+    std::string Formatter<Time>::format(const Time& time) const {
+        return FormatterBase::format(utils::format(m_format, NamedArgument("hour", time.hour),
+                                                             NamedArgument("minute", time.minute),
+                                                             NamedArgument("second", time.second),
+                                                             NamedArgument("millisecond", time.millisecond)));
+    }
+    
+    Formatter<Timestamp>::Formatter() : FormatterBase(),
+                                        m_format("{date} {time}") {
+    }
+    
+    Formatter<Timestamp>::~Formatter() {
+    }
+
+    void Formatter<Timestamp>::parse(const FormatSpec& spec) {
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for Timestamp types must be a specifier list");
+        
+        if (spec.has_specifier("format")) {
+            m_format = spec.get_specifier("format");
+        }
+        
+        FormatterBase::parse(spec);
+    }
+    
+    std::string Formatter<Timestamp>::format(const Timestamp& timestamp) const {
+        return FormatterBase::format(utils::format(m_format, NamedArgument("date", timestamp.date),
+                                                             NamedArgument("day", timestamp.date.day),
+                                                             NamedArgument("weekday", timestamp.date.weekday()),
+                                                             NamedArgument("month", timestamp.date.month),
+                                                             NamedArgument("year", timestamp.date.year),
+                                                             NamedArgument("time", timestamp.time),
+                                                             NamedArgument("hour", timestamp.time.hour),
+                                                             NamedArgument("minute", timestamp.time.minute),
+                                                             NamedArgument("second", timestamp.time.second),
+                                                             NamedArgument("millisecond", timestamp.time.millisecond)));
     }
     
 }
