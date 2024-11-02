@@ -425,8 +425,7 @@ namespace utils {
             std::string format(const std::source_location& value) const;
             
         private:
-            Formatter<std::size_t> m_line_formatter;
-            Formatter<const char*> m_file_formatter;
+            std::string_view m_format;
     };
     
     // std::filesystem::path

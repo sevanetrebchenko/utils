@@ -1035,38 +1035,28 @@ namespace utils {
         }
     }
     
-    Formatter<std::source_location>::Formatter() : m_file_formatter(),
-                                                   m_line_formatter() {
+    Formatter<std::source_location>::Formatter() : FormatterBase(),
+                                                   m_format("{file}:{line}"){
     }
 
     Formatter<std::source_location>::~Formatter() = default;
 
     void Formatter<std::source_location>::parse(const FormatSpec& spec) {
-        if (spec.type() == FormatSpec::Type::SpecifierList) {
-            FormatterBase::parse(spec);
+        ASSERT(spec.type() == FormatSpec::Type::SpecifierList, "format spec for std::source_location must be a specifier list");
+        
+        if (spec.has_specifier("format")) {
+            m_format = spec.get_specifier("format");
         }
-        else {
-            if (spec.has_group(0)) {
-                const FormatSpec& group = spec.get_group(0);
-                ASSERT(group.type() == FormatSpec::Type::SpecifierList, "invalid std::source_location format spec - formatting group 0 must be a specifier list");
-                FormatterBase::parse(group);
-            }
-            if (spec.has_group(1)) {
-                const FormatSpec& group = spec.get_group(1);
-                ASSERT(group.type() == FormatSpec::Type::SpecifierList, "invalid std::source_location format spec - formatting group 1 (file) must be a specifier list");
-                m_file_formatter.parse(group);
-            }
-            if (spec.has_group(2)) {
-                const FormatSpec& group = spec.get_group(2);
-                ASSERT(group.type() == FormatSpec::Type::SpecifierList, "invalid std::source_location format spec - formatting group 2 (line) must be a specifier list");
-                m_line_formatter.parse(group);
-            }
-        }
+        
+        FormatterBase::parse(spec);
     }
 
     std::string Formatter<std::source_location>::format(const std::source_location& value) const {
-        // Format: file:line
-        return std::move(FormatterBase::format(m_file_formatter.format(value.file_name()) + ':' + m_line_formatter.format(value.line())));
+        if (!m_format.empty()) {
+            return FormatterBase::format(utils::format(m_format, NamedArgument("file", value.file_name()), NamedArgument("line", value.line())));
+        }
+        
+        return "";
     }
     
     std::string Formatter<std::filesystem::path>::format(const std::filesystem::path& value) const {
