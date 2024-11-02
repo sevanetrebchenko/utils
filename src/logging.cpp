@@ -189,10 +189,6 @@ namespace utils {
                         // Error messages are printed in bright red
                         fwrite("\033[38;5;9m", sizeof(char), 9, file);
                         break;
-                    case Message::Level::Fatal:
-                        // Fatal messages are printed in bright magenta
-                        fwrite("\033[38;5;13m", sizeof(char), 10, file);
-                        break;
                 }
                 
                 fwrite(message.data(), sizeof(char), message.length(), file);

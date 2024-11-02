@@ -42,14 +42,26 @@ namespace utils {
         // Returns the index of the first invalid character
         std::size_t parse_format_spec(std::string_view in, FormatSpec& out, bool nested = false);
 
+        template <typename T>
+        bool is_reserved_argument(const NamedArgument<T>& arg) {
+            if (arg.name.length() < 2) {
+                return false;
+            }
+            
+            // Reserved arguments start with '__'
+            return arg.name[0] == '_' && arg.name[1] == '_';
+        }
+        
         // Performs various validation checks on function arguments
         template <typename Tuple>
         void validate_arguments(const Tuple& tuple, bool is_auto_numbered) {
             if (is_auto_numbered) {
-                // Check: argument list must not contain any NamedArgument<T> types
+                // Check: argument list must not contain any NamedArgument types (aside from builtin ones)
                 utils::apply([]<typename T, std::size_t I>(const T& value) {
                     if constexpr (is_named_argument<T>::value) {
-                        throw std::runtime_error(utils::format("invalid argument at position {} - named arguments are not allowed in format strings that only contain auto-numbered placeholders", I));
+                        if (!is_reserved_argument(value)) {
+                            throw std::runtime_error(utils::format("invalid argument at position {} - named arguments are not allowed in format strings that only contain auto-numbered placeholders", I));
+                        }
                     }
                 }, tuple);
             }
@@ -93,15 +105,6 @@ namespace utils {
                 }, tuple, num_positional_arguments, num_arguments);
             }
         }
-        
-        // For overriding source location in external function calls
-        template <typename T>
-        struct is_named_source_location : std::false_type {
-        };
-        
-        template <>
-        struct is_named_source_location<NamedArgument<std::source_location>> : std::true_type {
-        };
         
     }
     
@@ -249,22 +252,30 @@ namespace utils {
             return "";
         }
         
-        constexpr std::size_t num_arguments = sizeof...(Ts);
-        
         std::size_t length = fmt.length();
         std::size_t last_read_position = 0u;
         std::size_t i = 0u;
         
         std::string out;
         
-        if constexpr (num_arguments) {
+        if constexpr (sizeof...(Ts)) {
             std::tuple<typename std::decay<const Ts>::type...> tuple = std::make_tuple(args...);
             
             // 'source' is overridden by the implementation to reference external function calls
             utils::apply([&source]<typename T>(const T& arg) {
-                if constexpr (detail::is_named_source_location<T>::value) {
+                if constexpr (std::is_same<T, NamedArgument<std::source_location>>::value) {
                     if (icasecmp(arg.name, "__source")) {
                         source = arg.value;
+                    }
+                }
+            }, tuple);
+            
+            // Reserved arguments are provided automatically by the implementation and should not be considered part of the user-specified args
+            std::size_t num_arguments = sizeof...(Ts);
+            utils::apply([&num_arguments]<typename T>(const T& arg) {
+                if constexpr (is_named_argument<T>::value) {
+                    if (detail::is_reserved_argument(arg)) {
+                        --num_arguments;
                     }
                 }
             }, tuple);
@@ -327,9 +338,12 @@ namespace utils {
                                 // utils::apply is a noop is the argument index exceeds the length of the tuple
                                 // An exception for this is raised below (after parsing the whole format string)
                                 utils::apply([&spec, &out]<typename T>(const T& value) {
-                                    Formatter<T> formatter { };
-                                    formatter.parse(spec);
-                                    out.append(formatter.format(value));
+                                    // builtin arguments are specified via NamedArgument types, and should not be considered as a part of the user-specified argument list
+                                    if constexpr (!is_named_argument<T>::value) {
+                                        Formatter<T> formatter { };
+                                        formatter.parse(spec);
+                                        out.append(formatter.format(value));
+                                    }
                                 }, tuple, argument_index++);
                                 break;
                             }

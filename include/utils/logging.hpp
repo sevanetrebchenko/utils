@@ -39,7 +39,6 @@ namespace utils {
                 Info,
                 Warning,
                 Error,
-                Fatal
             } level;
             
             std::string_view format;
