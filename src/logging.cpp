@@ -211,6 +211,13 @@ namespace utils {
             ConsoleSink::flush();
         }
         
+        Message::Message(const std::string& fmt, std::source_location source) : level(Level::Debug),
+                                                                                format(fmt),
+                                                                                source(source),
+                                                                                message(),
+                                                                                timestamp(Timestamp::now()) {
+        }
+        
         Message::Message(std::string_view fmt, std::source_location source) : level(Level::Debug),
                                                                               format(fmt),
                                                                               source(source),

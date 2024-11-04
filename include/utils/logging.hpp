@@ -26,10 +26,8 @@ namespace utils {
     namespace logging {
 
         struct Message {
-            // For types that can be implicitly converted to std::string_view (such as std::string)
+            Message(const std::string& fmt, std::source_location source = std::source_location::current());
             Message(std::string_view fmt, std::source_location source = std::source_location::current());
-            
-            // For inline strings
             Message(const char* fmt, std::source_location source = std::source_location::current());
             
             ~Message();
