@@ -383,6 +383,54 @@ namespace utils {
             }
         }
         
+        std::string format_no_args(std::string_view fmt, std::source_location source) {
+            std::size_t length = fmt.length();
+            std::size_t last_read_position = 0u;
+            std::size_t i = 0u;
+            
+            std::string out;
+            
+            while (i < length) {
+                if (fmt[i] == '{') {
+                    if (i + 1 == length) {
+                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}' ()", i, source));
+                    }
+                    else if (fmt[i + 1] == '{') {
+                        // Escaped opening brace '{{'
+                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                        
+                        ++i;
+                        last_read_position = i + 1u; // Skip to the next character after the second brace
+                    }
+                    else {
+                        // format(...) was called with no arguments, so the existence of any placeholders is invalid
+                        throw std::runtime_error(utils::format("invalid format string - missing argument for placeholder at position {} ()", i, source));
+                    }
+                }
+                else if (fmt[i] == '}') {
+                    if (i + 1 < length && fmt[i + 1] == '}') {
+                        // Escaped closing brace '}}'
+                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
+                        
+                        ++i;
+                        last_read_position = i + 1u; // Skip to the next character after the second brace
+                    }
+                    else {
+                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}' ()", i, source));
+                    }
+                }
+                
+                ++i;
+            }
+            
+            if (i != last_read_position) {
+                // Append any remaining characters
+                out.append(fmt, last_read_position, i - last_read_position);
+            }
+            
+            return std::move(out);
+        }
+        
     }
 
     [[nodiscard]] std::vector<std::string_view> split(std::string_view in, std::string_view delimiter) {

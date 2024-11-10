@@ -106,6 +106,8 @@ namespace utils {
             }
         }
         
+        std::string format_no_args(std::string_view fmt, std::source_location source);
+
     }
     
     // namespace utils
@@ -280,6 +282,11 @@ namespace utils {
                 }
             }, tuple);
             
+            if (num_arguments == 0) {
+                // No user arguments provided to format
+                return std::move(detail::format_no_args(fmt, source));
+            }
+            
             std::optional<detail::Identifier::Type> type { };
             std::size_t argument_index = 0u; // Used only for auto-numbered format strings
             
@@ -403,49 +410,18 @@ namespace utils {
             if (*type == detail::Identifier::Type::Auto && argument_index > num_arguments) {
                 throw std::runtime_error(utils::format("not enough arguments provided to format(...) - expecting: {}, received: {} ({})", argument_index, num_arguments, source));
             }
+            
+            if (i != last_read_position) {
+                // Append any remaining characters
+                out.append(fmt, last_read_position, i - last_read_position);
+            }
+            
+            return std::move(out);
         }
         else {
             // No arguments provided to format
-            while (i < length) {
-                if (fmt[i] == '{') {
-                    if (i + 1 == length) {
-                        throw std::runtime_error(utils::format("unterminated placeholder opening brace at position {} - opening brace literals must be escaped as '}}' ()", i, source));
-                    }
-                    else if (fmt[i + 1] == '{') {
-                        // Escaped opening brace '{{'
-                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
-                        
-                        ++i;
-                        last_read_position = i + 1u; // Skip to the next character after the second brace
-                    }
-                    else {
-                        // format(...) was called with no arguments, so the existence of any placeholders is invalid
-                        throw std::runtime_error(utils::format("invalid format string - missing argument for placeholder at position {} ()", i, source));
-                    }
-                }
-                else if (fmt[i] == '}') {
-                    if (i + 1 < length && fmt[i + 1] == '}') {
-                        // Escaped closing brace '}}'
-                        out.append(fmt, last_read_position, i - last_read_position + 1u); // Include the first opening brace
-                        
-                        ++i;
-                        last_read_position = i + 1u; // Skip to the next character after the second brace
-                    }
-                    else {
-                        throw std::runtime_error(utils::format("invalid placeholder closing brace at position {} - closing brace literals must be escaped as '}}' ()", i, source));
-                    }
-                }
-                
-                ++i;
-            }
+            return std::move(detail::format_no_args(fmt, source));
         }
-        
-        if (i != last_read_position) {
-            // Append any remaining characters
-            out.append(fmt, last_read_position, i - last_read_position);
-        }
-        
-        return std::move(out);
     }
     
     template <typename T>
