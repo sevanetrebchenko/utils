@@ -68,6 +68,7 @@ namespace utils {
         template <typename ...Ts>
         void error(Message message, const Ts&... args);
         
+        // Logs error message and raises an exception in one go (std::runtime_error)
         template <typename ...Ts>
         void fatal(Message message, const Ts&... args);
         

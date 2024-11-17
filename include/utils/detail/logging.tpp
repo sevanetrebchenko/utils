@@ -45,9 +45,14 @@ namespace utils::logging {
     
     template <typename ...Ts>
     void fatal(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        message.level = Message::Level::Fatal;
+        std::string str = utils::format(message.format, args..., NamedArgument("__source", message.source));
+        
+        // Log error message
+        message.message = str;
+        message.level = Message::Level::Error;
         detail::log(message);
+        
+        throw std::runtime_error(str);
     }
     
     template <typename T, typename ...Ts>

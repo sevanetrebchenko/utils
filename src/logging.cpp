@@ -407,11 +407,8 @@ namespace utils {
             else if (level == Message::Level::Warning) {
                 str = "WARNING";
             }
-            else if (level == Message::Level::Error) {
+            else { // if (level == Message::Level::Error) {
                 str = "ERROR";
-            }
-            else { // if (level == Message::Level::Fatal) {
-                str = "FATAL";
             }
         }
         else {
@@ -424,11 +421,8 @@ namespace utils {
             else if (level == Message::Level::Warning) {
                 str = "warning";
             }
-            else if (level == Message::Level::Error) {
+            else { // if (level == Message::Level::Error) {
                 str = "error";
-            }
-            else { // if (level == Message::Level::Fatal) {
-                str = "fatal";
             }
         }
         
