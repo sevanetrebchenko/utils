@@ -12,6 +12,7 @@
 #include <variant> // std::variant
 #include <optional> // std::optional
 #include <filesystem> // std::filesystem::path
+#include <thread> // std::thread
 
 namespace utils {
     
