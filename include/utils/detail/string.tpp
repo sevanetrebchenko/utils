@@ -1472,6 +1472,87 @@ namespace utils {
         return std::move(FormatterBase::format(result));
     }
     
+    template <typename K, typename H, typename E, typename A>
+    Formatter<std::unordered_set<K, H, E, A>>::Formatter() : FormatterBase(),
+                                                             Formatter<K>() {
+    }
+    
+    template <typename K, typename H, typename E, typename A>
+    Formatter<std::unordered_set<K, H, E, A>>::~Formatter() = default;
+
+    template <typename K, typename H, typename E, typename A>
+    void Formatter<std::unordered_set<K, H, E, A>>::parse(const utils::FormatSpec& spec) {
+        if (spec.type() == FormatSpec::Type::SpecifierList) {
+            // A format spec consisting of a list of specifiers is applied globally to the unordered map
+            FormatterBase::parse(spec);
+        }
+        else {
+            if (spec.has_group(0)) {
+                const FormatSpec& group = spec.get_group(0);
+                ASSERT(group.type() == FormatSpec::Type::SpecifierList, "invalid std::unordered_map format spec - formatting group 0 must be a specifier list");
+                FormatterBase::parse(group);
+            }
+            if (spec.has_group(1)) {
+                // The second formatting group is applied to the underlying set type
+                Formatter<K>::parse(spec.get_group(1));
+            }
+        }
+    }
+    
+    template <typename K, typename H, typename E, typename A>
+    std::string Formatter<std::unordered_set<K, H, E, A>>::format(const T& value) const {
+        if (value.empty()) {
+            return "{ }";
+        }
+        
+        std::size_t num_elements = value.size();
+
+        // Format elements
+        std::vector<std::string> elements;
+        elements.reserve(num_elements);
+        
+        for (const K& element : value) {
+            elements.emplace_back(Formatter<K>::format(element));
+        }
+        
+        // Format: { value, ... }
+        
+        // 2 characters for container opening / closing braces { }
+        // 2 characters for leading space before the first element and trailing space after the last element
+        // 2 characters for comma + space between two elements (per element - 1)
+        std::size_t length = 4 + (num_elements - 1) * 2;
+        for (const std::string& element : elements) {
+            length += element.length();
+        }
+
+        std::string result(length, fill_character);
+        std::size_t write_position = 0;
+
+        result[write_position++] = '{';
+        result[write_position++] = ' ';
+
+        for (std::size_t i = 0u; i < num_elements; ++i) {
+            // Element format: { key: value }
+            const std::string& element = elements[i];
+
+            length = element.length();
+            result.replace(write_position, length, element, 0, length);
+            write_position += length;
+            
+            // Elements are formatted into a comma-separated list
+            if (i != num_elements - 1) {
+                // Do not insert a trailing comma
+                result[write_position++] = ',';
+                result[write_position++] = ' ';
+            }
+        }
+
+        result[write_position++] = ' ';
+        result[write_position++] = '}';
+
+        return std::move(FormatterBase::format(result));
+    }
+    
     template <typename T>
     std::string Formatter<NamedArgument<T>>::format(const NamedArgument<T>& value) {
         return Formatter<T>::format(value.value);

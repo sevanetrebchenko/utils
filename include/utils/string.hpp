@@ -475,6 +475,18 @@ namespace utils {
             Formatter<V> m_value_formatter;
     };
     
+    template <typename K, typename H, typename E, typename A>
+    struct Formatter<std::unordered_set<K, H, E, A>> : public FormatterBase, Formatter<K> {
+        using T = std::unordered_set<K, H, E, A>;
+        
+        Formatter();
+        ~Formatter();
+        
+        // Format: { value, ... }
+        void parse(const FormatSpec& spec);
+        std::string format(const T& value) const;
+    };
+    
     // Custom / user-defined types
     
     template <typename T>

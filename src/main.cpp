@@ -118,6 +118,13 @@ int main() {
         { 4, 4.4f },
     };
 
+    std::unordered_set<std::string> set {
+        "asdf",
+        "as"
+    };
+    
+    std::cout << utils::format("{}", set) << std::endl;
+    
 //    std::cout << utils::format("this is a format string {:justification=[right],fill_character=[-],width=[60]::precision=[2]}", a) << std::endl;
 //
 //    int c = 42;
@@ -137,6 +144,7 @@ int main() {
 
     try {
         logging::info("nested {time}", NamedArgument("time", Time::now()));
+        logging::info("nested {}");
     }
     catch (std::runtime_error& e) {
         std::cerr << e.what() << std::endl;
