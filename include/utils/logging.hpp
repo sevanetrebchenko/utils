@@ -14,6 +14,7 @@
 #include <fstream> // std::ofstream
 #include <functional> // std::function
 #include <span> // std::span
+#include <mutex> // std::mutex
 
 #if defined(PLATFORM_WINDOWS)
     #include <Windows.h>

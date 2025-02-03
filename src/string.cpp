@@ -3,9 +3,9 @@
 #include "utils/exceptions.hpp"
 #include "utils/detail/string.tpp"
 
-
 #include <limits> // std::numeric_limits
 #include <charconv> // std::from_chars, std::from_chars_result
+#include <cstring> // std::strlen
 
 namespace utils {
 

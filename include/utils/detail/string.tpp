@@ -9,6 +9,7 @@
 #include "utils/tuple.hpp"
 
 #include <charconv> // std::to_chars
+#include <cmath> // std::log10
 
 namespace utils {
 
