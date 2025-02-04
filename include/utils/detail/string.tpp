@@ -1474,8 +1474,7 @@ namespace utils {
     }
     
     template <typename K, typename H, typename E, typename A>
-    Formatter<std::unordered_set<K, H, E, A>>::Formatter() : FormatterBase(),
-                                                             Formatter<K>() {
+    Formatter<std::unordered_set<K, H, E, A>>::Formatter() : Formatter<K>() {
     }
     
     template <typename K, typename H, typename E, typename A>
@@ -1526,7 +1525,7 @@ namespace utils {
             length += element.length();
         }
 
-        std::string result(length, fill_character);
+        std::string result(length, Formatter<K>::fill_character);
         std::size_t write_position = 0;
 
         result[write_position++] = '{';

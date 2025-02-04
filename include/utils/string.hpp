@@ -477,7 +477,7 @@ namespace utils {
     };
     
     template <typename K, typename H, typename E, typename A>
-    struct Formatter<std::unordered_set<K, H, E, A>> : public FormatterBase, Formatter<K> {
+    struct Formatter<std::unordered_set<K, H, E, A>> : public Formatter<K> {
         using T = std::unordered_set<K, H, E, A>;
         
         Formatter();
