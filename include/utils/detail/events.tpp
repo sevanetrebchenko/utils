@@ -17,178 +17,81 @@
 namespace utils {
     namespace detail {
         
-        // Public-facing EventHandler (purposefully) cannot be instantiated directly
-        // Derived EventHandler class circumvents this restriction (for event system internal use)
-        class EventHandler : public utils::EventHandler {
-            public:
-                static constexpr std::size_t INVALID_ID = -1;
-                explicit EventHandler(std::size_t id);
-                
-                [[nodiscard]] std::size_t id() const;
-        };
+        struct EventData;
         
-        
-   
         class Callback {
             public:
-                Callback(std::type_index event_type);
-                virtual ~Callback() = default;
+                // Type-erased event handler callback
+                using FunctionType = std::function<bool(const EventData&)>;
                 
-                [[nodiscard]] bool operator==(std::size_t id) const;
+                template <typename Fn>
+                explicit Callback(Fn fn);
                 
+                // Wrappers around public-facing events API to avoid incurring overhead with copying std::function objects
+                template <typename T, typename U, typename E>
+                Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&));
+                
+                template <typename T, typename U, typename E>
+                Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&) const);
+                
+                template <typename T, typename U, typename E>
+                Callback(const std::shared_ptr<T>& object, bool (U::*function)(E));
+                
+                template <typename T, typename U, typename E>
+                Callback(const std::shared_ptr<T>& object, bool (U::*function)(E) const);
+                
+                template <typename T, typename U, typename E>
+                Callback(T* object, bool (U::*function)(const E&));
+                
+                template <typename T, typename U, typename E>
+                Callback(T* object, bool (U::*function)(const E&) const);
+                
+                template <typename T, typename U, typename E>
+                Callback(T* object, bool (U::*function)(E));
+                
+                template <typename T, typename U, typename E>
+                Callback(T* object, bool (U::*function)(E) const);
+                
+                template <typename E>
+                Callback(bool (*function)(const E&));
+                
+                template <typename E>
+                Callback(bool (*function)(E));
+                
+                ~Callback();
+                
+                [[nodiscard]] inline bool invoke(const EventData& data);
+                
+                [[nodiscard]] bool expired() const;
                 [[nodiscard]] bool enabled() const;
+                
+                // Marks this callback for deletion
+                // Will be deleted before the next call to process_events
+                void deregister();
+
                 void enable();
                 void disable();
                 
-                [[nodiscard]] bool tombstoned() const;
-                void tombstone();
-                
                 [[nodiscard]] std::size_t id() const;
-                [[nodiscard]] std::type_index event_type() const;
-                
-                [[nodiscard]] virtual bool invoke(const void* data) = 0;
-    
-            private:
-                std::type_index m_event_type;
-                std::size_t m_id;
-                bool m_enabled;
-                bool m_tombstoned;
-        };
-    
-        
-        
-        template <typename E>
-        class GlobalFunctionWrapper final : public Callback {
-            public:
-                using FunctionType = bool (*)(const E*);
-        
-                explicit GlobalFunctionWrapper(FunctionType function);
-                ~GlobalFunctionWrapper() override = default;
-        
-                [[nodiscard]] bool invoke(const void* data) override;
-    
-            private:
-                FunctionType m_function;
-        };
-        
-        template <typename E>
-        GlobalFunctionWrapper<E>::GlobalFunctionWrapper(FunctionType function) : Callback(typeid(E)),
-                                                                                 m_function(std::move(function)) {
-        }
-        
-        template <typename E>
-        bool GlobalFunctionWrapper<E>::invoke(const void* data) {
-            return m_function(reinterpret_cast<const E*>(data));
-        }
-        
-        
-        
-        template <typename T, typename U, typename E>
-        class MemberFunctionWrapper final : public Callback {
-            public:
-                using FunctionType = bool (U::*)(const E*);
-        
-                MemberFunctionWrapper(std::shared_ptr<T> instance, FunctionType function);
-                MemberFunctionWrapper(T* instance, FunctionType function);
-                ~MemberFunctionWrapper() override = default;
-        
-                [[nodiscard]] bool invoke(const void* data) override;
-    
-            private:
-                FunctionType m_function;
-                
-                union {
-                    std::weak_ptr<T> sp;
-                    T* p;
-                } m_object;
-                bool m_managed;
-        };
-        
-        template <typename T, typename U, typename E>
-        MemberFunctionWrapper<T, U, E>::MemberFunctionWrapper(std::shared_ptr<T> instance, FunctionType function) : Callback(typeid(E)),
-                                                                                                                    m_function(std::move(function)),
-                                                                                                                    m_object(instance),
-                                                                                                                    m_managed(true) {
-        }
-        
-        template <typename T, typename U, typename E>
-        MemberFunctionWrapper<T, U, E>::MemberFunctionWrapper(T* instance, FunctionType function) : Callback(typeid(E)),
-                                                                                                    m_function(std::move(function)),
-                                                                                                    m_object(instance),
-                                                                                                    m_managed(false) {
-        }
-        
-        template <typename T, typename U, typename E>
-        bool MemberFunctionWrapper<T, U, E>::invoke(const void* data) {
-            if (m_managed) {
-                std::weak_ptr<T> obj = m_object.sp;
-                return obj.expired() || std::invoke(obj.lock, m_function, reinterpret_cast<const E*>(data));
-            }
-            else {
-                return std::invoke(m_object.p, m_function, data);
-            }
-        }
-        
-        
-        
-        template <typename E>
-        class LambdaWrapper final : public Callback {
-            public:
-                using LambdaType = std::function<bool(const E*)>;
-                
-                explicit LambdaWrapper(LambdaType&& lambda);
-                ~LambdaWrapper() override = default;
-                
-                [[nodiscard]] bool invoke(const void* data) override;
+                [[nodiscard]] std::type_index type() const;
                 
             private:
-                LambdaType m_lambda;
-        };
-        
-        template <typename E>
-        LambdaWrapper<E>::LambdaWrapper(LambdaType&& lambda) : Callback(typeid(E)),
-                                                               m_lambda(std::move(lambda)) {
-        }
-        
-        template <typename E>
-        bool LambdaWrapper<E>::invoke(const void* data) {
-            return m_lambda(reinterpret_cast<const E*>(data));
-        }
-        
-        
-        
-        template <typename T>
-        struct is_lambda : std::false_type { };
-        
-        template <typename E>
-        struct is_lambda<std::function<bool(const E*)>> : std::true_type {
-            using EventType = E;
-        };
-
-        
-        
-        struct GlobalFunction {
-            GlobalFunction(std::shared_ptr<Callback> callback);
-            ~GlobalFunction() = default;
-
-            [[nodiscard]] bool operator==(const GlobalFunction& other) const;
+                static constexpr std::size_t ENABLED_BIT = 1 << (std::numeric_limits<std::uint8_t>::digits - 1); // 0b10000000
+                static constexpr std::size_t TOMBSTONED_BIT = 1 << (std::numeric_limits<std::uint8_t>::digits - 2); // 0b01000000
+                
+                [[nodiscard]] bool deregistered() const;
             
-            std::shared_ptr<Callback> callback;
-            std::uintptr_t address;
+                // Remains uninitialized for lambdas / global functions
+                std::weak_ptr<void> m_object;
+                FunctionType m_function;
+                
+                std::type_index m_type;
+                std::size_t m_id;
+                
+                std::uint8_t m_flags;
         };
         
-        struct GlobalFunctionHash {
-            using is_transparent = void; // Allow heterogeneous lookup
-            std::size_t operator()(const GlobalFunction& function) const;
-            std::size_t operator()(std::uintptr_t address) const;
-        };
-        
-        struct GlobalFunctionComparator {
-            using is_transparent = void; // Allow heterogeneous lookup
-            bool operator()(const GlobalFunction& a, const GlobalFunction& b) const;
-            bool operator()(const GlobalFunction& a, std::uintptr_t b) const;
-            bool operator()(std::uintptr_t a, const GlobalFunction& b) const;
-        };
+        using CallbackHandle = std::shared_ptr<Callback>;
         
         class IdGenerator {
             public:
@@ -215,14 +118,7 @@ namespace utils {
                 std::size_t m_id;
         };
         
-        struct EventHandlerRegistration {
-            EventHandlerRegistration(std::type_index event_type, std::size_t index);
-            
-            std::type_index event_type;
-            std::size_t index;
-        };
-        
-        struct Event {
+        struct EventData {
             void* data;
             std::type_index type;
         };
@@ -235,7 +131,7 @@ namespace utils {
                         ForwardIterator(void* base);
                         ~ForwardIterator() = default;
                         
-                        Event operator*() const;
+                        EventData operator*() const;
                         ForwardIterator& operator++();
                         bool operator!=(const ForwardIterator& other) const;
                         
@@ -284,6 +180,135 @@ namespace utils {
                 std::size_t m_capacity; // Capacity, in bytes
                 std::size_t m_allocation_count;
         };
+        
+        // Indices change when expired callbacks are removed, so lookup is done by callback id instead
+        [[nodiscard]] CallbackHandle get_callback(std::size_t address, std::size_t id);
+        
+        // Helper function for deregistering all callbacks for a given object or a global function
+        void remove_callback_registration(std::uintptr_t address);
+        
+        IdGenerator id_generator;
+        EventQueue event_queue;
+        std::unordered_map<std::type_index, std::vector<std::weak_ptr<Callback>>> dispatch_map;
+        
+        using CallbackRegistration = std::variant<std::monostate, CallbackHandle, std::vector<CallbackHandle>>;
+        std::unordered_map<std::uintptr_t, CallbackRegistration> callback_registrations;
+        
+        // Note for Callback constructors: object validity is checked before the callback is constructed
+        
+        template <typename T>
+        struct lambda_traits : lambda_traits<decltype(&T::operator())> { };
+        
+        template <typename T, typename E>
+        struct lambda_traits<bool (T::*)(E) const> {
+            using EventType = E;
+        };
+        
+        template <typename T, typename E>
+        struct lambda_traits<bool (T::*)(const E&) const> {
+            using EventType = E;
+        };
+        
+        template <typename Fn>
+        Callback::Callback(Fn fn) : m_object(),
+                                    m_function([fn = std::move(fn)](const EventData& event) -> bool {
+                                        using E = lambda_traits<Fn>::EventType;
+                                        return fn(*static_cast<E*>(event.data));
+                                    }),
+                                    m_type(typeid(typename lambda_traits<Fn>::EventType)),
+                                    m_id(id_generator.next()),
+                                    m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&)) : m_object(object),
+                                                                                              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                                                                                                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
+                                                                                              }),
+                                                                                              m_type(typeid(E)),
+                                                                                              m_id(id_generator.next()),
+                                                                                              m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E)) : m_object(object),
+                                                                                       m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                                                                                           return (object.lock()->*fn)(*static_cast<E*>(event.data));
+                                                                                       }),
+                                                                                       m_type(typeid(E)),
+                                                                                       m_id(id_generator.next()),
+                                                                                       m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E) const) : m_object(object),
+                                                                                             m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                                                                                                 return (object.lock()->*fn)(*static_cast<E*>(event.data));
+                                                                                             }),
+                                                                                             m_type(typeid(E)),
+                                                                                             m_id(id_generator.next()),
+                                                                                             m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(T* object, bool (U::*function)(const E&)) : m_object(),
+                                                                       m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                                                                           return (object->*fn)(*static_cast<E*>(event.data));
+                                                                       }),
+                                                                       m_type(typeid(E)),
+                                                                       m_id(id_generator.next()),
+                                                                       m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(T* object, bool (U::*function)(const E&) const) : m_object(),
+                                                                             m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                                                                                 return (object->*fn)(*static_cast<E*>(event.data));
+                                                                             }),
+                                                                             m_type(typeid(E)),
+                                                                             m_id(id_generator.next()),
+                                                                             m_flags(ENABLED_BIT) {
+}
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(T* object, bool (U::*function)(E)) : m_object(),
+                                                                m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                                                                    return (object->*fn)(*static_cast<E*>(event.data));
+                                                                }),
+                                                                m_type(typeid(E)),
+                                                                m_id(id_generator.next()),
+                                                                m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(T* object, bool (U::*function)(E) const) : m_object(),
+                                                                      m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                                                                          return (object->*fn)(*static_cast<E*>(event.data));
+                                                                      }),
+                                                                      m_type(typeid(E)),
+                                                                      m_id(id_generator.next()),
+                                                                      m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename E>
+        Callback::Callback(bool (*function)(const E&)) : m_object(),
+                                                         m_function([fn = std::move(function)](const EventData& event) -> bool {
+                                                             return fn(*static_cast<E*>(event.data));
+                                                         }),
+                                                         m_type(typeid(E)),
+                                                         m_id(id_generator.next()),
+                                                         m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename E>
+        Callback::Callback(bool (*function)(E)) : m_object(),
+                                                  m_function([fn = std::move(function)](const EventData& event) -> bool {
+                                                      return fn(*static_cast<E*>(event.data));
+                                                  }),
+                                                  m_type(typeid(E)),
+                                                  m_id(id_generator.next()),
+                                                  m_flags(ENABLED_BIT) {
+        }
         
         template <typename E>
         void EventQueue::push(E&& event) {
@@ -339,31 +364,34 @@ namespace utils {
             }
         }
         
-        std::shared_ptr<Callback> get_callback(std::size_t id);
-        
-        void register_new_callback(const std::shared_ptr<Callback>& callback);
-        void remove_expired_callbacks();
-        
-        IdGenerator id_generator;
-        std::unordered_map<std::size_t, EventHandlerRegistration> id_to_event_handler_map;
-        std::unordered_map<std::type_index, std::vector<std::weak_ptr<Callback>>> callbacks;
-        std::unordered_set<GlobalFunction, GlobalFunctionHash, GlobalFunctionComparator> global_function_registrations;
-        
-        // Using std::vector here instead of std::unordered_map<std::type_index, std::shared_ptr<Callback>> as the number of callbacks per object is expected to be relatively low
-        // such that performing a linear scan of the callbacks per object will be more efficient than a hash + lookup operation
-        std::unordered_map<std::uintptr_t, std::vector<std::shared_ptr<Callback>>> member_function_registrations;
-        
-        EventQueue event_queue;
-    }
+    } // namespace detail
+    
+    // Public API implementation
     
     template <typename T, typename U, typename E>
-    EventHandler register_event_handler(std::shared_ptr<T> instance, bool (U::*function)(const E*)) {
-        // Always use the underlying object pointer
-        return register_event_handler(instance.get(), function);
+    EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&)) {
+        return register_event_handler(object.get(), function);
     }
 
     template <typename T, typename U, typename E>
-    EventHandler register_event_handler(T* instance, bool (U::*function)(const E*)) {
+    EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&) const) {
+        return register_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(E)) {
+        return register_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(E) const) {
+        return register_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(T* object, bool (U::*function)(const E&)) {
+        using namespace detail;
+        
         // Allow polymorphic class instances to register event listeners to functions of a base class type, but not the other way around:
         //
         // struct Base {
@@ -376,136 +404,201 @@ namespace utils {
         //
         // Allow register_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not register_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
         static_assert(std::is_convertible<U, T>::value);
-
-        if (!instance) {
-            return detail::EventHandler(detail::EventHandler::INVALID_ID);
+        
+        if (!object) {
+            return { };
         }
         if (!function) {
-            return detail::EventHandler(detail::EventHandler::INVALID_ID);
+            return { };
         }
 
-        std::shared_ptr<detail::Callback> callback;
+        CallbackHandle callback;
         
-        // This operation will either register a new member function callback or be a noop (if the callback already exists)
-        // Either way, using std::unordered_map::operator[] will not result in unnecessary memory overhead
-        std::vector<std::shared_ptr<detail::Callback>>& callbacks = detail::member_function_registrations[instance];
-        for (const std::shared_ptr<detail::Callback>& c : callbacks) {
-            if (c == function) {
-                // Found existing registration in the system for this function
-                callback = c;
-                break;
+        // This will create a new registration if one does not already exist
+        // A new registration will contain a std::monostate object
+        std::uintptr_t address = object;
+        CallbackRegistration& registration = callback_registrations[address];
+        
+        if (std::holds_alternative<std::monostate>(registration)) {
+            // This is the first registration for this address
+            callback = std::make_shared<Callback>(object, function);
+            registration = callback;
+        }
+        else if (std::holds_alternative<CallbackHandle>(registration)) {
+            // The event system only incurs the overhead of a std::vector when more than one callback is registered to the same (object) address
+            // This is to (more) efficiently support registrations of global functions (1:1 mapping) or objects with only one event handler
+            
+            const CallbackHandle& handle = std::get<CallbackHandle>(registration);
+            if (handle->type() == typeid(E)) {
+                // An event handler for this event type has already been registered for this object
+                // The system supports only one callback per event type per object
+                callback = handle;
+            }
+            else {
+                callback = std::make_shared<Callback>(object, function);
+                
+                // Maintain the existing order of callback registration
+                registration = std::vector<CallbackHandle> {
+                    handle,
+                    callback
+                };
             }
         }
-
-        if (!callback) {
-            // Existing registration was not found, create a new one
-            callback = callbacks.emplace_back(std::make_shared<detail::MemberFunctionWrapper>(instance, function));
-            detail::register_new_callback(callback);
+        else if (std::holds_alternative<std::vector<CallbackHandle>>(registration)) {
+            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+            for (const CallbackHandle& handle : callbacks) {
+                if (handle->type() == typeid(E)) {
+                    // An event handler for this event type has already been registered for this object
+                    // The system supports only one callback per event type per object
+                    callback = handle;
+                    break;
+                }
+            }
+            
+            if (!callback) {
+                callback = callbacks.emplace_back(std::make_shared<Callback>(object, function));
+            }
         }
         
-        return detail::EventHandler(callback->id());
+        return EventHandler(address, callback->id());
     }
 
     template <typename E>
     EventHandler register_event_handler(bool (*function)(const E*)) {
+        using namespace detail;
+        
         if (!function) {
-            return detail::EventHandler(detail::EventHandler::INVALID_ID);
+            return { };
         }
 
-        std::shared_ptr<detail::Callback> callback;
+        CallbackHandle callback;
         
-        auto it = detail::global_function_registrations.find(function);
-        if (it != detail::global_function_registrations.end()) {
-            // Found existing registration in the system for this function
-            callback = it->second.function;
+        // Global function callbacks use the function address directly as the key
+        std::uintptr_t address = function;
+        
+        // This will create a new registration if one does not already exist
+        // A new registration will contain a std::monostate object
+        CallbackRegistration& registration = callback_registrations[address];
+        
+        // Global functions can only ever refer to a single event handler
+        ASSERT(!std::holds_alternative<std::vector<CallbackHandle>>(registration), "invalid event handler registration");
+        
+        if (std::holds_alternative<std::monostate>(registration)) {
+            callback = std::make_shared<Callback>(function);
+            registration = callback;
         }
         else {
-            callback = detail::global_function_registrations.emplace(std::make_shared<detail::GlobalFunctionWrapper<E>>(function));
-            detail::register_new_callback(callback);
+            callback = std::get<CallbackHandle>(registration);
+            ASSERT(callback->type() == typeid(E), "invalid event handler registration");
         }
         
-        return detail::EventHandler(callback->id());
+        return EventHandler(address, callback->id());
     }
     
     template <typename Fn>
     EventHandler register_event_handler(Fn&& function) {
         using namespace detail;
-        std::size_t id = detail::EventHandler::INVALID_ID;
         
-        // There aren't many safeguards here...
-        if constexpr (is_lambda<Fn>::value) {
-            using E = is_lambda<Fn>::EventType;
-            std::shared_ptr<Callback> callback = global_function_registrations.emplace(std::make_shared<LambdaWrapper<E>>(function));
-            register_new_callback(callback);
-            id = callback->id();
+        // Lambda callbacks are always considered unique (there is no way to easily determine if two lambdas are equal)
+        CallbackHandle callback = std::make_shared<Callback>(function);
+        
+        std::uintptr_t address = 0;  // Lambdas use reserved memory address 0
+        CallbackRegistration& registration = callback_registrations[address];
+        
+        if (std::holds_alternative<std::monostate>(registration)) {
+            registration = callback;
+        }
+        else if (std::holds_alternative<CallbackHandle>(registration)) {
+            const CallbackHandle& handle = std::get<CallbackHandle>(registration);
+            registration = std::vector<CallbackHandle> {
+                handle,
+                callback
+            };
+        }
+        else if (std::holds_alternative<std::vector<CallbackHandle>>(registration)) {
+            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+            callbacks.emplace_back(callback);
         }
         
-        return detail::EventHandler(id);
+        return EventHandler(address, callback->id());
     }
 
     template <typename T, typename U, typename E>
-    void deregister_event_handler(std::shared_ptr<T> instance, bool (U::*function)(const E*)) {
+    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E*)) {
         // Always use the underlying object pointer
-        deregister_event_handler(instance.get(), function);
+        deregister_event_handler(object.get(), function);
     }
 
     template <typename T>
-    void deregister_event_handler(std::shared_ptr<T> instance) {
+    void deregister_event_handler(std::shared_ptr<T> object) {
         // Always use the underlying object pointer
-        deregister_event_handler(instance.get());
+        deregister_event_handler(object.get());
     }
 
     template <typename T, typename U, typename E>
-    void deregister_event_handler(T* instance, bool (U::*function)(const E*)) {
-        if (!instance) {
+    void deregister_event_handler(T* object, bool (U::*function)(const E*)) {
+        using namespace detail;
+        
+        if (!object) {
             return;
         }
         if (!function) {
             return;
         }
         
-        auto it = detail::member_function_registrations.find(instance);
-        if (it == detail::member_function_registrations.end()) {
+        std::uintptr_t address = object;
+        auto it = callback_registrations.find(address);
+        if (it == callback_registrations.end()) {
+            // No callback registrations exist for the given object
             return;
         }
         
-        std::vector<std::shared_ptr<detail::Callback>>& callbacks = it->second;
-        for (std::size_t i = 0; i < callbacks.size(); ++i) {
-            if (callbacks[i] == function) {
-                callbacks.erase(callbacks.begin() + i);
-                break;
+        CallbackRegistration& registration = it->second;
+        
+        if (std::holds_alternative<std::monostate>(registration)) {
+            // No callback registrations exist for the given object
+            // This will be cleaned up by a call to
+            return;
+        }
+        else if (std::holds_alternative<CallbackHandle>(registration)) {
+            const CallbackHandle& callback = std::get<CallbackHandle>(registration);
+            if (callback->type() == typeid(E)) {
+                registration = std::monostate { };
+            }
+        }
+        else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
+            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+            std::erase_if(callbacks, [](const CallbackHandle& callback) -> bool {
+                return callback->type() == typeid(E);
+            });
+            
+            if (callbacks.empty()) {
+                // Is it better to not deallocate vector memory so that further registrations are quicker?
+                registration = std::monostate { };
             }
         }
     }
     
     template <typename T>
-    void deregister_event_handler(T* instance) {
+    void deregister_event_handler(T* object) {
         using namespace detail;
-        if (!instance) {
+        
+        if (!object) {
             return;
         }
         
-        auto it = member_function_registrations.find(instance);
-        if (it == member_function_registrations.end()) {
-            return;
-        }
-        
-        member_function_registrations.erase(it);
+        remove_callback_registration(object);
     }
     
     template <typename E>
     void deregister_event_handler(bool (*function)(const E*)) {
         using namespace detail;
+        
         if (!function) {
             return;
         }
         
-        auto it = global_function_registrations.find(function);
-        if (it == global_function_registrations.end()) {
-            return;
-        }
-        
-        global_function_registrations.erase(it);
+        remove_callback_registration(function);
     }
     
     template <typename E>

@@ -2,125 +2,130 @@
 #include "utils/events.hpp"
 #include "utils/assert.hpp"
 #include "utils/detail/events.tpp"
+#include <stdexcept> // std::out_of_range
 
 namespace utils {
-    
-    void EventHandler::enable() const {
-        std::shared_ptr<detail::Callback> callback = detail::get_callback(m_id);
-        if (callback) {
-            callback->enable();
-        }
-    }
-    
-    void EventHandler::disable() const {
-        std::shared_ptr<detail::Callback> callback = detail::get_callback(m_id);
-        if (callback) {
-            callback->enable();
-        }
-    }
-    
-    bool EventHandler::enabled() const {
-        std::shared_ptr<detail::Callback> callback = detail::get_callback(m_id);
-        if (callback) {
-            return callback->enabled();
-        }
-        
-        return false;
-    }
-    
-    void EventHandler::deregister() const {
-        std::shared_ptr<detail::Callback> callback = detail::get_callback(m_id);
-        if (callback) {
-            callback->tombstone();
-        }
-    }
-    
-    EventHandler::EventHandler(std::size_t id) : m_id(id) { }
-    
-    void process_events() {
-        using namespace detail;
-        for (const Event& event : event_queue) {
-            auto it = callbacks.find(event.type);
-            if (it == callbacks.end()) {
-                continue;
-            }
-            
-            for (const std::weak_ptr<Callback>& callback : it->second) {
-                if (callback.expired()) {
-                    continue;
-                }
-                
-                std::shared_ptr<Callback> c = callback.lock();
-                if (c->tombstoned()) {
-                    continue;
-                }
-                
-                if (!c->invoke(event.data)) {
-                    // An EventHandler returns false to stop event propagation
-                    break;
-                }
-            }
-        }
-        
-        // Reset allocator for the next frame
-        event_queue.reset();
-    }
-    
     namespace detail {
         
-        Callback::Callback(std::type_index event_type) : m_event_type(event_type),
-                                                         m_id(detail::id_generator.next()),
-                                                         m_enabled(true),
-                                                         m_tombstoned(false) {
+        template <typename T>
+        bool is_uninitialized(const std::weak_ptr<T>& ptr) {
+            return !ptr.owner_before(std::weak_ptr<T>{ }) && !std::weak_ptr<T>{ }.owner_before(ptr);
         }
         
-        bool Callback::operator==(std::uintptr_t id) const {
-            return m_id == id;
+        // Callback implementation
+        Callback::~Callback() {
+            id_generator.recycle(m_id);
+        }
+        
+        bool Callback::invoke(const EventData& data) {
+            return m_function(data);
+        }
+        
+        bool Callback::expired() const {
+            if (is_uninitialized(m_object)) {
+                // If the object pointer was never initialized, the callback was either created with a raw object pointer (T*) or a global function pointer,
+                // which expire unless manually deregistered from the system
+                return deregistered();
+            }
+            
+            return m_object.expired() || deregistered();
         }
         
         bool Callback::enabled() const {
-            return m_enabled;
+            return (m_flags & ENABLED_BIT) != 0;
+        }
+        
+        void Callback::deregister() {
+            m_flags |= TOMBSTONED_BIT;
         }
         
         void Callback::enable() {
-            m_enabled = true;
+            m_flags |= ENABLED_BIT;
         }
         
         void Callback::disable() {
-            m_enabled = false;
-        }
-        
-        bool Callback::tombstoned() const {
-            return m_tombstoned;
-        }
-        
-        void Callback::tombstone() {
-            m_tombstoned = true;
+            m_flags &= ~ENABLED_BIT;
         }
         
         std::size_t Callback::id() const {
             return m_id;
         }
         
-        std::type_index Callback::event_type() const {
-            return m_event_type;
+        std::type_index Callback::type() const {
+            return m_type;
         }
         
-        std::shared_ptr<Callback> get_callback(std::size_t id) {
-            auto it = detail::id_to_event_handler_map.find(id);
-            if (it == detail::id_to_event_handler_map.end()) {
-                return nullptr;
-            }
-            
-            const detail::EventHandlerRegistration& handler = it->second;
-            std::weak_ptr<detail::Callback> callback = detail::callbacks[handler.event_type][handler.index];
-            if (callback.expired()) {
-                return nullptr;
-            }
-            
-            return callback.lock();
+        bool Callback::deregistered() const {
+            return (m_flags & TOMBSTONED_BIT) != 0;
         }
         
+        // IdGenerator implementation
+        IdGenerator::IdGenerator() : m_id(0) { }
+        
+        void IdGenerator::recycle(std::size_t id) {
+            for (auto it = m_intervals.begin(); it != m_intervals.end(); ++it) {
+                if (id + 1 == it->start) {
+                    it->start = id;
+                    merge(it);
+                    return;
+                }
+                
+                if (id == it->end + 1) {
+                    it->end = id;
+                    merge(it);
+                    return;
+                }
+                
+                if (id >= it->start && id <= it->end) {
+                    // Index is already contained within an existing interval
+                    return;
+                }
+                
+                if (id < it->start) {
+                    m_intervals.insert(it, { id, id });
+                    return;
+                }
+            }
+            
+            m_intervals.emplace_back(id, id);
+        }
+        
+        std::size_t IdGenerator::next() {
+            if (m_intervals.empty()) {
+                return m_id++;
+            }
+            
+            Interval& interval = m_intervals.front();
+            std::size_t id = interval.start++;
+            
+            if (interval.start > interval.end) {
+                // Interval consists of one element and should be removed entirely
+                m_intervals.erase(m_intervals.begin());
+            }
+            
+            return id;
+        }
+        
+        void IdGenerator::merge(std::vector<Interval>::iterator it) {
+            // Merge left
+            if (it != m_intervals.begin()) {
+                auto previous = std::prev(it);
+                if (previous->end + 1 == it->start) {
+                    previous->end = it->end;
+                    m_intervals.erase(it);
+                    it = previous;
+                }
+            }
+            
+            // Merge right
+            auto next = std::next(it);
+            if (next != m_intervals.end() && it->end + 1 == next->start) {
+                it->end = next->end;
+                m_intervals.erase(next);
+            }
+        }
+        
+        // EventQueue implementation
         EventQueue::EventQueue(std::size_t size) : m_data(malloc(size)),
                                                    m_offset(0),
                                                    m_capacity(size),
@@ -212,122 +217,12 @@ namespace utils {
         EventQueue::ForwardIterator EventQueue::end() {
             return reinterpret_cast<std::byte*>(m_data) + m_offset; // Points to one past the last element
         }
-        
-        void remove_expired_callbacks() {
-            // Remove expired callback registrations
-            std::erase_if(global_function_registrations, [](const GlobalFunction& function) -> bool {
-                return function.callback->tombstoned();
-            });
-            for (auto it = member_function_registrations.begin(); it != member_function_registrations.end(); ++it) {
-                std::erase_if(it->second, [](const std::shared_ptr<Callback>& callback) -> bool {
-                    return callback->tombstoned();
-                });
-            }
-            
-            for (auto& [event_type, callback_list] : callbacks) {
-                // Remove references to expired callbacks
-                std::erase_if(callback_list, [](const std::weak_ptr<Callback>& callback) -> bool {
-                    return callback.expired();
-                });
-                
-                // Update valid callback indices
-                for (std::size_t i = 0; i < callback_list.size(); ++i) {
-                    std::shared_ptr<Callback> callback = callback_list[i].lock();
-                    
-                    auto it = id_to_event_handler_map.find(callback->id());
-                    ASSERT(it != id_to_event_handler_map.end(), "invalid EventHandler mapping");
-                    
-                    it->second.index = i;
-                }
-            }
-        }
-        
-        IdGenerator::IdGenerator() : m_id(0) { }
-        
-        void IdGenerator::recycle(std::size_t id) {
-            for (auto it = m_intervals.begin(); it != m_intervals.end(); ++it) {
-                if (id + 1 == it->start) {
-                    it->start = id;
-                    merge(it);
-                    return;
-                }
-                
-                if (id == it->end + 1) {
-                    it->end = id;
-                    merge(it);
-                    return;
-                }
-                
-                if (id >= it->start && id <= it->end) {
-                    // Index is already contained within an existing interval
-                    return;
-                }
-                
-                if (id < it->start) {
-                    m_intervals.insert(it, { id, id });
-                    return;
-                }
-            }
-            
-            m_intervals.emplace_back(id, id);
-        }
-        
-        std::size_t IdGenerator::next() {
-            if (m_id == detail::EventHandler::INVALID_ID) {
-                // std::size_t maximum value is reserved
-                throw std::runtime_error("");
-            }
-            
-            if (m_intervals.empty()) {
-                return m_id++;
-            }
-            
-            Interval& interval = m_intervals.front();
-            std::size_t id = interval.start++;
-            
-            if (interval.start > interval.end) {
-                // Interval consists of one element and should be removed entirely
-                m_intervals.erase(m_intervals.begin());
-            }
-            
-            return id;
-        }
-        
-        void IdGenerator::merge(std::vector<Interval>::iterator it) {
-            // Merge left
-            if (it != m_intervals.begin()) {
-                auto previous = std::prev(it);
-                if (previous->end + 1 == it->start) {
-                    previous->end = it->end;
-                    m_intervals.erase(it);
-                    it = previous;
-                }
-            }
-            
-            // Merge right
-            auto next = std::next(it);
-            if (next != m_intervals.end() && it->end + 1 == next->start) {
-                it->end = next->end;
-                m_intervals.erase(next);
-            }
-        }
 
-        void register_new_callback(const std::shared_ptr<Callback>& callback) {
-            std::size_t id = callback->id();
-            std::type_index event_type = callback->event_type();
-            std::vector<std::weak_ptr<Callback>> cb = callbacks[event_type];
-            
-            std::size_t index = cb.size();
-            cb.emplace_back(callback);
-            
-            detail::id_to_event_handler_map.emplace(id, EventHandlerRegistration(event_type, index));
-        }
-        
-        
+        // EventQueue::ForwardIterator implementation
         EventQueue::ForwardIterator::ForwardIterator(void* base) : m_base(base) {
         }
         
-        Event EventQueue::ForwardIterator::operator*() const {
+        EventData EventQueue::ForwardIterator::operator*() const {
             const EventQueue::Allocation& allocation = *reinterpret_cast<EventQueue::Allocation*>(m_base);
             return {
                 .data = reinterpret_cast<std::byte*>(m_base) + sizeof(Allocation), // Return a pointer to the data segment
@@ -344,36 +239,151 @@ namespace utils {
         bool EventQueue::ForwardIterator::operator!=(const EventQueue::ForwardIterator& other) const {
             return m_base == other.m_base;
         }
-        
-        GlobalFunction::GlobalFunction(std::shared_ptr<Callback> callback) : callback(std::move(callback)),
-                                                                             address(reinterpret_cast<uintptr_t>(this->callback.get())) {
+
+        CallbackHandle get_callback(std::size_t address, std::size_t id) {
+            auto it = callback_registrations.find(address);
             
+            // The assumption here is that the number of callbacks per object is relatively low, so performing a linear scan is faster than a hash + lookup operation
+            if (it == callback_registrations.end()) {
+                return nullptr;
+            }
+            
+            CallbackRegistration& registration = it->second;
+            
+            if (std::holds_alternative<std::monostate>(registration)) {
+                return nullptr;
+            }
+            else if (std::holds_alternative<CallbackHandle>(registration)) {
+                const CallbackHandle& callback = std::get<CallbackHandle>(registration);
+                return callback->id() == id ? callback : nullptr;
+            }
+            else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
+                const std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+                for (const CallbackHandle& callback : callbacks) {
+                    if (callback->id() == id) {
+                        return callback;
+                    }
+                }
+                
+                return nullptr;
+            }
         }
         
-        bool GlobalFunction::operator==(const GlobalFunction& other) const {
-            return address == other.address;
+        void remove_callback_registration(std::uintptr_t address) {
+            auto it = callback_registrations.find(address);
+            if (it == callback_registrations.end()) {
+                // No callback registrations exist for the given object
+                return;
+            }
+            
+            callback_registrations.erase(it);
         }
         
-        std::size_t GlobalFunctionHash::operator()(const GlobalFunction& function) const {
-            return std::hash<std::uintptr_t>{ }(function.address);
+    }
+    
+    // EventHandler implementation
+    EventHandler::EventHandler(std::uintptr_t address, std::size_t id) : m_address(address),
+                                                                         m_id(id) {
+    }
+    
+    EventHandler::EventHandler() : m_address(-1),
+                                   m_id(-1) {
+    }
+    
+    void EventHandler::enable() const {
+        using namespace detail;
+        CallbackHandle callback = get_callback(m_address, m_id);
+        if (callback) {
+            callback->enable();
+        }
+    }
+    
+    void EventHandler::disable() const {
+        using namespace detail;
+        CallbackHandle callback = get_callback(m_address, m_id);
+        if (callback) {
+            callback->disable();
+        }
+    }
+    
+    bool EventHandler::enabled() const {
+        using namespace detail;
+        CallbackHandle callback = get_callback(m_address, m_id);
+        if (callback) {
+            return callback->enabled();
         }
         
-        std::size_t GlobalFunctionHash::operator()(std::uintptr_t address) const {
-            return std::hash<std::uintptr_t>{ }(address);
+        return false;
+    }
+    
+    void EventHandler::deregister() const {
+        using namespace detail;
+        CallbackHandle callback = get_callback(m_address, m_id);
+        if (callback) {
+            callback->deregister();
+        }
+    }
+    
+    // Event system helper functions
+    void remove_expired_callbacks(detail::CallbackRegistration& registration) {
+        using namespace detail;
+        
+        if (std::holds_alternative<CallbackHandle>(registration)) {
+            const CallbackHandle& callback = std::get<CallbackHandle>(registration);
+            if (callback->expired()) {
+                registration = std::monostate { };
+            }
+        }
+        else if (std::holds_alternative<std::vector<CallbackHandle>>(registration)) {
+            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+            std::erase_if(callbacks, [](const CallbackHandle& callback) -> bool {
+                return callback->expired();
+            });
+        }
+        // Nothing to do if variant holds std::monostate
+        // else { ... }
+    }
+    
+    void process_events() {
+        using namespace detail;
+        
+        // Ensure that only valid callbacks are invoked with event data
+        for (auto& [address, callbacks] : callback_registrations) {
+            remove_expired_callbacks(callbacks);
         }
         
-        bool GlobalFunctionComparator::operator()(const GlobalFunction& a, const GlobalFunction& b) const {
-            return a.address < b.address;
+        // Remove references to expired callbacks
+        for (auto& [type, callbacks] : dispatch_map) {
+            std::erase_if(callbacks, [](const std::weak_ptr<Callback>& callback) -> bool {
+                return callback.expired();
+            });
         }
         
-        bool GlobalFunctionComparator::operator()(const GlobalFunction& a, std::uintptr_t b) const {
-            return a.address < b;
+        // Dispatch enqueued events
+        for (const EventData& event : event_queue) {
+            auto it = dispatch_map.find(event.type);
+            if (it == dispatch_map.end()) {
+                continue;
+            }
+            
+            for (const std::weak_ptr<Callback>& callback : it->second) {
+                ASSERT(!callback.expired(), "invoking expired callback");
+                CallbackHandle c = callback.lock();
+
+                if (!c->enabled()) {
+                    // Do not invoke disabled callbacks
+                    continue;
+                }
+                
+                if (!c->invoke(event)) {
+                    // An EventHandler returns false to stop event propagation
+                    break;
+                }
+            }
         }
         
-        bool GlobalFunctionComparator::operator()(std::uintptr_t a, const GlobalFunction& b) const {
-            return a < b.address;
-        }
-        
+        // Reset allocator for the next frame
+        event_queue.reset();
     }
     
 }
