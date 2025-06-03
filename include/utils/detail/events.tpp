@@ -210,104 +210,114 @@ namespace utils {
         };
         
         template <typename Fn>
-        Callback::Callback(Fn fn) : m_object(),
-                                    m_function([fn = std::move(fn)](const EventData& event) -> bool {
-                                        using E = lambda_traits<Fn>::EventType;
-                                        return fn(*static_cast<E*>(event.data));
-                                    }),
-                                    m_type(typeid(typename lambda_traits<Fn>::EventType)),
-                                    m_id(id_generator.next()),
-                                    m_flags(ENABLED_BIT) {
+        Callback::Callback(Fn fn)
+            : m_object(),
+            m_function([fn = std::move(fn)](const EventData& event) -> bool {
+                using E = lambda_traits<Fn>::EventType;
+                return fn(*static_cast<E*>(event.data));
+            }),
+            m_type(typeid(typename lambda_traits<Fn>::EventType)),
+            m_id(id_generator.next()),
+            m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&)) : m_object(object),
-                                                                                              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
-                                                                                                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
-                                                                                              }),
-                                                                                              m_type(typeid(E)),
-                                                                                              m_id(id_generator.next()),
-                                                                                              m_flags(ENABLED_BIT) {
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&))
+            : m_object(object),
+              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E)) : m_object(object),
-                                                                                       m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
-                                                                                           return (object.lock()->*fn)(*static_cast<E*>(event.data));
-                                                                                       }),
-                                                                                       m_type(typeid(E)),
-                                                                                       m_id(id_generator.next()),
-                                                                                       m_flags(ENABLED_BIT) {
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E))
+            : m_object(object),
+              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E) const) : m_object(object),
-                                                                                             m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
-                                                                                                 return (object.lock()->*fn)(*static_cast<E*>(event.data));
-                                                                                             }),
-                                                                                             m_type(typeid(E)),
-                                                                                             m_id(id_generator.next()),
-                                                                                             m_flags(ENABLED_BIT) {
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E) const)
+            : m_object(object),
+              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(T* object, bool (U::*function)(const E&)) : m_object(),
-                                                                       m_function([object, fn = std::move(function)](const EventData& event) -> bool {
-                                                                           return (object->*fn)(*static_cast<E*>(event.data));
-                                                                       }),
-                                                                       m_type(typeid(E)),
-                                                                       m_id(id_generator.next()),
-                                                                       m_flags(ENABLED_BIT) {
+        Callback::Callback(T* object, bool (U::*function)(const E&))
+            : m_object(),
+              m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                  return (object->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(T* object, bool (U::*function)(const E&) const) : m_object(),
-                                                                             m_function([object, fn = std::move(function)](const EventData& event) -> bool {
-                                                                                 return (object->*fn)(*static_cast<E*>(event.data));
-                                                                             }),
-                                                                             m_type(typeid(E)),
-                                                                             m_id(id_generator.next()),
-                                                                             m_flags(ENABLED_BIT) {
-}
-        
-        template <typename T, typename U, typename E>
-        Callback::Callback(T* object, bool (U::*function)(E)) : m_object(),
-                                                                m_function([object, fn = std::move(function)](const EventData& event) -> bool {
-                                                                    return (object->*fn)(*static_cast<E*>(event.data));
-                                                                }),
-                                                                m_type(typeid(E)),
-                                                                m_id(id_generator.next()),
-                                                                m_flags(ENABLED_BIT) {
+        Callback::Callback(T* object, bool (U::*function)(const E&) const)
+            : m_object(),
+              m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                  return (object->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename T, typename U, typename E>
-        Callback::Callback(T* object, bool (U::*function)(E) const) : m_object(),
-                                                                      m_function([object, fn = std::move(function)](const EventData& event) -> bool {
-                                                                          return (object->*fn)(*static_cast<E*>(event.data));
-                                                                      }),
-                                                                      m_type(typeid(E)),
-                                                                      m_id(id_generator.next()),
-                                                                      m_flags(ENABLED_BIT) {
+        Callback::Callback(T* object, bool (U::*function)(E))
+            : m_object(),
+              m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                  return (object->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
+        Callback::Callback(T* object, bool (U::*function)(E) const)
+            : m_object(),
+              m_function([object, fn = std::move(function)](const EventData& event) -> bool {
+                  return (object->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename E>
-        Callback::Callback(bool (*function)(const E&)) : m_object(),
-                                                         m_function([fn = std::move(function)](const EventData& event) -> bool {
-                                                             return fn(*static_cast<E*>(event.data));
-                                                         }),
-                                                         m_type(typeid(E)),
-                                                         m_id(id_generator.next()),
-                                                         m_flags(ENABLED_BIT) {
+        Callback::Callback(bool (*function)(const E&))
+            : m_object(),
+              m_function([fn = std::move(function)](const EventData& event) -> bool {
+                  return fn(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename E>
-        Callback::Callback(bool (*function)(E)) : m_object(),
-                                                  m_function([fn = std::move(function)](const EventData& event) -> bool {
-                                                      return fn(*static_cast<E*>(event.data));
-                                                  }),
-                                                  m_type(typeid(E)),
-                                                  m_id(id_generator.next()),
-                                                  m_flags(ENABLED_BIT) {
+        Callback::Callback(bool (*function)(E))
+            : m_object(),
+              m_function([fn = std::move(function)](const EventData& event) -> bool {
+                  return fn(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
         }
         
         template <typename E>
