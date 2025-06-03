@@ -271,6 +271,17 @@ namespace utils {
         }
         
         template <typename T, typename U, typename E>
+        Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(const E&) const)
+            : m_object(object),
+              m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
+                  return (object.lock()->*fn)(*static_cast<E*>(event.data));
+              }),
+              m_type(typeid(E)),
+              m_id(id_generator.next()),
+              m_flags(ENABLED_BIT) {
+        }
+        
+        template <typename T, typename U, typename E>
         Callback::Callback(const std::shared_ptr<T>& object, bool (U::*function)(E))
             : m_object(object),
               m_function([object = std::weak_ptr<T>(object), fn = std::move(function)](const EventData& event) -> bool {
