@@ -95,6 +95,13 @@ namespace utils {
     
     
     template <typename E>
+    void deregister_event_handler(bool (*function)(const E&));
+    
+    template <typename E>
+    void deregister_event_handler(bool (*function)(E));
+    
+    
+    template <typename E>
     void dispatch_event(E&& event);
     
 }

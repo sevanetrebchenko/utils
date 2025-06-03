@@ -181,11 +181,62 @@ namespace utils {
                 std::size_t m_allocation_count;
         };
         
+        template <typename T>
+        struct callback_traits : callback_traits<decltype(&T::operator())> { };
+        
+        template <typename T, typename E>
+        struct callback_traits<bool (T::*)(const E&) const> {
+            using ClassType = T;
+            using EventType = E;
+        };
+        
+        template <typename T, typename E>
+        struct callback_traits<bool (T::*)(const E&)> {
+            using ClassType = T;
+            using EventType = E;
+        };
+        
+        template <typename T, typename E>
+        struct callback_traits<bool (T::*)(E) const> {
+            using ClassType = T;
+            using EventType = E;
+        };
+        
+        template <typename T, typename E>
+        struct callback_traits<bool (T::*)(E)> {
+            using ClassType = T;
+            using EventType = E;
+        };
+        
+        template <typename E>
+        struct callback_traits<bool(*)(const E&)> {
+            using EventType = E;
+        };
+        
+        template <typename E>
+        struct callback_traits<bool(*)(E)> {
+            using EventType = E;
+        };
+        
+        template <typename T, typename Fn>
+        inline EventHandler register_event_handler(T* object, Fn function);
+        
+        template <typename Fn>
+        inline EventHandler register_event_handler(Fn function);
+        
+        template <typename T, typename Fn>
+        inline void deregister_event_handler(T* object, Fn function);
+        
+        template <typename Fn>
+        inline void deregister_event_handler(Fn function);
+        
+        // Specialization for deregistering all callbacks for a given object or global function
+        template <>
+        inline void deregister_event_handler(std::uintptr_t address);
+        
+        
         // Indices change when expired callbacks are removed, so lookup is done by callback id instead
         [[nodiscard]] CallbackHandle get_callback(std::size_t address, std::size_t id);
-        
-        // Helper function for deregistering all callbacks for a given object or a global function
-        void remove_callback_registration(std::uintptr_t address);
         
         IdGenerator id_generator;
         EventQueue event_queue;
@@ -196,27 +247,14 @@ namespace utils {
         
         // Note for Callback constructors: object validity is checked before the callback is constructed
         
-        template <typename T>
-        struct lambda_traits : lambda_traits<decltype(&T::operator())> { };
-        
-        template <typename T, typename E>
-        struct lambda_traits<bool (T::*)(E) const> {
-            using EventType = E;
-        };
-        
-        template <typename T, typename E>
-        struct lambda_traits<bool (T::*)(const E&) const> {
-            using EventType = E;
-        };
-        
         template <typename Fn>
         Callback::Callback(Fn fn)
             : m_object(),
             m_function([fn = std::move(fn)](const EventData& event) -> bool {
-                using E = lambda_traits<Fn>::EventType;
+                using E = callback_traits<Fn>::EventType;
                 return fn(*static_cast<E*>(event.data));
             }),
-            m_type(typeid(typename lambda_traits<Fn>::EventType)),
+            m_type(typeid(typename callback_traits<Fn>::EventType)),
             m_id(id_generator.next()),
             m_flags(ENABLED_BIT) {
         }
@@ -374,135 +412,226 @@ namespace utils {
             }
         }
         
+        template <typename T, typename Fn>
+        EventHandler register_event_handler(T* object, Fn function) {
+            using U = callback_traits<Fn>::ClassType;
+            using E = callback_traits<Fn>::EventType;
+            
+            // Allow polymorphic class instances to register event listeners to functions of a base class type, but not the other way around:
+            //
+            // struct Base {
+            //     bool handle_event(const int*);
+            // };
+            //
+            // struct Derived : public Base {
+            //     bool handle_event(const int*);
+            // };
+            //
+            // Allow register_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not register_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
+            static_assert(std::is_convertible<U, T>::value);
+            
+            if (!object) {
+                return { };
+            }
+            if (!function) {
+                return { };
+            }
+    
+            CallbackHandle callback;
+            
+            // This will create a new registration if one does not already exist
+            // A new registration will contain a std::monostate object
+            std::uintptr_t address = (std::uintptr_t) object;
+            CallbackRegistration& registration = callback_registrations[address];
+            
+            if (std::holds_alternative<std::monostate>(registration)) {
+                // This is the first registration for this address
+                callback = std::make_shared<Callback>(object, function);
+                registration = callback;
+            }
+            else if (std::holds_alternative<CallbackHandle>(registration)) {
+                // The event system only incurs the overhead of a std::vector when more than one callback is registered to the same (object) address
+                // This is to (more) efficiently support registrations of global functions (1:1 mapping) or objects with only one event handler
+                
+                const CallbackHandle& handle = std::get<CallbackHandle>(registration);
+                if (handle->type() == typeid(E)) {
+                    // An event handler for this event type has already been registered for this object
+                    // The system supports only one callback per event type per object
+                    callback = handle;
+                }
+                else {
+                    callback = std::make_shared<Callback>(object, function);
+                    
+                    // Maintain the existing order of callback registration
+                    registration = std::vector<CallbackHandle> {
+                        handle,
+                        callback
+                    };
+                }
+            }
+            else if (std::holds_alternative<std::vector<CallbackHandle>>(registration)) {
+                std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+                for (const CallbackHandle& handle : callbacks) {
+                    if (handle->type() == typeid(E)) {
+                        // An event handler for this event type has already been registered for this object
+                        // The system supports only one callback per event type per object
+                        callback = handle;
+                        break;
+                    }
+                }
+                
+                if (!callback) {
+                    callback = callbacks.emplace_back(std::make_shared<Callback>(object, function));
+                }
+            }
+            
+            return EventHandler(address, callback->id());
+        }
+        
+        template <typename Fn>
+        EventHandler register_event_handler(Fn function) {
+            using E = callback_traits<Fn>::EventType;
+            if (!function) {
+                return { };
+            }
+    
+            CallbackHandle callback;
+            
+            // Global function callbacks use the function address directly as the key
+            std::uintptr_t address = function;
+            
+            // This will create a new registration if one does not already exist
+            // A new registration will contain a std::monostate object
+            CallbackRegistration& registration = callback_registrations[address];
+            
+            // Global functions can only ever refer to a single event handler
+            ASSERT(!std::holds_alternative<std::vector<CallbackHandle>>(registration), "invalid event handler registration");
+            
+            if (std::holds_alternative<std::monostate>(registration)) {
+                callback = std::make_shared<Callback>(function);
+                registration = callback;
+            }
+            else {
+                callback = std::get<CallbackHandle>(registration);
+                ASSERT(callback->type() == typeid(E), "invalid event handler registration");
+            }
+            
+            return EventHandler(address, callback->id());
+        }
+        
+        template <typename T, typename Fn>
+        void deregister_event_handler(T* object, Fn function) {
+            using U = callback_traits<Fn>::ClassType;
+            using E = callback_traits<Fn>::EventType;
+            
+            // Allow polymorphic class instances to deregister event listeners to functions of a base class type, but not the other way around:
+            //
+            // struct Base {
+            //     bool handle_event(const int*);
+            // };
+            //
+            // struct Derived : public Base {
+            //     bool handle_event(const int*);
+            // };
+            //
+            // Allow deregister_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not deregister_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
+            static_assert(std::is_convertible<U, T>::value);
+            
+            if (!object) {
+                return;
+            }
+            if (!function) {
+                return;
+            }
+            
+            std::uintptr_t address = object;
+            auto it = callback_registrations.find(address);
+            if (it == callback_registrations.end()) {
+                // No callback registrations exist for the given object
+                return;
+            }
+            
+            CallbackRegistration& registration = it->second;
+            
+            if (std::holds_alternative<std::monostate>(registration)) {
+                // No callback registrations exist for the given object
+                // This will be cleaned up by a call to
+                return;
+            }
+            else if (std::holds_alternative<CallbackHandle>(registration)) {
+                const CallbackHandle& callback = std::get<CallbackHandle>(registration);
+                if (callback->type() == typeid(E)) {
+                    registration = std::monostate { };
+                }
+            }
+            else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
+                std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
+                std::erase_if(callbacks, [](const CallbackHandle& callback) -> bool {
+                    return callback->type() == typeid(E);
+                });
+                
+                if (callbacks.empty()) {
+                    // Is it better to not deallocate vector memory so that further registrations are quicker?
+                    registration = std::monostate { };
+                }
+            }
+        }
+        
+        template <typename Fn>
+        void deregister_event_handler(Fn function) {
+            using E = callback_traits<Fn>::EventType;
+            if (!function) {
+                return;
+            }
+        }
+        
     } // namespace detail
     
     // Public API implementation
     
     template <typename T, typename U, typename E>
     EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&)) {
-        return register_event_handler(object.get(), function);
+        return detail::register_event_handler(object.get(), function);
     }
 
     template <typename T, typename U, typename E>
     EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&) const) {
-        return register_event_handler(object.get(), function);
+        return detail::register_event_handler(object.get(), function);
     }
     
     template <typename T, typename U, typename E>
     EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(E)) {
-        return register_event_handler(object.get(), function);
+        return detail::register_event_handler(object.get(), function);
     }
     
     template <typename T, typename U, typename E>
     EventHandler register_event_handler(std::shared_ptr<T> object, bool (U::*function)(E) const) {
-        return register_event_handler(object.get(), function);
+        return detail::register_event_handler(object.get(), function);
     }
     
     template <typename T, typename U, typename E>
     EventHandler register_event_handler(T* object, bool (U::*function)(const E&)) {
-        using namespace detail;
-        
-        // Allow polymorphic class instances to register event listeners to functions of a base class type, but not the other way around:
-        //
-        // struct Base {
-        //     bool handle_event(const int*);
-        // };
-        //
-        // struct Derived : public Base {
-        //     bool handle_event(const int*);
-        // };
-        //
-        // Allow register_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not register_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
-        static_assert(std::is_convertible<U, T>::value);
-        
-        if (!object) {
-            return { };
-        }
-        if (!function) {
-            return { };
-        }
-
-        CallbackHandle callback;
-        
-        // This will create a new registration if one does not already exist
-        // A new registration will contain a std::monostate object
-        std::uintptr_t address = object;
-        CallbackRegistration& registration = callback_registrations[address];
-        
-        if (std::holds_alternative<std::monostate>(registration)) {
-            // This is the first registration for this address
-            callback = std::make_shared<Callback>(object, function);
-            registration = callback;
-        }
-        else if (std::holds_alternative<CallbackHandle>(registration)) {
-            // The event system only incurs the overhead of a std::vector when more than one callback is registered to the same (object) address
-            // This is to (more) efficiently support registrations of global functions (1:1 mapping) or objects with only one event handler
-            
-            const CallbackHandle& handle = std::get<CallbackHandle>(registration);
-            if (handle->type() == typeid(E)) {
-                // An event handler for this event type has already been registered for this object
-                // The system supports only one callback per event type per object
-                callback = handle;
-            }
-            else {
-                callback = std::make_shared<Callback>(object, function);
-                
-                // Maintain the existing order of callback registration
-                registration = std::vector<CallbackHandle> {
-                    handle,
-                    callback
-                };
-            }
-        }
-        else if (std::holds_alternative<std::vector<CallbackHandle>>(registration)) {
-            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
-            for (const CallbackHandle& handle : callbacks) {
-                if (handle->type() == typeid(E)) {
-                    // An event handler for this event type has already been registered for this object
-                    // The system supports only one callback per event type per object
-                    callback = handle;
-                    break;
-                }
-            }
-            
-            if (!callback) {
-                callback = callbacks.emplace_back(std::make_shared<Callback>(object, function));
-            }
-        }
-        
-        return EventHandler(address, callback->id());
+        return detail::register_event_handler(object, function);
+    }
+    
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(T* object, bool (U::*function)(const E&) const) {
+        return detail::register_event_handler(object, function);
     }
 
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(T* object, bool (U::*function)(E)) {
+        return detail::register_event_handler(object, function);
+    }
+    
+    template <typename T, typename U, typename E>
+    EventHandler register_event_handler(T* object, bool (U::*function)(E) const) {
+        return detail::register_event_handler(object, function);
+    }
+    
     template <typename E>
     EventHandler register_event_handler(bool (*function)(const E*)) {
-        using namespace detail;
-        
-        if (!function) {
-            return { };
-        }
-
-        CallbackHandle callback;
-        
-        // Global function callbacks use the function address directly as the key
-        std::uintptr_t address = function;
-        
-        // This will create a new registration if one does not already exist
-        // A new registration will contain a std::monostate object
-        CallbackRegistration& registration = callback_registrations[address];
-        
-        // Global functions can only ever refer to a single event handler
-        ASSERT(!std::holds_alternative<std::vector<CallbackHandle>>(registration), "invalid event handler registration");
-        
-        if (std::holds_alternative<std::monostate>(registration)) {
-            callback = std::make_shared<Callback>(function);
-            registration = callback;
-        }
-        else {
-            callback = std::get<CallbackHandle>(registration);
-            ASSERT(callback->type() == typeid(E), "invalid event handler registration");
-        }
-        
-        return EventHandler(address, callback->id());
+        return detail::register_event_handler(function);
     }
     
     template <typename Fn>
@@ -534,81 +663,63 @@ namespace utils {
     }
 
     template <typename T, typename U, typename E>
-    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E*)) {
-        // Always use the underlying object pointer
-        deregister_event_handler(object.get(), function);
+    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&)) {
+        detail::deregister_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(const E&) const) {
+        detail::deregister_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(E)) {
+        detail::deregister_event_handler(object.get(), function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(std::shared_ptr<T> object, bool (U::*function)(E) const) {
+        detail::deregister_event_handler(object.get(), function);
     }
 
     template <typename T>
     void deregister_event_handler(std::shared_ptr<T> object) {
-        // Always use the underlying object pointer
-        deregister_event_handler(object.get());
-    }
-
-    template <typename T, typename U, typename E>
-    void deregister_event_handler(T* object, bool (U::*function)(const E*)) {
-        using namespace detail;
-        
-        if (!object) {
-            return;
-        }
-        if (!function) {
-            return;
-        }
-        
-        std::uintptr_t address = object;
-        auto it = callback_registrations.find(address);
-        if (it == callback_registrations.end()) {
-            // No callback registrations exist for the given object
-            return;
-        }
-        
-        CallbackRegistration& registration = it->second;
-        
-        if (std::holds_alternative<std::monostate>(registration)) {
-            // No callback registrations exist for the given object
-            // This will be cleaned up by a call to
-            return;
-        }
-        else if (std::holds_alternative<CallbackHandle>(registration)) {
-            const CallbackHandle& callback = std::get<CallbackHandle>(registration);
-            if (callback->type() == typeid(E)) {
-                registration = std::monostate { };
-            }
-        }
-        else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
-            std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
-            std::erase_if(callbacks, [](const CallbackHandle& callback) -> bool {
-                return callback->type() == typeid(E);
-            });
-            
-            if (callbacks.empty()) {
-                // Is it better to not deallocate vector memory so that further registrations are quicker?
-                registration = std::monostate { };
-            }
-        }
+        detail::deregister_event_handler((std::uintptr_t) object.get());
     }
     
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(T* object, bool (U::*function)(const E&)) {
+        detail::deregister_event_handler(object, function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(T* object, bool (U::*function)(const E&) const) {
+        detail::deregister_event_handler(object, function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(T* object, bool (U::*function)(E)) {
+        detail::deregister_event_handler(object, function);
+    }
+    
+    template <typename T, typename U, typename E>
+    void deregister_event_handler(T* object, bool (U::*function)(E) const) {
+        detail::deregister_event_handler(object, function);
+    }
+
     template <typename T>
     void deregister_event_handler(T* object) {
-        using namespace detail;
-        
-        if (!object) {
-            return;
-        }
-        
-        remove_callback_registration(object);
+        detail::deregister_event_handler((std::uintptr_t) object);
     }
     
     template <typename E>
-    void deregister_event_handler(bool (*function)(const E*)) {
-        using namespace detail;
-        
-        if (!function) {
-            return;
-        }
-        
-        remove_callback_registration(function);
+    void deregister_event_handler(bool (*function)(const E&)) {
+        detail::deregister_event_handler((std::uintptr_t) function);
+    }
+    
+    template <typename E>
+    void deregister_event_handler(bool (*function)(E)) {
+        detail::deregister_event_handler((std::uintptr_t) function);
     }
     
     template <typename E>

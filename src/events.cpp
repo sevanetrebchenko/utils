@@ -269,7 +269,8 @@ namespace utils {
             }
         }
         
-        void remove_callback_registration(std::uintptr_t address) {
+        template <>
+        void deregister_event_handler(std::uintptr_t address) {
             auto it = callback_registrations.find(address);
             if (it == callback_registrations.end()) {
                 // No callback registrations exist for the given object
