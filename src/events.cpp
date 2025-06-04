@@ -14,11 +14,7 @@ namespace utils {
         
         // Callback implementation
         Callback::~Callback() {
-            id_generator.recycle(m_id);
-        }
-        
-        bool Callback::invoke(const EventData& data) {
-            return m_function(data);
+            id_generator.recycle(id);
         }
         
         bool Callback::expired() const {
@@ -45,14 +41,6 @@ namespace utils {
         
         void Callback::disable() {
             m_flags &= ~ENABLED_BIT;
-        }
-        
-        std::size_t Callback::id() const {
-            return m_id;
-        }
-        
-        std::type_index Callback::type() const {
-            return m_type;
         }
         
         bool Callback::deregistered() const {
@@ -255,12 +243,12 @@ namespace utils {
             }
             else if (std::holds_alternative<CallbackHandle>(registration)) {
                 const CallbackHandle& callback = std::get<CallbackHandle>(registration);
-                return callback->id() == id ? callback : nullptr;
+                return callback->id == id ? callback : nullptr;
             }
             else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
                 const std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
                 for (const CallbackHandle& callback : callbacks) {
-                    if (callback->id() == id) {
+                    if (callback->id == id) {
                         return callback;
                     }
                 }
@@ -376,7 +364,7 @@ namespace utils {
                     continue;
                 }
                 
-                if (!c->invoke(event)) {
+                if (!c->function(event)) {
                     // An EventHandler returns false to stop event propagation
                     break;
                 }
