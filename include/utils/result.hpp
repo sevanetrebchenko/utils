@@ -30,7 +30,7 @@ namespace utils {
             std::optional<E> m_error;
     };
 
-    template <typename T, typename E>
+    template <typename T, typename E = std::string>
     class Result {
         public:
             template <typename ...Ts>

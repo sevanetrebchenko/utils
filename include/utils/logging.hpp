@@ -71,7 +71,7 @@ namespace utils {
         
         // Logs error message and raises an exception in one go (std::runtime_error)
         template <typename ...Ts>
-        void fatal(Message message, const Ts&... args);
+        [[noreturn]] void fatal(Message message, const Ts&... args);
         
         // Scopes are thread local
         void push_scope(std::string name);
