@@ -4,6 +4,8 @@
 #ifndef LOGGING_TPP
 #define LOGGING_TPP
 
+#include <iostream>
+
 #include "utils/string.hpp"
 
 namespace utils::logging {
@@ -51,7 +53,7 @@ namespace utils::logging {
         message.message = str;
         message.level = Message::Level::Error;
         detail::log(message);
-        
+
         throw std::runtime_error(str);
     }
     
