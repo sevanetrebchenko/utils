@@ -54,7 +54,7 @@ namespace utils {
     template <typename ...Ts>
     Result<T, E> Result<T, E>::OK(Ts&&... args) {
         Result<T, E> r { };
-        r.m_result = { std::move(args)... };
+        r.m_result = T { std::move(args)... };
         return std::move(r);
     }
     
@@ -62,7 +62,14 @@ namespace utils {
     template <typename ...Ts>
     Result<T, E> Result<T, E>::NOT_OK(Ts&&... args) {
         Result<T, E> e { };
-        e.m_error = { std::move(args)... };
+
+        if constexpr (std::is_same_v<E, std::string>) {
+            e.m_error = format(std::move(args)...);
+        }
+        else {
+            e.m_error = { std::move(args)... };
+        }
+
         return std::move(e);
     }
     
