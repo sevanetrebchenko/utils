@@ -13,7 +13,7 @@ namespace utils {
     // Unlike Result, a Response instance does not contain a data payload
     // This is suitable, for example, for when a validating function doesn't need to return any value on success but an error type on failure
     
-    template <typename E>
+    template <typename E = std::string>
     class Response {
         public:
             static Response<E> OK();
