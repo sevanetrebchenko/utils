@@ -245,12 +245,12 @@ namespace utils {
         // Indices change when expired callbacks are removed, so lookup is done by callback id instead
         [[nodiscard]] CallbackHandle get_callback(std::size_t address, std::size_t id);
         
-        IdGenerator id_generator;
-        EventQueue event_queue;
-        std::unordered_map<std::type_index, std::vector<std::weak_ptr<Callback>>> dispatch_map;
-        
+        extern IdGenerator id_generator;
+        extern EventQueue event_queue;
+        extern std::unordered_map<std::type_index, std::vector<std::weak_ptr<Callback>>> dispatch_map;
+
         using CallbackRegistration = std::variant<std::monostate, CallbackHandle, std::vector<CallbackHandle>>;
-        std::unordered_map<std::uintptr_t, CallbackRegistration> callback_registrations;
+        extern std::unordered_map<std::uintptr_t, CallbackRegistration> callback_registrations;
         
         // Note for Callback constructors: object validity is checked before the callback is constructed
         
@@ -389,22 +389,22 @@ namespace utils {
         
         template <typename T, typename E>
         bool Callback::operator==(bool (T::*fn)(const E&)) {
-            return hash == std::hash<decltype(fn)>{ }(fn) == type == typeid(E);
+            return hash == std::hash<decltype(fn)>{ }(fn) && type == typeid(E);
         }
         
         template <typename T, typename E>
         bool Callback::operator==(bool (T::*fn)(const E&) const) {
-            return hash == std::hash<decltype(fn)>{ }(fn) == type == typeid(E);
+            return hash == std::hash<decltype(fn)>{ }(fn) && type == typeid(E);
         }
         
         template <typename T, typename E>
         bool Callback::operator==(bool (T::*fn)(E)) {
-            return hash == std::hash<decltype(fn)>{ }(fn) == type == typeid(E);
+            return hash == std::hash<decltype(fn)>{ }(fn) && type == typeid(E);
         }
         
         template <typename T, typename E>
         bool Callback::operator==(bool (T::*fn)(E) const) {
-            return hash == std::hash<decltype(fn)>{ }(fn) == type == typeid(E);
+            return hash == std::hash<decltype(fn)>{ }(fn) && type == typeid(E);
         }
         
         template <typename E>
@@ -424,7 +424,7 @@ namespace utils {
             Allocation& allocation = *reinterpret_cast<Allocation*>(block);
             allocation.copy_op = Allocation::CopyConstructorType::None;
             allocation.type = typeid(E);
-            allocation.size = block_size;
+            allocation.size = sizeof(E);
             
             if constexpr (!std::is_trivially_destructible<E>::value && std::is_destructible<E>::value) {
                 // Hybrid allocator automatically stores destructors for non-trivially destructible types
@@ -534,9 +534,11 @@ namespace utils {
                 }
             }
             
+            dispatch_map[typeid(E)].push_back(std::weak_ptr<Callback>(callback));
+
             return EventHandler(address, callback->id);
         }
-        
+
         template <typename Fn>
         EventHandler register_event_handler(Fn function) {
             if (!function) {
@@ -546,7 +548,7 @@ namespace utils {
             CallbackHandle callback;
             
             // Global function callbacks use the function address directly as the key
-            std::uintptr_t address = function;
+            std::uintptr_t address = reinterpret_cast<std::uintptr_t>(function);
             
             // This will create a new registration if one does not already exist
             // A new registration will contain a std::monostate object
@@ -591,7 +593,7 @@ namespace utils {
                 return;
             }
             
-            std::uintptr_t address = object;
+            std::uintptr_t address = reinterpret_cast<std::uintptr_t>(object);
             auto it = callback_registrations.find(address);
             if (it == callback_registrations.end()) {
                 // No callback registrations exist for the given object
@@ -607,14 +609,14 @@ namespace utils {
             }
             else if (std::holds_alternative<CallbackHandle>(registration)) {
                 const CallbackHandle& callback = std::get<CallbackHandle>(registration);
-                if (callback == function) {
+                if (*callback == function) {
                     registration = std::monostate { };
                 }
             }
             else { // if (std::holds_alternative<std::vector<CallbackHandle>>(registration))
                 std::vector<CallbackHandle>& callbacks = std::get<std::vector<CallbackHandle>>(registration);
                 std::erase_if(callbacks, [function](const CallbackHandle& callback) -> bool {
-                    return callback == function;
+                    return *callback == function;
                 });
                 
                 if (callbacks.empty()) {

@@ -6,7 +6,12 @@
 
 namespace utils {
     namespace detail {
-        
+
+        IdGenerator id_generator { };
+        EventQueue event_queue { };
+        std::unordered_map<std::type_index, std::vector<std::weak_ptr<Callback>>> dispatch_map { };
+        std::unordered_map<std::uintptr_t, CallbackRegistration> callback_registrations { };
+
         template <typename T>
         bool is_uninitialized(const std::weak_ptr<T>& ptr) {
             return !ptr.owner_before(std::weak_ptr<T>{ }) && !std::weak_ptr<T>{ }.owner_before(ptr);
@@ -225,7 +230,7 @@ namespace utils {
         }
         
         bool EventQueue::ForwardIterator::operator!=(const EventQueue::ForwardIterator& other) const {
-            return m_base == other.m_base;
+            return m_base != other.m_base;
         }
 
         CallbackHandle get_callback(std::size_t address, std::size_t id) {
