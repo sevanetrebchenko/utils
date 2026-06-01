@@ -780,7 +780,7 @@ namespace utils {
     template <typename E, typename ...Ts>
     void dispatch_event(const Ts&... args) {
         using namespace detail;
-        event_queue.push(E(args));
+        event_queue.push(E(args...));
     }
     
     // To be called by the implementation
