@@ -776,6 +776,12 @@ namespace utils {
         using namespace detail;
         event_queue.push(event);
     }
+
+    template <typename E, typename ...Ts>
+    void dispatch_event(const Ts&... args) {
+        using namespace detail;
+        event_queue.push(E(args));
+    }
     
     // To be called by the implementation
     // Processes all events from the last frame

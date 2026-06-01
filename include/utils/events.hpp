@@ -103,6 +103,9 @@ namespace utils {
     
     template <typename E>
     void dispatch_event(E&& event);
+
+    template <typename E, typename ...Ts>
+    void dispatch_event(const Ts&... args);
     
 }
 
