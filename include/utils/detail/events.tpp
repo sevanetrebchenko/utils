@@ -226,20 +226,20 @@ namespace utils {
         };
         
         template <typename T, typename Fn>
-        inline EventHandler register_event_handler(T* object, Fn function);
+        EventHandler register_event_handler(T* object, Fn function);
         
         template <typename Fn>
-        inline EventHandler register_event_handler(Fn function);
+        EventHandler register_event_handler(Fn function);
         
         template <typename T, typename Fn>
-        inline void deregister_event_handler(T* object, Fn function);
+        void deregister_event_handler(T* object, Fn function);
         
         template <typename Fn>
-        inline void deregister_event_handler(Fn function);
+        void deregister_event_handler(Fn function);
         
         // Specialization for deregistering all callbacks for a given object or global function
         template <>
-        inline void deregister_event_handler(std::uintptr_t address);
+        void deregister_event_handler(std::uintptr_t address);
         
         
         // Indices change when expired callbacks are removed, so lookup is done by callback id instead
@@ -477,17 +477,17 @@ namespace utils {
             // };
             //
             // Allow register_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not register_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
-            static_assert(std::is_convertible<U, T>::value);
-            
+            static_assert(std::is_convertible<U*, T*>::value);
+
             if (!object) {
                 return { };
             }
             if (!function) {
                 return { };
             }
-    
+
             CallbackHandle callback;
-            
+
             // This will create a new registration if one does not already exist
             // A new registration will contain a std::monostate object
             std::uintptr_t address = (std::uintptr_t) object;
@@ -583,16 +583,16 @@ namespace utils {
             //     bool handle_event(const int*);
             // };
             //
-            // Allow deregister_event_handler(std::shared_ptr<Derived>, &Base::handle_event), but not deregister_event_handler(std::shared_ptr<Base>, &Derived::handle_event)
-            static_assert(std::is_convertible<U, T>::value);
-            
+            // Allow deregister_event_handler(Derived*, &Base::handle_event), but not deregister_event_handler(Base*, &Derived::handle_event)
+            static_assert(std::is_convertible<U*, T*>::value);
+
             if (!object) {
                 return;
             }
             if (!function) {
                 return;
             }
-            
+
             std::uintptr_t address = reinterpret_cast<std::uintptr_t>(object);
             auto it = callback_registrations.find(address);
             if (it == callback_registrations.end()) {
