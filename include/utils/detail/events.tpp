@@ -168,12 +168,12 @@ namespace utils {
                         MoveConstructor move;
                     } copy_constructor;
                     Destructor destructor;
-                    unsigned int size : 30;
+                    unsigned int size;
                     enum class CopyConstructorType {
                         None = 0,
                         Copy,
                         Move,
-                    } copy_op : 2;
+                    } copy_op;
                     
                     std::type_index type;
                     // Timestamp timestamp;
@@ -409,48 +409,51 @@ namespace utils {
         
         template <typename E>
         void EventQueue::push(E&& event) {
-            std::size_t block_size = sizeof(Allocation) + sizeof(E);
+            using EventType = std::decay_t<E>;
+
+            std::size_t block_size = sizeof(Allocation) + sizeof(EventType);
             std::size_t available_size = m_capacity - m_offset;
             if (available_size < block_size) {
                 // Allocator is out of memory, need to reallocate the internal data store
                 m_capacity *= 2;
                 reallocate();
             }
-            
+
             std::byte* block = reinterpret_cast<std::byte*>(m_data) + m_offset;
             m_offset += block_size;
-            
+
             // Initialize metadata block
             Allocation& allocation = *reinterpret_cast<Allocation*>(block);
             allocation.copy_op = Allocation::CopyConstructorType::None;
-            allocation.type = typeid(E);
-            allocation.size = sizeof(E);
-            
-            if constexpr (!std::is_trivially_destructible<E>::value && std::is_destructible<E>::value) {
+            allocation.type = typeid(EventType);
+            allocation.size = sizeof(EventType);
+
+            if constexpr (!std::is_trivially_destructible<EventType>::value && std::is_destructible<EventType>::value) {
                 // Hybrid allocator automatically stores destructors for non-trivially destructible types
-                allocation.destructor = get_destructor<E>();
+                allocation.destructor = get_destructor<EventType>();
             }
             else {
                 allocation.destructor = nullptr; // Clear underlying memory since Allocation objects are reused per frame
             }
-            
+
             // Prefer move constructor over copy constructor, if available
-            if constexpr (!std::is_trivially_copy_constructible<E>::value && std::is_copy_constructible<E>::value) {
-                allocation.copy_constructor.copy = get_copy_constructor<E>();
+            if constexpr (!std::is_trivially_copy_constructible<EventType>::value && std::is_copy_constructible<EventType>::value) {
+                allocation.copy_constructor.copy = get_copy_constructor<EventType>();
                 allocation.copy_op = Allocation::CopyConstructorType::Copy;
             }
-            if constexpr (!std::is_trivially_move_constructible<E>::value && std::is_move_constructible<E>::value) {
-                allocation.copy_constructor.move = get_move_constructor<E>();
+            if constexpr (!std::is_trivially_move_constructible<EventType>::value && std::is_move_constructible<EventType>::value) {
+                allocation.copy_constructor.move = get_move_constructor<EventType>();
                 allocation.copy_op = Allocation::CopyConstructorType::Move;
             }
-            
+
             void* data = block + sizeof(Allocation);
-            
+            ++m_allocation_count;
+
             // Migrate event data
             switch (allocation.copy_op) {
                 case Allocation::CopyConstructorType::None:
                     // Event type is trivially copyable
-                    std::memcpy(data, &event, sizeof(E));
+                    std::memcpy(data, &event, sizeof(EventType));
                     break;
                 case Allocation::CopyConstructorType::Copy:
                     allocation.copy_constructor.copy(data, &event);
@@ -774,7 +777,7 @@ namespace utils {
     template <typename E>
     void dispatch_event(E&& event) {
         using namespace detail;
-        event_queue.push(event);
+        event_queue.push(std::forward<E>(event));
     }
 
     template <typename E, typename ...Ts>

@@ -195,7 +195,7 @@ namespace utils {
                 }
                 
                 // Step to next block
-                base += sizeof(base) + allocation.size;
+                base += sizeof(Allocation) + allocation.size;
             }
             
             // Reset allocator internals
