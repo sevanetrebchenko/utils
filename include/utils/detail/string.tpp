@@ -590,7 +590,7 @@ namespace utils {
                 break;
         }
 
-        char buffer[std::numeric_limits<T>::digits10 + (std::is_signed<T>::value ? 1 : 0)];
+        char buffer[std::numeric_limits<T>::digits10 + 1 + (std::is_signed<T>::value ? 1 : 0)];
         char* start = buffer;
         char* end = buffer + sizeof(buffer) / sizeof(buffer[0]);
         const auto& [ptr, error_code] = std::to_chars(start, end, value, 10);
