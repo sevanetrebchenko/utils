@@ -262,7 +262,7 @@ namespace utils {
     template <>
     struct Formatter<std::uint16_t> : public IntegerFormatter<std::uint16_t> {
     };
-    
+
     // int
     template <>
     struct Formatter<std::int32_t> : public IntegerFormatter<std::int32_t> {
@@ -359,7 +359,13 @@ namespace utils {
     struct Formatter<std::string> : public Formatter<const char*> {
         std::string format(const std::string& value) const;
     };
-    
+
+    // bool
+    template <>
+    struct Formatter<bool> : public FormatterBase {
+        std::string format(bool value) const;
+    };
+
     // Pointer types
     
     // void*

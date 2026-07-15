@@ -1028,7 +1028,14 @@ namespace utils {
     std::string Formatter<std::string>::format(const std::string& value) const {
         return Formatter<const char*>::format(value.c_str(), value.length());
     }
-    
+
+    std::string Formatter<bool>::format(bool value) const {
+        if (value) {
+            return "true";
+        }
+        return "false";
+    }
+
     Formatter<void*>::Formatter() : IntegerFormatter<std::uintptr_t>() {
         // Pointers are always formatted using hexadecimal
         representation = Representation::Hexadecimal;
