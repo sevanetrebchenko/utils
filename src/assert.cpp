@@ -1,16 +1,13 @@
 
 #include "utils/assert.hpp"
-#include "utils/string.hpp"
+#include "utils/logging.hpp"
 
 namespace utils {
     namespace internal {
         
         // Assert implementation.
         void cppassert(const std::string& expression, std::source_location source, const std::string& message) {
-            // TODO: hook up with logging functionality
-//            std::string error = format("ERROR: assertion {} failed in {}, {}:{}: {}", expression, source.file_name(), source.line(), message);
-//            std::cerr << error << std::endl;
-            std::abort();
+            logging::fatal("Assertion '{}' failed in {}:{}: {}", expression, source.file_name(), source.line(), message);
         }
         
     }
