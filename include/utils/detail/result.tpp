@@ -64,7 +64,7 @@ namespace utils {
         Result<T, E> e { };
 
         if constexpr (std::is_same_v<E, std::string>) {
-            e.m_error = format(std::move(args)...);
+            e.m_error = utils::format(std::move(args)...);
         }
         else {
             e.m_error = { std::move(args)... };
