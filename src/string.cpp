@@ -466,7 +466,7 @@ namespace utils {
     }
 
     template <typename T>
-    inline std::size_t fundamental_from_string(std::string_view in, T& out) {
+    inline std::size_t fundamental_from_string(std::string_view in, T& out, int base) {
         // Leading whitespace is not ignored
         std::string_view str = trim(in);
 
@@ -479,27 +479,23 @@ namespace utils {
             str = str.substr(1);
         }
 
-        // Leading base prefixes are not recognized
-        int base = 10;
-        bool has_base = false;
+        if constexpr (is_integer_type<T>::value) {
+            if (base == 0) {
+                // Auto-detect base 16 / 2 from a '0x' / '0b' prefix (falling back to base 10), matching strtol's own base = 0 convention
+                base = 10;
 
-        if (str.length() > 1) {
-            if (str[0] == '0') {
-                if (str[1] == 'x' || str[1] == 'X') {
-                    // Hexadecimal
-                    base = 16;
-                    has_base = true;
-                }
-                else if (str[1] == 'b' || str[1] == 'B') {
-                    // Binary
-                    base = 2;
-                    has_base = true;
+                if (str.length() > 1 && str[0] == '0') {
+                    if (str[1] == 'x' || str[1] == 'X') {
+                        base = 16;
+                        str = str.substr(2);
+                    }
+                    else if (str[1] == 'b' || str[1] == 'B') {
+                        base = 2;
+                        str = str.substr(2);
+                    }
                 }
             }
-        }
-
-        if (has_base) {
-            str = str.substr(2);
+            // An explicitly-provided base is taken at face value - 'str' is expected to already contain raw digits with no prefix
         }
 
         const char* start = str.data();
@@ -530,52 +526,52 @@ namespace utils {
         return ptr - start;
     }
 
-    std::size_t from_string(std::string_view in, unsigned char& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, unsigned char& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, short& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, short& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, unsigned short& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, unsigned short& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, int& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, int& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, unsigned int& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, unsigned int& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, long& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, long& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, unsigned long& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, unsigned long& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, long long int& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, long long int& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
-    std::size_t from_string(std::string_view in, unsigned long long int& out) {
-        return fundamental_from_string(in, out);
+    std::size_t from_string(std::string_view in, unsigned long long int& out, int base) {
+        return fundamental_from_string(in, out, base);
     }
 
     std::size_t from_string(std::string_view in, float& out) {
-        return fundamental_from_string(in, out);
+        return fundamental_from_string(in, out, 0);
     }
 
     std::size_t from_string(std::string_view in, double& out) {
-        return fundamental_from_string(in, out);
+        return fundamental_from_string(in, out, 0);
     }
 
     std::size_t from_string(std::string_view in, long double& out) {
-        return fundamental_from_string(in, out);
+        return fundamental_from_string(in, out, 0);
     }
 
     // FormatSpec implementation
