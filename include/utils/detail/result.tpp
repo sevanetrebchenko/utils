@@ -27,7 +27,14 @@ namespace utils {
     template <typename ...Ts>
     Response<E> Response<E>::NOT_OK(Ts&& ...args) {
         Response<E> e { };
-        e.m_error = { std::move(args)... };
+
+        if constexpr (std::is_same_v<E, std::string>) {
+            e.m_error = utils::format(std::move(args)...);
+        }
+        else {
+            e.m_error = { std::move(args)... };
+        }
+
         return std::move(e);
     }
     
@@ -54,7 +61,14 @@ namespace utils {
     template <typename ...Ts>
     Result<T, E> Result<T, E>::OK(Ts&&... args) {
         Result<T, E> r { };
-        r.m_result = T { std::move(args)... };
+
+        if constexpr (std::is_same_v<T, std::string>) {
+            r.Result<T, E>::m_result = utils::format(std::move(args)...);
+        }
+        else {
+            r.Result<T, E>::m_result = { std::move(args)... };
+        }
+
         return std::move(r);
     }
     
@@ -115,7 +129,14 @@ namespace utils {
     ParseResponse<E> ParseResponse<E>::NOT_OK(std::size_t error_position, Ts&&... args) {
         ParseResponse<E> e { };
         e.m_offset = error_position;
-        e.Response<E>::m_error = { std::move(args)... };
+
+        if constexpr (std::is_same_v<E, std::string>) {
+            e.Response<E>::m_error = utils::format(std::move(args)...);
+        }
+        else {
+            e.Response<E>::m_error = { std::move(args)... };
+        }
+
         return std::move(e);
     }
     
@@ -136,7 +157,14 @@ namespace utils {
     ParseResult<T, E> ParseResult<T, E>::OK(std::size_t num_characters_parsed, Ts&& ...args) {
         ParseResult<T, E> r { };
         r.m_offset = num_characters_parsed;
-        r.Result<T, E>::m_result = { std::move(args)... };
+
+        if constexpr (std::is_same_v<T, std::string>) {
+            r.Result<T, E>::m_result = utils::format(std::move(args)...);
+        }
+        else {
+            r.Result<T, E>::m_result = { std::move(args)... };
+        }
+
         return std::move(r);
     }
     
@@ -145,7 +173,14 @@ namespace utils {
     ParseResult<T, E> ParseResult<T, E>::NOT_OK(std::size_t error_position, Ts&& ... args) {
         ParseResult<T, E> e { };
         e.m_offset = error_position;
-        e.Result<T, E>::m_error = { std::move(args)... };
+
+        if constexpr (std::is_same_v<E, std::string>) {
+            e.Result<T, E>::m_error = utils::format(std::move(args)...);
+        }
+        else {
+            e.Result<T, E>::m_error = { std::move(args)... };
+        }
+
         return std::move(e);
     }
 
