@@ -7,7 +7,7 @@
 
 namespace utils {
     
-    std::string load(const std::filesystem::path& path);
+    [[nodiscard]] std::string read(const std::filesystem::path& path);
     
 }
 

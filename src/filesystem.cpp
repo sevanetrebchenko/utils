@@ -4,27 +4,15 @@
 
 namespace utils {
 
-    std::string load(const std::filesystem::path& path) {
-        std::ifstream file(path, std::ios::in);
-        if (!file.is_open()) {
-            throw std::runtime_error("");
-        }
-
-        // Get the length of the file
-        file.seekg(0, std::ifstream::end);
+    std::string read(const std::filesystem::path& path) {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
         std::streamsize length = file.tellg();
-        file.seekg(0, std::ifstream::beg);
 
-        std::string source;
-        source.reserve(length);
+        std::string content(length, '\0');
+        file.seekg(0);
+        file.read(&content[0], length);
 
-        std::string line;
-        while (std::getline(file, line)) {
-            source += line;
-            source += '\n';
-        }
-
-        return std::move(source);
+        return std::move(content);
     }
 
 }
