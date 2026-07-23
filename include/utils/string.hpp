@@ -1,8 +1,6 @@
 
-#pragma once
-
-#ifndef STRING_HPP
-#define STRING_HPP
+#ifndef UTILS_STRING_HPP
+#define UTILS_STRING_HPP
 
 #include "utils/concepts.hpp"
 #include <spdlog/fmt/std.h>
@@ -144,4 +142,4 @@ struct fmt::formatter<std::unordered_set<K, H, E, A>> {
 // Template definitions
 #include "utils/detail/string.tpp"
 
-#endif // STRING_HPP
+#endif // UTILS_STRING_HPP

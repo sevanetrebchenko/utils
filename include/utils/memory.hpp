@@ -1,6 +1,6 @@
 
-#ifndef MEMORY_HPP
-#define MEMORY_HPP
+#ifndef UTILS_MEMORY_HPP
+#define UTILS_MEMORY_HPP
 
 #include <cstddef> // std::size_t
 #include <utility> // std::move
@@ -36,4 +36,4 @@ namespace utils {
 
 #include "utils/detail/memory.tpp"
 
-#endif // MEMORY_HPP
+#endif // UTILS_MEMORY_HPP

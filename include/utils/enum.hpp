@@ -1,6 +1,6 @@
 
-#ifndef ENUM_HPP
-#define ENUM_HPP
+#ifndef UTILS_ENUM_HPP
+#define UTILS_ENUM_HPP
 
 #include <type_traits> // std::underlying_type
 
@@ -34,4 +34,4 @@
         return (target & value) == value;                                       \
     }
 
-#endif // ENUM_HPP
+#endif // UTILS_ENUM_HPP

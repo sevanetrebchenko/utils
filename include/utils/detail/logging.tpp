@@ -1,8 +1,9 @@
 
-#pragma once
 
-#ifndef LOGGING_TPP
-#define LOGGING_TPP
+#ifndef UTILS_LOGGING_TPP
+#define UTILS_LOGGING_TPP
+
+#include <spdlog/spdlog.h>
 
 namespace utils::logging {
 
@@ -46,4 +47,4 @@ namespace utils::logging {
 
 }
 
-#endif // LOGGING_TPP
+#endif  // UTILS_LOGGING_TPP

@@ -1,8 +1,6 @@
 
-#pragma once
-
-#ifndef STRING_TPP
-#define STRING_TPP
+#ifndef UTILS_STRING_TPP
+#define UTILS_STRING_TPP
 
 namespace utils {
 
@@ -276,4 +274,4 @@ fmt::format_context::iterator fmt::formatter<std::unordered_set<K, H, E, A>>::fo
     return out;
 }
 
-#endif // STRING_TPP
+#endif // UTILS_STRING_TPP

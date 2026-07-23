@@ -1,6 +1,6 @@
 
-#ifndef PLATFORM_HPP
-#define PLATFORM_HPP
+#ifndef UTILS_PLATFORM_HPP
+#define UTILS_PLATFORM_HPP
 
 #if defined(_WIN32) || defined(_WIN64)
     #define PLATFORM_WINDOWS 1
@@ -26,4 +26,4 @@
     #error "Unknown platform!"
 #endif
 
-#endif // PLATFORM_HPP
+#endif // UTILS_PLATFORM_HPP

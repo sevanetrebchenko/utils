@@ -1,6 +1,6 @@
 
-#ifndef EVENTS_HPP
-#define EVENTS_HPP
+#ifndef UTILS_EVENTS_HPP
+#define UTILS_EVENTS_HPP
 
 #include <memory> // std::shared_ptr
 
@@ -111,4 +111,4 @@ namespace utils {
 
 #include "utils/detail/events.tpp"
 
-#endif // EVENTS_HPP
+#endif // UTILS_EVENTS_HPP

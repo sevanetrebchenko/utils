@@ -1,6 +1,6 @@
 
-#ifndef HASH_HPP
-#define HASH_HPP
+#ifndef UTILS_HASH_HPP
+#define UTILS_HASH_HPP
 
 #include <cstddef> // std::size_t
 
@@ -16,4 +16,4 @@ namespace utils {
 
 #include "utils/detail/hash.tpp"
 
-#endif // HASH_HPP
+#endif // UTILS_HASH_HPP

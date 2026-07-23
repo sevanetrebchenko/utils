@@ -1,6 +1,6 @@
 
-#ifndef EVENTS_TPP
-#define EVENTS_TPP
+#ifndef UTILS_EVENTS_TPP
+#define UTILS_EVENTS_TPP
 
 #include "utils/hash.hpp"
 #include "utils/assert.hpp"
@@ -791,4 +791,4 @@ namespace utils {
     
 }
 
-#endif // EVENTS_TPP
+#endif  // UTILS_EVENTS_TPP

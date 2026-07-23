@@ -1,5 +1,5 @@
-#ifndef MEMORY_TPP
-#define MEMORY_TPP
+#ifndef UTILS_MEMORY_TPP
+#define UTILS_MEMORY_TPP
 
 namespace utils {
     
@@ -26,4 +26,4 @@ namespace utils {
     
 }
 
-#endif // MEMORY_TPP
+#endif  // UTILS_MEMORY_TPP

@@ -1,8 +1,6 @@
 
-#pragma once
-
-#ifndef RESULT_HPP
-#define RESULT_HPP
+#ifndef UTILS_RESULT_HPP
+#define UTILS_RESULT_HPP
 
 #include <string> // std::string
 #include <string_view> // std::string_view
@@ -53,5 +51,5 @@ namespace utils {
 
 #include "utils/detail/result.tpp"
 
-#endif // RESULT_HPP
+#endif  // UTILS_RESULT_HPP
 

@@ -1,6 +1,6 @@
 
-#ifndef RESULT_TPP
-#define RESULT_TPP
+#ifndef UTILS_RESULT_TPP
+#define UTILS_RESULT_TPP
 
 #include <utility> // std::move
 #include <stdexcept> // std::runtime_error
@@ -81,4 +81,4 @@ namespace utils {
 
 }
 
-#endif // RESULT_TPP
+#endif // UTILS_RESULT_TPP

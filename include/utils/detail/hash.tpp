@@ -1,6 +1,6 @@
 
-#ifndef HASH_TPP
-#define HASH_TPP
+#ifndef UTILS_HASH_TPP
+#define UTILS_HASH_TPP
 
 #include <string_view> // std::string_view
 
@@ -41,4 +41,4 @@ namespace utils {
 
 }
 
-#endif // HASH_TPP
+#endif  // UTILS_HASH_TPP

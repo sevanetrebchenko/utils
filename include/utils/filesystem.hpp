@@ -1,6 +1,6 @@
 
-#ifndef FILESYSTEM_HPP
-#define FILESYSTEM_HPP
+#ifndef UTILS_FILESYSTEM_HPP
+#define UTILS_FILESYSTEM_HPP
 
 #include <string> // std::string
 #include <filesystem> // std::filesystem
@@ -11,4 +11,4 @@ namespace utils {
     
 }
 
-#endif // FILESYSTEM_HPP
+#endif // UTILS_FILESYSTEM_HPP

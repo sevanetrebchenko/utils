@@ -1,9 +1,8 @@
 
-#ifndef TUPLE_HPP
-#define TUPLE_HPP
+#ifndef UTILS_TUPLE_HPP
+#define UTILS_TUPLE_HPP
 
 #include "utils/concepts.hpp"
-
 #include <cstddef> // std::size_t
 #include <tuple> // std::tuple
 
@@ -43,4 +42,4 @@ namespace utils {
 
 #include "utils/detail/tuple.tpp"
 
-#endif // TUPLE_HPP
+#endif // UTILS_TUPLE_HPP

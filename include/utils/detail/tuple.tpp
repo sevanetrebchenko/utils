@@ -1,6 +1,6 @@
 
-#ifndef TUPLE_TPP
-#define TUPLE_TPP
+#ifndef UTILS_TUPLE_TPP
+#define UTILS_TUPLE_TPP
 
 #define GENERATE_APPLY_DEFINITIONS_FOR(TUPLE)                                                                                                                                                    \
 namespace utils {                                                                                                                                                                                \
@@ -136,4 +136,4 @@ GENERATE_APPLY_DEFINITIONS_FOR(std::tuple<Ts...> &);
 GENERATE_APPLY_DEFINITIONS_FOR(std::tuple<Ts...> &&);
 
 
-#endif // TUPLE_TPP
+#endif // UTILS_TUPLE_TPP
