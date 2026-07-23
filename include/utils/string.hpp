@@ -30,11 +30,6 @@ namespace utils {
     template <String T, String U>
     [[nodiscard]] bool operator==(const T& first, const U& second);
 
-    // from_string for fundamental types (wrapper around std::from_chars)
-    // Returns the number of characters processed, throws on invalid argument
-    // 'base' defaults to 0, which auto-detects base 16 / 2 from a '0x' / '0b' prefix (falling back to base 10) - matches strtol's own convention
-    // Passing an explicit base skips prefix auto-detection entirely and parses 'in' as raw digits in that base
-
     std::size_t from_string(std::string_view in, unsigned char& out, int base = 0);
     std::size_t from_string(std::string_view in, short& out, int base = 0);
     std::size_t from_string(std::string_view in, unsigned short& out, int base = 0);
