@@ -14,32 +14,32 @@ namespace utils::logging {
     }
 
     template <typename ...Args>
-    void info(FormatString fmt, Args&&... args) {
+    void info(FormatString fmt, const Args&... args) {
         spdlog::logger& logger = detail::logger();
-        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::info, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::info, fmt::runtime(fmt.format), args...);
     }
 
     template <typename ...Args>
-    void debug(FormatString fmt, Args&&... args) {
+    void debug(FormatString fmt, const Args&... args) {
         spdlog::logger& logger = detail::logger();
-        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::debug, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::debug, fmt::runtime(fmt.format), args...);
     }
 
     template <typename ...Args>
-    void warning(FormatString fmt, Args&&... args) {
+    void warning(FormatString fmt, const Args&... args) {
         spdlog::logger& logger = detail::logger();
-        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::warn, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::warn, fmt::runtime(fmt.format), args...);
     }
 
     template <typename ...Args>
-    void error(FormatString fmt, Args&&... args) {
+    void error(FormatString fmt, const Args&... args) {
         spdlog::logger& logger = detail::logger();
-        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::err, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::err, fmt::runtime(fmt.format), args...);
     }
 
     template <typename ...Args>
-    [[noreturn]] void fatal(FormatString fmt, Args&&... args) {
-        std::string message = utils::format(fmt, std::forward<Args>(args)...);
+    [[noreturn]] void fatal(FormatString fmt, const Args&... args) {
+        std::string message = utils::format(fmt, args...);
         spdlog::logger& logger = detail::logger();
         logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::err, message);
         throw std::runtime_error(message);

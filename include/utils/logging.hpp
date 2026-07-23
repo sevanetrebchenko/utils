@@ -9,20 +9,20 @@ namespace utils {
     namespace logging {
 
         template <typename ...Args>
-        void info(FormatString fmt, Args&&... args);
+        void info(FormatString fmt, const Args&... args);
 
         template <typename ...Args>
-        void debug(FormatString fmt, Args&&... args);
+        void debug(FormatString fmt, const Args&... args);
 
         template <typename ...Args>
-        void warning(FormatString fmt, Args&&... args);
+        void warning(FormatString fmt, const Args&... args);
 
         template <typename ...Args>
-        void error(FormatString fmt, Args&&... args);
+        void error(FormatString fmt, const Args&... args);
 
         // Logs an error message and raises a std::runtime_error
         template <typename ...Args>
-        [[noreturn]] void fatal(FormatString fmt, Args&&... args);
+        [[noreturn]] void fatal(FormatString fmt, const Args&... args);
 
     }
 
