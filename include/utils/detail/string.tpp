@@ -51,8 +51,7 @@ namespace utils {
 
     namespace detail {
 
-        // Converts a plain argument to an fmt-compatible argument unchanged, and a NamedArgument<T> to the
-        // fmt::arg(...) equivalent so fmt can resolve '{name}' placeholders against it
+        // Converts a plain argument to a fmt-compatible argument (unchanged), and a NamedArgument<T> to the fmt::arg(...) equivalent so fmt can resolve '{name}' placeholders against it
         template <typename T>
         decltype(auto) to_fmt_argument(const T& value) {
             if constexpr (is_named_argument<T>::value) {
@@ -90,7 +89,7 @@ namespace utils {
     template <typename ...Ts>
     std::string format(const FormatString& str, const Ts&... args) {
         try {
-            return fmt::vformat(str.format, fmt::make_format_args(detail::to_fmt_argument(args)...));
+            return fmt::vformat(str.format, fmt::make_format_args(args...));
         }
         catch (const fmt::format_error& error) {
             throw std::runtime_error(fmt::format("{} ({}:{})", error.what(), str.source.file_name(), str.source.line()));
