@@ -4,67 +4,46 @@
 #ifndef LOGGING_TPP
 #define LOGGING_TPP
 
-#include <iostream>
-
-#include "utils/string.hpp"
-
 namespace utils::logging {
-    
-    namespace detail {
-        
-        void log(Message& message);
-        void add_sink(const std::shared_ptr<Sink>& sink);
-    
-    }
-    
-    template <typename ...Ts>
-    void info(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        message.level = Message::Level::Info;
-        detail::log(message);
-    }
-    
-    template <typename ...Ts>
-    void debug(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        message.level = Message::Level::Debug;
-        detail::log(message);
-    }
-    
-    template <typename ...Ts>
-    void warning(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        message.level = Message::Level::Warning;
-        detail::log(message);
-    }
-    
-    template <typename ...Ts>
-    void error(Message message, const Ts&... args) {
-        message.message = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        message.level = Message::Level::Error;
-        detail::log(message);
-    }
-    
-    template <typename ...Ts>
-    void fatal(Message message, const Ts&... args) {
-        std::string str = utils::format(message.format, args..., NamedArgument("__source", message.source));
-        
-        // Log error message
-        message.message = str;
-        message.level = Message::Level::Error;
-        detail::log(message);
 
-        throw std::runtime_error(str);
+    namespace detail {
+
+        spdlog::logger& logger();
+
     }
-    
-    template <typename T, typename ...Ts>
-    std::shared_ptr<T> create_sink(Ts&&... args) {
-        static_assert(std::is_base_of<Sink, T>::value, "type provided to create_sink must derive from Sink");
-        std::shared_ptr<T> sink = std::make_shared<T>(std::move(args)...);
-        detail::add_sink(sink);
-        return std::move(sink);
+
+    template <typename ...Args>
+    void info(FormatString fmt, Args&&... args) {
+        spdlog::logger& logger = detail::logger();
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::info, fmt::runtime(fmt.format), std::forward<Args>(args)...);
     }
-    
+
+    template <typename ...Args>
+    void debug(FormatString fmt, Args&&... args) {
+        spdlog::logger& logger = detail::logger();
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::debug, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+    }
+
+    template <typename ...Args>
+    void warning(FormatString fmt, Args&&... args) {
+        spdlog::logger& logger = detail::logger();
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::warn, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+    }
+
+    template <typename ...Args>
+    void error(FormatString fmt, Args&&... args) {
+        spdlog::logger& logger = detail::logger();
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::err, fmt::runtime(fmt.format), std::forward<Args>(args)...);
+    }
+
+    template <typename ...Args>
+    [[noreturn]] void fatal(FormatString fmt, Args&&... args) {
+        std::string message = utils::format(fmt, std::forward<Args>(args)...);
+        spdlog::logger& logger = detail::logger();
+        logger.log(spdlog::source_loc(fmt.source.file_name(), static_cast<int>(fmt.source.line()), fmt.source.function_name()), spdlog::level::err, message);
+        throw std::runtime_error(message);
+    }
+
 }
 
 #endif // LOGGING_TPP
