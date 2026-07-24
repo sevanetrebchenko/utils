@@ -1,6 +1,6 @@
 
 #include "utils/filesystem.hpp"
-#include <fstream> // std::ifstream
+#include <fstream> // std::ifstream, std::ofstream
 
 namespace utils {
 
@@ -13,6 +13,12 @@ namespace utils {
         file.read(&content[0], length);
 
         return std::move(content);
+    }
+
+    void write(const std::filesystem::path& path, std::string_view content) {
+        std::ofstream file(path, std::ios::binary);
+        file.write(content.data(), content.size());
+        // File automatically closed by the destructor
     }
 
 }
