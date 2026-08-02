@@ -1,10 +1,11 @@
 
 #include "utils/string.hpp"
 
-#include <limits> // std::numeric_limits
-#include <charconv> // std::from_chars, std::from_chars_result
-#include <cstring> // std::strlen
-#include <stdexcept> // std::runtime_error
+#include <limits>
+#include <charconv>
+#include <cerrno>
+#include <cstdlib>
+#include <stdexcept>
 
 namespace utils {
 
@@ -81,9 +82,29 @@ namespace utils {
         if constexpr (is_integer_type<T>::value) {
             result = std::from_chars(start, end, out, base);
         }
-        else {
+        else if constexpr (requires { std::from_chars(start, end, out, std::chars_format::general); }) {
             // std::format_chars::general supports both scientific and fixed representations
             result = std::from_chars(start, end, out, std::chars_format::general);
+        }
+        else {
+            // Falls back to strtold since std::from_chars has no floating-point overload for T on this standard library (some implementations, such as libc++, only implement one for float and double, not long double)
+            // std::strtold does not take a string length, so copy it into a null-terminated buffer to avoid overrun
+            std::string buffer { str };
+
+            errno = 0;
+            char* parsed_end = nullptr;
+            out = std::strtold(buffer.c_str(), &parsed_end);
+
+            std::size_t character_count = static_cast<std::size_t>(parsed_end - buffer.c_str());
+            if (character_count == 0) {
+                result = { start, std::errc::invalid_argument };
+            }
+            else if (errno == ERANGE) {
+                result = { start + character_count, std::errc::result_out_of_range };
+            }
+            else {
+                result = { start + character_count, std::errc { } };
+            }
         }
 
         const auto& [ptr, error_code] = result;
