@@ -8,6 +8,7 @@
 #include <source_location> // std::source_location
 #include <thread> // std::thread
 #include <vector> // std::vector
+#include <span> // std::span
 #include <unordered_map> // std::unordered_map
 #include <unordered_set> // std::unordered_set
 #include <utility> // std::pair
@@ -116,6 +117,16 @@ struct fmt::formatter<std::vector<T>> {
 
     private:
         fmt::formatter<T> m_formatter;
+};
+
+// std::span
+template <typename T>
+struct fmt::formatter<std::span<T>> {
+    fmt::format_parse_context::iterator parse(fmt::format_parse_context& ctx);
+    fmt::format_context::iterator format(const std::span<T>& value, fmt::format_context& ctx) const;
+
+    private:
+        fmt::formatter<std::remove_cv_t<T>> m_formatter;
 };
 
 // std::unordered_map

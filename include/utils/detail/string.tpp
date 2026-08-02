@@ -206,6 +206,30 @@ fmt::format_context::iterator fmt::formatter<std::vector<T>>::format(const std::
     return out;
 }
 
+// std::span
+
+template <typename T>
+fmt::format_parse_context::iterator fmt::formatter<std::span<T>>::parse(fmt::format_parse_context& ctx) {
+    return m_formatter.parse(ctx);
+}
+
+template <typename T>
+fmt::format_context::iterator fmt::formatter<std::span<T>>::format(const std::span<T>& value, fmt::format_context& ctx) const {
+    fmt::format_context::iterator out = ctx.out();
+    out = fmt::format_to(out, "[ ");
+
+    for (std::size_t i = 0u; i < value.size(); ++i) {
+        if (i) {
+            out = fmt::format_to(out, ", ");
+        }
+
+        out = m_formatter.format(value[i], ctx);
+    }
+
+    out = fmt::format_to(out, " ]");
+    return out;
+}
+
 // std::unordered_map
 
 template <typename K, typename V, typename H, typename P, typename A>
