@@ -192,17 +192,24 @@ fmt::format_parse_context::iterator fmt::formatter<std::vector<T>>::parse(fmt::f
 template <typename T>
 fmt::format_context::iterator fmt::formatter<std::vector<T>>::format(const std::vector<T>& value, fmt::format_context& ctx) const {
     fmt::format_context::iterator out = ctx.out();
-    out = fmt::format_to(out, "[ ");
 
-    for (std::size_t i = 0u; i < value.size(); ++i) {
-        if (i) {
-            out = fmt::format_to(out, ", ");
+    if (value.empty()) {
+        out = fmt::format_to(out, "[ ]");
+    }
+    else {
+        out = fmt::format_to(out, "[ ");
+
+        for (std::size_t i = 0u; i < value.size(); ++i) {
+            if (i) {
+                out = fmt::format_to(out, ", ");
+            }
+
+            out = m_formatter.format(value[i], ctx);
         }
 
-        out = m_formatter.format(value[i], ctx);
+        out = fmt::format_to(out, " ]");
     }
 
-    out = fmt::format_to(out, " ]");
     return out;
 }
 
@@ -216,17 +223,24 @@ fmt::format_parse_context::iterator fmt::formatter<std::span<T>>::parse(fmt::for
 template <typename T>
 fmt::format_context::iterator fmt::formatter<std::span<T>>::format(const std::span<T>& value, fmt::format_context& ctx) const {
     fmt::format_context::iterator out = ctx.out();
-    out = fmt::format_to(out, "[ ");
 
-    for (std::size_t i = 0u; i < value.size(); ++i) {
-        if (i) {
-            out = fmt::format_to(out, ", ");
+    if (value.empty()) {
+        out = fmt::format_to(out, "[ ]");
+    }
+    else {
+        out = fmt::format_to(out, "[ ");
+
+        for (std::size_t i = 0u; i < value.size(); ++i) {
+            if (i) {
+                out = fmt::format_to(out, ", ");
+            }
+
+            out = m_formatter.format(value[i], ctx);
         }
 
-        out = m_formatter.format(value[i], ctx);
+        out = fmt::format_to(out, " ]");
     }
 
-    out = fmt::format_to(out, " ]");
     return out;
 }
 
@@ -253,21 +267,28 @@ fmt::format_parse_context::iterator fmt::formatter<std::unordered_map<K, V, H, P
 template <typename K, typename V, typename H, typename P, typename A>
 fmt::format_context::iterator fmt::formatter<std::unordered_map<K, V, H, P, A>>::format(const std::unordered_map<K, V, H, P, A>& value, fmt::format_context& ctx) const {
     fmt::format_context::iterator out = ctx.out();
-    out = fmt::format_to(out, "{{ ");
 
-    bool first_element = true;
-    for (const auto& [key, mapped] : value) {
-        if (!first_element) {
-            out = fmt::format_to(out, ", ");
+    if (value.empty()) {
+        out = fmt::format_to(out, "{{ }}");
+    }
+    else {
+        out = fmt::format_to(out, "{{ ");
+
+        bool first_element = true;
+        for (const auto& [key, mapped] : value) {
+            if (!first_element) {
+                out = fmt::format_to(out, ", ");
+            }
+            first_element = false;
+
+            out = m_key_formatter.format(key, ctx);
+            out = fmt::format_to(out, ": ");
+            out = m_value_formatter.format(mapped, ctx);
         }
-        first_element = false;
 
-        out = m_key_formatter.format(key, ctx);
-        out = fmt::format_to(out, ": ");
-        out = m_value_formatter.format(mapped, ctx);
+        out = fmt::format_to(out, " }}");
     }
 
-    out = fmt::format_to(out, " }}");
     return out;
 }
 
@@ -281,19 +302,26 @@ fmt::format_parse_context::iterator fmt::formatter<std::unordered_set<K, H, E, A
 template <typename K, typename H, typename E, typename A>
 fmt::format_context::iterator fmt::formatter<std::unordered_set<K, H, E, A>>::format(const std::unordered_set<K, H, E, A>& value, fmt::format_context& ctx) const {
     fmt::format_context::iterator out = ctx.out();
-    out = fmt::format_to(out, "{{ ");
 
-    bool first_element = true;
-    for (const K& element : value) {
-        if (!first_element) {
-            out = fmt::format_to(out, ", ");
+    if (value.empty()) {
+        out = fmt::format_to(out, "{{ }}");
+    }
+    else {
+        out = fmt::format_to(out, "{{ ");
+
+        bool first_element = true;
+        for (const K& element : value) {
+            if (!first_element) {
+                out = fmt::format_to(out, ", ");
+            }
+            first_element = false;
+
+            out = m_formatter.format(element, ctx);
         }
-        first_element = false;
 
-        out = m_formatter.format(element, ctx);
+        out = fmt::format_to(out, " }}");
     }
 
-    out = fmt::format_to(out, " }}");
     return out;
 }
 
