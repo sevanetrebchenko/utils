@@ -8,6 +8,9 @@ namespace utils {
 
     namespace logging {
 
+        // Sets the pattern used to format every subsequent log message
+        void set_pattern(std::string_view pattern);
+
         template <typename ...Args>
         void info(FormatString fmt, const Args&... args);
 

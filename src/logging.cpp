@@ -28,4 +28,9 @@ namespace utils::logging {
 
     }
 
+    void set_pattern(std::string_view pattern) {
+        spdlog::logger& logger = detail::logger();
+        logger.set_pattern(std::string(pattern));
+    }
+
 }
