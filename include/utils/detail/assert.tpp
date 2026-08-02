@@ -7,7 +7,7 @@
 namespace utils {
     namespace internal {
         
-        [[noreturn]] inline void cppassert(const std::string& expression, std::source_location source, const std::string& message);
+        [[noreturn]] void cppassert(const std::string& expression, std::source_location source, const std::string& message);
         
     }
     
