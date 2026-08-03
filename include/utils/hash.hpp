@@ -2,7 +2,8 @@
 #ifndef UTILS_HASH_HPP
 #define UTILS_HASH_HPP
 
-#include <cstddef> // std::size_t
+#include <cstddef>
+#include <string_view>
 
 namespace utils {
     
