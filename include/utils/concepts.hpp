@@ -33,19 +33,14 @@ namespace utils {
     
     template <typename T>
     concept String = is_string_type<T>::value;
-    
-    
-    
-    template <typename Fn, typename T>
-    concept returns_type = requires(const Fn& predicate) {
-        { predicate() } -> std::same_as<T>;
-    };
-    
-    template <typename Fn, typename T>
-    concept accepts_type = requires(const Fn& predicate) {
-        { predicate(std::declval<T>()) };
-    };
-    
+
+    // Checks that no two types in a given parameter pack are the same
+    template <typename ...Ts>
+    inline constexpr bool contains_unique_types = true;
+
+    template <typename First, typename... Rest>
+    inline constexpr bool contains_unique_types<First, Rest...> = (!std::is_same_v<First, Rest> && ...) && contains_unique_types<Rest...>;
+
 }
 
 #endif // UTILS_CONCEPTS_HPP
