@@ -1,7 +1,5 @@
-
 #include "utils/allocator.hpp"
-
-#include <memory> // std::align
+#include <memory>
 
 namespace utils {
 
@@ -46,7 +44,7 @@ namespace utils {
         while (true) {
             Block& block = m_blocks[m_current_block_index];
 
-            void* data = block.data + block.size;
+            void* data = static_cast<std::byte*>(block.data) + block.size;
             std::size_t remaining = block.capacity - block.size;
 
             if (std::align(alignment, size, data, remaining)) {
@@ -72,7 +70,7 @@ namespace utils {
     }
 
     void BumpAllocator::allocate_block(std::size_t size) {
-        std::size_t capacity = 0;
+        std::size_t capacity = 1;
         if (!m_blocks.empty()) {
             capacity = m_blocks.back().capacity;
         }
