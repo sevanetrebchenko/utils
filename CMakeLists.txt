@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 add_subdirectory(lib)
 
 add_library("${PROJECT_NAME}"
+    "${PROJECT_SOURCE_DIR}/src/allocator.cpp"
     "${PROJECT_SOURCE_DIR}/src/assert.cpp"
     "${PROJECT_SOURCE_DIR}/src/events.cpp"
     "${PROJECT_SOURCE_DIR}/src/filesystem.cpp"
